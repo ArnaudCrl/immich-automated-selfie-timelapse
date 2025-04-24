@@ -13,6 +13,14 @@ import logging
 from typing import Tuple
 from immich_api import get_assets_with_person, download_asset
 
+SUPPORTED_IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+}
+
 class TqdmLoggingHandler(logging.Handler):
     def __init__(self, level=logging.NOTSET):
         super().__init__(level)
@@ -417,7 +425,8 @@ def process_asset_worker(asset, config: AppConfig):
     """
     try:
         asset_id = asset['id']
-        image_bytes = download_asset(config.api_key, config.base_url, asset_id)
+        use_original = asset['originalMimeType'] in SUPPORTED_IMAGE_MIME_TYPES
+        image_bytes = download_asset(config.api_key, config.base_url, asset_id, use_original)
         image = Image.open(io.BytesIO(image_bytes))
         image = ImageOps.exif_transpose(image)
         image = image.convert("RGB")

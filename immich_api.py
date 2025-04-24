@@ -94,7 +94,7 @@ def get_assets_with_person(api_key, base_url, person_id, date_from=None, date_to
     return all_assets
 
 
-def download_asset(api_key, base_url, asset_id):
+def download_asset(api_key, base_url, asset_id, use_original=True):
     """
     Downloads the original image asset from the API.
 
@@ -102,11 +102,13 @@ def download_asset(api_key, base_url, asset_id):
         api_key (str): API key for authentication.
         base_url (str): Base URL of the API.
         asset_id (str): The asset's ID.
+        use_original (bool): If True, download the original image; otherwise, download the JPEG preview thumbnail.
 
     Returns:
         bytes: The content of the downloaded image.
     """
     headers = {'x-api-key': api_key}
-    response = requests.get(f'{base_url}/assets/{asset_id}/original', headers=headers)
+    url = f'{base_url}/assets/{asset_id}/original' if use_original else f'{base_url}/assets/{asset_id}/thumbnail?size=preview'
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.content

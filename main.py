@@ -33,6 +33,7 @@ class AppConfig:
     left_eye_pos: Tuple[float, float] = (0.35, 0.4)
     date_from: str = None
     date_to: str = None
+    ear_threshold: float = 0.2
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -165,6 +166,7 @@ def index() -> str:
             config.pose_threshold = float(request.form.get("pose_threshold"))
             config.date_from = request.form.get("date_from")
             config.date_to = request.form.get("date_to")
+            config.ear_threshold = float(request.form.get("ear_threshold", 0.2))
             max_workers = int(request.form.get("max_workers"))
             do_not_compile_video = request.form.get("do_not_compile_video") == "on"
             framerate = int(request.form.get("framerate", 15))

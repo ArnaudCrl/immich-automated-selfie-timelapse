@@ -3,7 +3,7 @@ import os
 import io
 import concurrent.futures
 from datetime import datetime
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw, ImageFont
 import numpy as np
 import cv2
 import dlib
@@ -437,6 +437,24 @@ def process_asset_worker(asset, config: AppConfig):
 
     dt = datetime.fromisoformat(asset['fileCreatedAt'].replace("Z", "+00:00"))
     timestamp = dt.strftime("%Y%m%d_%H%M%S")
+
+    # TODO: use in config
+    label = True
+    label_size = 12
+    label_left = True
+    label_top = False
+    label_format = "%Y-%m-%d"
+    label_padding = 10
+    label_fill = "white"
+
+    if label:
+        draw = ImageDraw.Draw(aligned_face)
+        font = ImageFont.load_default(size=label_size)
+        text = dt.strftime(format=label_format)
+        x = label_padding if label_left else aligned_face.width - label_padding - draw.textlength(text, font)
+        y = label_padding if label_top else aligned_face.height - label_padding - label_size
+        draw.text((x, y), text, fill=label_fill, font=font)
+
     filename = os.path.join(config.output_folder, f"{timestamp}.jpg")
     aligned_face.save(filename)
     return filename

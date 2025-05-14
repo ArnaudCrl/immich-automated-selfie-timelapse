@@ -40,10 +40,10 @@ app = Flask(__name__)
 
 # Global state
 AVAILABLE_CORES = multiprocessing.cpu_count()
-progress_info: Dict[str, any] = {"completed": 0, "total": 0, "status": "idle"}
-processing_thread: threading.Thread = None
-cancel_requested: bool = False
-config = AppConfig()
+PROGRESS_INFO: Dict[str, any] = {"completed": 0, "total": 0, "status": "idle"}
+PROCESSING_THREAD: threading.Thread = None
+CANCEL_REQUESTED: bool = False
+CONFIG = AppConfig()
 
 def update_progress(current: int, total: int) -> None:
     """Update the global progress information.
@@ -52,9 +52,9 @@ def update_progress(current: int, total: int) -> None:
         current: Number of completed tasks
         total: Total number of tasks
     """
-    progress_info["completed"] = current
-    progress_info["total"] = total
-    progress_info["status"] = "running" if current < total else "done"
+    PROGRESS_INFO["completed"] = current
+    PROGRESS_INFO["total"] = total
+    PROGRESS_INFO["status"] = "running" if current < total else "done"
 
 def check_output_folder() -> Tuple[bool, int]:
     """Check if the output folder is empty.
@@ -62,12 +62,12 @@ def check_output_folder() -> Tuple[bool, int]:
     Returns:
         Tuple containing (is_empty, file_count)
     """
-    if not os.path.exists(config.output_folder):
-        os.makedirs(config.output_folder, exist_ok=True)
+    if not os.path.exists(CONFIG.output_folder):
+        os.makedirs(CONFIG.output_folder, exist_ok=True)
         return True, 0
 
-    files = [f for f in os.listdir(config.output_folder) 
-             if os.path.isfile(os.path.join(config.output_folder, f))]
+    files = [f for f in os.listdir(CONFIG.output_folder) 
+             if os.path.isfile(os.path.join(CONFIG.output_folder, f))]
     return len(files) == 0, len(files)
 
 def background_process(
@@ -89,7 +89,7 @@ def background_process(
     try:
         # Process faces
         process_faces(
-            config=config,
+            config=CONFIG,
             max_workers=max_workers,
             progress_callback=progress_callback,
             cancel_flag=cancel_flag
@@ -99,15 +99,15 @@ def background_process(
                 progress_callback(1, 1)
         
         if not do_not_compile_video and not cancel_flag():
-            progress_info["status"] = "compiling_video"
-            video_output_path = os.path.join(config.output_folder, "timelapse.mp4")
+            PROGRESS_INFO["status"] = "compiling_video"
+            video_output_path = os.path.join(CONFIG.output_folder, "timelapse.mp4")
             success = compile_timelapse(
-                image_folder=config.output_folder,
+                image_folder=CONFIG.output_folder,
                 output_path=video_output_path,
                 framerate=framerate,
                 update_progress=progress_callback
             )
-            progress_info["status"] = "video_done" if success else "error:Video compilation failed"
+            PROGRESS_INFO["status"] = "video_done" if success else "error:Video compilation failed"
 
     except Exception as e:
         raise
@@ -115,29 +115,29 @@ def background_process(
 @app.route("/progress")
 def progress() -> Dict[str, any]:
     """Get current progress information."""
-    return jsonify(progress_info)
+    return jsonify(PROGRESS_INFO)
 
 @app.route("/check-connection")
 def check_connection() -> Dict[str, any]:
     """Check connection to Immich server."""
-    is_valid, message = validate_immich_connection(config.api_key, config.base_url)
+    is_valid, message = validate_immich_connection(CONFIG.api_key, CONFIG.base_url)
     return jsonify({"valid": is_valid, "message": message})
 
 @app.route("/cancel", methods=["POST"])
 def cancel() -> Dict[str, any]:
     """Cancel the current processing job."""
-    global processing_thread, cancel_requested
-    cancel_requested = True
-    if processing_thread and processing_thread.is_alive():
-        progress_info["status"] = "cancelled"
+    global PROCESSING_THREAD, CANCEL_REQUESTED
+    CANCEL_REQUESTED = True
+    if PROCESSING_THREAD and PROCESSING_THREAD.is_alive():
+        PROGRESS_INFO["status"] = "cancelled"
         return jsonify({"success": True, "message": "Processing cancelled."})
-    cancel_requested = False
+    CANCEL_REQUESTED = False
     return jsonify({"success": False, "message": "No active processing to cancel."})
 
 @app.route("/", methods=["GET", "POST"])
 def index() -> str:
     """Handle the main page and processing requests."""
-    global processing_thread, cancel_requested
+    global PROCESSING_THREAD, CANCEL_REQUESTED
 
     message = None
     error = None
@@ -150,46 +150,46 @@ def index() -> str:
 
     # Validate connection on POST
     if request.method == "POST":
-        is_valid, message = validate_immich_connection(config.api_key, config.base_url)
+        is_valid, message = validate_immich_connection(CONFIG.api_key, CONFIG.base_url)
         if not is_valid:
             error = f"Immich server connection error: {message}"
             return render_template("index.html", error=error, warning=warning,
                                 max_workers_options=list(range(1, AVAILABLE_CORES + 1)))
 
         try:
-            cancel_requested = False
+            CANCEL_REQUESTED = False
 
             # Get form data
-            config.person_id = request.form["person_id"]
-            config.resize_size = int(request.form.get("resize_size"))
-            config.face_resolution_threshold = int(request.form.get("face_resolution_threshold"))
-            config.pose_threshold = float(request.form.get("pose_threshold"))
-            config.date_from = request.form.get("date_from")
-            config.date_to = request.form.get("date_to")
-            config.ear_threshold = float(request.form.get("ear_threshold", 0.2))
+            CONFIG.person_id = request.form["person_id"]
+            CONFIG.resize_size = int(request.form.get("resize_size"))
+            CONFIG.face_resolution_threshold = int(request.form.get("face_resolution_threshold"))
+            CONFIG.pose_threshold = float(request.form.get("pose_threshold"))
+            CONFIG.date_from = request.form.get("date_from")
+            CONFIG.date_to = request.form.get("date_to")
+            CONFIG.ear_threshold = float(request.form.get("ear_threshold", 0.2))
             max_workers = int(request.form.get("max_workers"))
             do_not_compile_video = request.form.get("do_not_compile_video") == "on"
             framerate = int(request.form.get("framerate", 15))
 
             # Reset progress info
-            progress_info.update({
+            PROGRESS_INFO.update({
                 "completed": 0,
                 "total": 0,
                 "status": "idle"
             })
 
             # Start processing
-            processing_thread = threading.Thread(
+            PROCESSING_THREAD = threading.Thread(
                 target=background_process,
                 kwargs={
                     "max_workers": max_workers,
                     "progress_callback": update_progress,
-                    "cancel_flag": lambda: cancel_requested,
+                    "cancel_flag": lambda: CANCEL_REQUESTED,
                     "do_not_compile_video": do_not_compile_video,
                     "framerate": framerate
                 }  
             )   
-            processing_thread.start()
+            PROCESSING_THREAD.start()
             
             message = "Processing started. Please wait and watch the progress bar below."
 

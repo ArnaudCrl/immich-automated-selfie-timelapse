@@ -2,13 +2,13 @@ import logging
 import multiprocessing
 import os
 import threading
-from dataclasses import dataclass
 from typing import Callable, Dict, List, Tuple
-
 from flask import Flask, jsonify, render_template, request
+
 from image_processing import process_faces
 from immich_api import validate_immich_connection
 from compile_timelapse import compile_timelapse
+from config import AppConfig
 
 
 # Filter out progress route logs
@@ -18,22 +18,6 @@ class ProgressRouteFilter(logging.Filter):
 
 log = logging.getLogger('werkzeug')
 log.addFilter(ProgressRouteFilter())
-
-@dataclass
-class AppConfig:
-    """Configuration for the application."""
-    api_key: str = os.environ.get("IMMICH_API_KEY", "")
-    base_url: str = os.environ.get("IMMICH_BASE_URL", "")
-    person_id: str = None
-    output_folder: str = "output"
-    landmark_model: str = "shape_predictor_68_face_landmarks.dat"
-    resize_size: int = 512
-    face_resolution_threshold: int = 80
-    pose_threshold: float = 25.0
-    left_eye_pos: Tuple[float, float] = (0.35, 0.4)
-    date_from: str = None
-    date_to: str = None
-    ear_threshold: float = 0.2
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -71,26 +55,19 @@ def check_output_folder() -> Tuple[bool, int]:
     return len(files) == 0, len(files)
 
 def background_process(
-    max_workers: int = 1,
     progress_callback: Callable = None,
     cancel_flag: Callable = None,
-    do_not_compile_video: bool = False,
-    framerate: int = 15
 ) -> List[str]:
     """Process faces in the background and optionally compile a timelapse video.
     
     Args:
-        max_workers: Number of worker processes for face processing
         progress_callback: Optional callback for progress updates
         cancel_flag: Optional function to check for cancellation
-        do_not_compile_video: Whether to not compile a timelapse video after processing
-        framerate: Frames per second for the output video
     """
     try:
         # Process faces
         process_faces(
             config=CONFIG,
-            max_workers=max_workers,
             progress_callback=progress_callback,
             cancel_flag=cancel_flag
         )
@@ -98,13 +75,13 @@ def background_process(
         if progress_callback:
                 progress_callback(1, 1)
         
-        if not do_not_compile_video and not cancel_flag():
+        if not CONFIG.do_not_compile_video and not cancel_flag():
             PROGRESS_INFO["status"] = "compiling_video"
             video_output_path = os.path.join(CONFIG.output_folder, "timelapse.mp4")
             success = compile_timelapse(
                 image_folder=CONFIG.output_folder,
                 output_path=video_output_path,
-                framerate=framerate,
+                framerate=CONFIG.framerate,
                 update_progress=progress_callback
             )
             PROGRESS_INFO["status"] = "video_done" if success else "error:Video compilation failed"
@@ -154,7 +131,8 @@ def index() -> str:
         if not is_valid:
             error = f"Immich server connection error: {message}"
             return render_template("index.html", error=error, warning=warning,
-                                max_workers_options=list(range(1, AVAILABLE_CORES + 1)))
+                                   available_cores=AVAILABLE_CORES,
+                                   config=CONFIG)
 
         try:
             CANCEL_REQUESTED = False
@@ -166,10 +144,10 @@ def index() -> str:
             CONFIG.pose_threshold = float(request.form.get("pose_threshold"))
             CONFIG.date_from = request.form.get("date_from")
             CONFIG.date_to = request.form.get("date_to")
-            CONFIG.ear_threshold = float(request.form.get("ear_threshold", 0.2))
-            max_workers = int(request.form.get("max_workers"))
-            do_not_compile_video = request.form.get("do_not_compile_video") == "on"
-            framerate = int(request.form.get("framerate", 15))
+            CONFIG.ear_threshold = float(request.form.get("ear_threshold"))
+            CONFIG.max_workers = int(request.form.get("max_workers"))
+            CONFIG.do_not_compile_video = request.form.get("do_not_compile_video") == "on"
+            CONFIG.framerate = int(request.form.get("framerate"))
 
             # Reset progress info
             PROGRESS_INFO.update({
@@ -182,11 +160,8 @@ def index() -> str:
             PROCESSING_THREAD = threading.Thread(
                 target=background_process,
                 kwargs={
-                    "max_workers": max_workers,
                     "progress_callback": update_progress,
                     "cancel_flag": lambda: CANCEL_REQUESTED,
-                    "do_not_compile_video": do_not_compile_video,
-                    "framerate": framerate
                 }  
             )   
             PROCESSING_THREAD.start()
@@ -196,11 +171,12 @@ def index() -> str:
         except Exception as e:
             error = f"Error processing request: {e}"
 
-    return render_template("index.html", 
-                         message=message, 
-                         error=error, 
-                         warning=warning,
-                         max_workers_options=list(range(1, AVAILABLE_CORES + 1)))
+    return render_template("index.html",
+                           message=message,
+                           error=error,
+                           warning=warning,
+                           available_cores=AVAILABLE_CORES,
+                           config=CONFIG)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)

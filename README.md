@@ -34,6 +34,15 @@ services:
     environment:
       - IMMICH_API_KEY=abcdefghijklmnopqrstuvwxyz
       - IMMICH_BASE_URL=http://192.168.1.94:2283/api
+      # That
+      - DEFAULT_PERSON_ID=
+      - DEFAULT_RESIZE_SIZE=512
+      - DEFAULT_FACE_RESOLUTION_THRESHOLD=80
+      - DEFAULT_POSE_THRESHOLD=25.0
+      - DEFAULT_LEFT_EYE_POS_X=0.35
+      - DEFAULT_LEFT_EYE_POS_Y=0.4
+      - DEFAULT_DATE_FROM=2023-01-01
+      - DEFAULT_DATE_TO=2023-12-31
 ```
 
 Once the service is started, access the webpage to configure the tool: http://127.0.0.1:5000.  
@@ -44,7 +53,7 @@ Once the service is started, access the webpage to configure the tool: http://12
 
 ## Additional Notes
 
-- For best looking results, I still recommand a manual pass over the final image folder to remove some outliers. The face orientation detection is not perfect at all. Hopefully someday I can get a better results.
+- For best looking results, I still recommend a manual pass over the final image folder to remove some outliers. The face orientation detection is not perfect at all. Hopefully someday I can get better results.
 - Contributions and improvements are welcome.
 
 ## License

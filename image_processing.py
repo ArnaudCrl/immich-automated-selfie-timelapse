@@ -3,7 +3,6 @@ import os
 import io
 import concurrent.futures
 from datetime import datetime
-from dataclasses import dataclass
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
@@ -12,6 +11,7 @@ from tqdm import tqdm
 import logging
 from typing import Tuple
 from immich_api import get_assets_with_person, download_asset
+from config import AppConfig
 
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -39,23 +39,6 @@ tqdm_handler = TqdmLoggingHandler()
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
 tqdm_handler.setFormatter(formatter)
 logger.addHandler(tqdm_handler)
-
-
-@dataclass
-class AppConfig:
-    """Configuration for the application."""
-    api_key: str
-    base_url: str
-    person_id: str
-    output_folder: str
-    landmark_model: str
-    resize_size: int
-    face_resolution_threshold: int
-    pose_threshold: float
-    left_eye_pos: Tuple[float, float]
-    date_from: str
-    date_to: str
-    ear_threshold: float
 
 
 def initialize_worker(landmark_model_path: str) -> None:
@@ -458,7 +441,7 @@ def process_asset_worker(asset, config: AppConfig):
     aligned_face.save(filename)
     return filename
 
-def process_faces(config: AppConfig, max_workers=1, progress_callback=None, cancel_flag=None):
+def process_faces(config: AppConfig, progress_callback=None, cancel_flag=None):
     """
     Processes assets containing the person and saves aligned face images.
 
@@ -467,7 +450,6 @@ def process_faces(config: AppConfig, max_workers=1, progress_callback=None, canc
 
     Args:
         config (AppConfig): Configuration parameters.
-        max_workers (int): Number of worker processes.
         progress_callback (callable, optional): A callback function for progress updates.
         cancel_flag (callable, optional): A function that returns True if processing should be cancelled.
 
@@ -489,7 +471,7 @@ def process_faces(config: AppConfig, max_workers=1, progress_callback=None, canc
 
     initializer_args = [config.landmark_model]
     with concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers,
+            max_workers=config.max_workers,
             initializer=initialize_worker,
             initargs=initializer_args) as executor:
         future_to_asset = {executor.submit(process_asset_worker, asset, config): asset

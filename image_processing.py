@@ -11,7 +11,7 @@ from tqdm import tqdm
 import logging
 from typing import Tuple
 from immich_api import get_assets_with_person, download_asset
-from config import AppConfig
+from forms import OUTPUT_FOLDER, LANDMARK_MODEL
 
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -394,7 +394,7 @@ def crop_and_align_face(image, face_data, resize_size, face_resolution_threshold
         return None
 
 
-def process_asset_worker(asset, config: AppConfig):
+def process_asset_worker(asset: dict, config: dict):
     """
     Worker function to process a single asset.
 
@@ -403,7 +403,7 @@ def process_asset_worker(asset, config: AppConfig):
 
     Args:
         asset (dict): The asset metadata.
-        config (AppConfig): Configuration parameters.
+        config (dict): TimelapseForm data
 
     Returns:
         str or None: The file path of the saved image if processing is successful; otherwise None.
@@ -411,7 +411,7 @@ def process_asset_worker(asset, config: AppConfig):
     try:
         asset_id = asset['id']
         use_original = asset['originalMimeType'] in SUPPORTED_IMAGE_MIME_TYPES
-        image_bytes = download_asset(config.api_key, config.base_url, asset_id, use_original)
+        image_bytes = download_asset(config["api_key"], config["base_url"], asset_id, use_original)
         image = Image.open(io.BytesIO(image_bytes))
         image = ImageOps.exif_transpose(image)
         image = image.convert("RGB")
@@ -419,17 +419,17 @@ def process_asset_worker(asset, config: AppConfig):
         logger.info(f"Error processing asset {asset.get('id')}: {e}")
         return None
 
-    matching_person = next((p for p in asset.get('people', []) if p.get('id') == config.person_id), None)
+    matching_person = next((p for p in asset.get('people', []) if p.get('id') == config["person_id"]), None)
     face_data = matching_person.get('faces', [])[0]
     
     aligned_face = crop_and_align_face(
         image,
         face_data,
-        resize_size=config.resize_size,
-        face_resolution_threshold=config.face_resolution_threshold,
-        pose_threshold=config.pose_threshold,
-        left_eye_pos=config.left_eye_pos,
-        ear_threshold=config.ear_threshold,
+        resize_size=config["resize_size"],
+        face_resolution_threshold=config["face_resolution_threshold"],
+        pose_threshold=config["pose_threshold"],
+        left_eye_pos=config["left_eye_pos"],
+        ear_threshold=config["ear_threshold"],
     )
 
     if aligned_face is None:
@@ -455,11 +455,11 @@ def process_asset_worker(asset, config: AppConfig):
         y = label_padding if label_top else aligned_face.height - label_padding - label_size
         draw.text((x, y), text, fill=label_fill, font=font)
 
-    filename = os.path.join(config.output_folder, f"{timestamp}.jpg")
+    filename = os.path.join(OUTPUT_FOLDER, f"{timestamp}.jpg")
     aligned_face.save(filename)
     return filename
 
-def process_faces(config: AppConfig, progress_callback=None, cancel_flag=None):
+def process_faces(config: dict, progress_callback=None, cancel_flag=None):
     """
     Processes assets containing the person and saves aligned face images.
 
@@ -467,7 +467,7 @@ def process_faces(config: AppConfig, progress_callback=None, cancel_flag=None):
     concurrently download, crop, and align faces.
 
     Args:
-        config (AppConfig): Configuration parameters.
+        config (dict): Configuration parameters.
         progress_callback (callable, optional): A callback function for progress updates.
         cancel_flag (callable, optional): A function that returns True if processing should be cancelled.
 
@@ -478,7 +478,7 @@ def process_faces(config: AppConfig, progress_callback=None, cancel_flag=None):
         logger.info("Processing was cancelled.")
         return []
 
-    assets = get_assets_with_person(config.api_key, config.base_url, config.person_id, config.date_from, config.date_to)
+    assets = get_assets_with_person(config["api_key"], config["base_url"], config["person_id"], config["date_from"], config["date_to"])
     logger.info(f"Found {len(assets)} assets containing the person.")
 
     total_assets = len(assets)
@@ -487,9 +487,9 @@ def process_faces(config: AppConfig, progress_callback=None, cancel_flag=None):
     processed_files = []
     completed_count = 0
 
-    initializer_args = [config.landmark_model]
+    initializer_args = [LANDMARK_MODEL]
     with concurrent.futures.ProcessPoolExecutor(
-            max_workers=config.max_workers,
+            max_workers=config["max_workers"],
             initializer=initialize_worker,
             initargs=initializer_args) as executor:
         future_to_asset = {executor.submit(process_asset_worker, asset, config): asset

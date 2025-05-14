@@ -23,74 +23,63 @@
         {% endif %}
 
         <form method="post" id="timelapseForm">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.api_key.label }}
+                {{ form.api_key(class="form-control") }}
+            </div>
+            <div class="form-group">
+                {{ form.base_url.label }}
+                {{ form.base_url(class="form-control") }}
+            </div>
             <div class="section-header">Person Selection</div>
             <div class="form-group">
-                <label>
-                    Person ID:
-                    <input type="text" name="person_id" value="{{ config.person_id }}" required>
-                </label>
+                {{ form.person_id.label }}
+                {{ form.person_id(class="form-control") }}
             </div>
 
             <div class="section-header">Date Range (Optional)</div>
             <div class="flex-row">
                 <div class="form-group">
-                    <label>
-                        From Date:
-                        <input type="date" name="date_from" value="{{ config.date_from }}">
-                    </label>
+                    {{ form.date_from.label }}
+                    {{ form.date_from(class="form-control") }}
                 </div>
                 <div class="form-group">
-                    <label>
-                        To Date:
-                        <input type="date" name="date_to" value="{{ config.date_to }}">
-                    </label>
+                    {{ form.date_to.label }}
+                    {{ form.date_to(class="form-control") }}
                 </div>
             </div>
 
             <div class="section-header">Face Processing Settings</div>
             <div class="form-group">
-                <label for="resize_size">Output Image Size:</label>
-                <input type="number" step="1" name="resize_size" value="{{ config.resize_size }}">
-                <small class="form-text text-muted">Width and height of the output images in pixels.</small>
+                {{ form.resize_size.label }}
+                {{ form.resize_size(class="form-control") }}
             </div>
             <div class="form-group">
-                <label for="face_resolution_threshold">Minimum Face Resolution:</label>
-                <input type="number" step="1" name="face_resolution_threshold" value="{{ config.face_resolution_threshold }}">
-                <small class="form-text text-muted">Minimum width/height of detected faces in pixels.</small>
+                {{ form.face_resolution_threshold.label }}
+                {{ form.face_resolution_threshold(class="form-control") }}
             </div>
             <div class="form-group">
-                <label for="pose_threshold">Maximum Head Pose Deviation:</label>
-                <input type="number" step="0.1" name="pose_threshold" value="{{ config.pose_threshold }}">
-                <small class="form-text text-muted">Maximum allowed head angle in degrees (0 degrees is when subject is looking straight at the camera).</small>
+                {{ form.pose_threshold.label }}
+                {{ form.pose_threshold(class="form-control") }}
             </div>
             <div class="form-group">
-                <label for="ear_threshold">Minimum Eye Aspect Ratio:</label>
-                <input type="number" step="0.01" name="ear_threshold" value="{{ config.ear_threshold }}" min="0" max="1">
-                <small class="form-text text-muted">Eye aspect ratio threshold to consider eyes open (0 accepts all eyes as open).</small>
+                {{ form.ear_threshold.label }}
+                {{ form.ear_threshold(class="form-control") }}
             </div>
             <div class="form-group">
-                <label>
-                    Max Workers (CPU cores):
-                    <select name="max_workers">
-                        {% for i in range(available_cores + 1) %}
-                            <option value="{{ i }}" {% if config.max_workers|int == i %}selected{% endif %}>{{ i }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
+                {{ form.max_workers.label }}
+                {{ form.max_workers(class="form-control") }}
             </div>
 
             <div class="section-header">Video Output</div>
             <div class="form-group">
-                <div class="checkbox-container">
-                    <input type="checkbox" id="do_not_compile_video" name="do_not_compile_video" {% if config.do_not_compile_video %}checked{% endif %}>
-                    <label for="do_not_compile_video">Do not compile images into a video</label>
-                </div>
+                {{ form.do_not_compile_video }}
+                {{ form.do_not_compile_video.label }}
             </div>
-            <div class="form-group" id="framerateGroup" style="display:{% if config.do_not_compile_video %}none{% else %}block{% endif %};">
-                <label>
-                    Frames per second:
-                    <input type="number" name="framerate" value="{{ config.framerate or 15 }}" min="1">
-                </label>
+            <div class="form-group" id="framerateGroup" style="display:{% if form.do_not_compile_video.data %}none{% else %}block{% endif %};">
+                {{ form.framerate.label }}
+                {{ form.framerate(class="form-control") }}
             </div>
 
             <button type="submit" id="submitButton" class="button-primary">Generate Timelapse</button>

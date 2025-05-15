@@ -4,44 +4,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def validate_immich_connection(api_key, base_url):
-    """
-    Validates that the provided Immich API key and base URL are working.
-
-    Args:
-        api_key (str): API key for authentication.
-        base_url (str): Base URL of the API.
-
-    Returns:
-        tuple: (bool, str) - (is_valid, error_message)
-    """
-    if not api_key or not base_url:
-        return False, "API key and base URL are required."
-
-    try:
-        headers = {
-            'Accept': 'application/json',
-            'x-api-key': api_key,
-        }
-        # Try a simple ping to the server via the user endpoint
-        url = f"{base_url}/server/about"
-        response = requests.get(url, headers=headers, timeout=5)
-
-        if response.status_code == 200:
-            return True, "Connection successful."
-        elif response.status_code == 401:
-            return False, "Authentication failed. Invalid API key."
-        else:
-            return False, f"Server error: Status code {response.status_code}"
-
-    except requests.exceptions.ConnectionError:
-        return False, "Connection error. Check the base URL."
-    except requests.exceptions.Timeout:
-        return False, "Connection timed out. Server might be down."
-    except Exception as e:
-        return False, f"Unexpected error: {str(e)}"
-
-
 def get_assets_with_person(api_key, base_url, person_id, date_from=None, date_to=None):
     """
     Retrieve all image assets containing the specified person by querying the API.

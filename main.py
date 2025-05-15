@@ -145,6 +145,9 @@ def index() -> str:
 
         except Exception as e:
             error = f"Error processing request: {e}"
+    else:
+        if form.errors:
+            error = "Form validation failed. Please check your input."
 
     return render_template("index.html",
                            form=form,

@@ -1,37 +1,9 @@
 document.addEventListener('DOMContentLoaded', function () {
-    checkConnectionStatus();
-
     // Toggle framerate field visibility based on checkbox
     document.getElementById('do_not_compile_video').addEventListener('change', function () {
         document.getElementById('framerateGroup').style.display = this.checked ? 'none' : 'block';
     });
 });
-
-function checkConnectionStatus() {
-    fetch('/check-connection')
-        .then(response => response.json())
-        .then(data => {
-            const statusDiv = document.getElementById('connectionStatus');
-            const submitButton = document.getElementById('submitButton');
-
-            if (data.valid) {
-                statusDiv.className = 'connection-status connected';
-                statusDiv.textContent = 'Connected to Immich server';
-                submitButton.disabled = false;
-            } else {
-                statusDiv.className = 'connection-status disconnected';
-                statusDiv.textContent = 'Error: ' + data.message;
-                submitButton.disabled = true;
-            }
-        })
-        .catch(error => {
-            console.error('Error checking connection:', error);
-            const statusDiv = document.getElementById('connectionStatus');
-            statusDiv.className = 'connection-status disconnected';
-            statusDiv.textContent = 'Error checking Immich server connection';
-            document.getElementById('submitButton').disabled = true;
-        });
-}
 
 // Cancel button
 document.getElementById('cancelButton').addEventListener('click', function () {

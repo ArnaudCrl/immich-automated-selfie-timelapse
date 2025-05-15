@@ -1,3 +1,5 @@
+{% from "_formhelpers.html" import render_field %}
+
 <!DOCTYPE html>
 <html>
 <head>
@@ -9,11 +11,6 @@
     <div class="container">
         <h1>Immich Selfie Timelapse Tool</h1>
 
-        <!-- Connection Status -->
-        <div id="connectionStatus" class="connection-status">
-            Checking Immich server connection...
-        </div>
-
         {% if warning %}
             <div class="warning">{{ warning }}</div>
         {% endif %}
@@ -24,63 +21,19 @@
 
         <form method="post" id="timelapseForm">
             {{ form.hidden_tag() }}
-            <div class="form-group">
-                {{ form.api_key.label }}
-                {{ form.api_key(class="form-control") }}
-            </div>
-            <div class="form-group">
-                {{ form.base_url.label }}
-                {{ form.base_url(class="form-control") }}
-            </div>
-            <div class="section-header">Person Selection</div>
-            <div class="form-group">
-                {{ form.person_id.label }}
-                {{ form.person_id(class="form-control") }}
-            </div>
 
-            <div class="section-header">Date Range (Optional)</div>
-            <div class="flex-row">
-                <div class="form-group">
-                    {{ form.date_from.label }}
-                    {{ form.date_from(class="form-control") }}
-                </div>
-                <div class="form-group">
-                    {{ form.date_to.label }}
-                    {{ form.date_to(class="form-control") }}
-                </div>
-            </div>
-
-            <div class="section-header">Face Processing Settings</div>
-            <div class="form-group">
-                {{ form.resize_size.label }}
-                {{ form.resize_size(class="form-control") }}
-            </div>
-            <div class="form-group">
-                {{ form.face_resolution_threshold.label }}
-                {{ form.face_resolution_threshold(class="form-control") }}
-            </div>
-            <div class="form-group">
-                {{ form.pose_threshold.label }}
-                {{ form.pose_threshold(class="form-control") }}
-            </div>
-            <div class="form-group">
-                {{ form.ear_threshold.label }}
-                {{ form.ear_threshold(class="form-control") }}
-            </div>
-            <div class="form-group">
-                {{ form.max_workers.label }}
-                {{ form.max_workers(class="form-control") }}
-            </div>
-
-            <div class="section-header">Video Output</div>
-            <div class="form-group">
-                {{ form.do_not_compile_video }}
-                {{ form.do_not_compile_video.label }}
-            </div>
-            <div class="form-group" id="framerateGroup" style="display:{% if form.do_not_compile_video.data %}none{% else %}block{% endif %};">
-                {{ form.framerate.label }}
-                {{ form.framerate(class="form-control") }}
-            </div>
+            {{ render_field(form.base_url) }}
+            {{ render_field(form.api_key) }}
+            {{ render_field(form.person_id) }}
+            {{ render_field(form.date_from) }}
+            {{ render_field(form.date_to) }}
+            {{ render_field(form.resize_size) }}
+            {{ render_field(form.face_resolution_threshold) }}
+            {{ render_field(form.pose_threshold) }}
+            {{ render_field(form.ear_threshold) }}
+            {{ render_field(form.max_workers) }}
+            {{ render_field(form.do_not_compile_video) }}
+            {{ render_field(form.framerate) }}
 
             <button type="submit" id="submitButton" class="button-primary">Generate Timelapse</button>
             <button type="button" id="cancelButton" class="button-danger" style="display:none;">Cancel Processing</button>

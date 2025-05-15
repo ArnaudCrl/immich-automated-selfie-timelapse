@@ -1,9 +1,10 @@
+import requests
 from os import environ
 from multiprocessing import cpu_count
 from datetime import datetime
 from flask_wtf import FlaskForm
 from wtforms import StringField, IntegerField, FloatField, SelectField, BooleanField, DateField, SubmitField
-from wtforms.validators import DataRequired, NumberRange, Optional
+from wtforms.validators import DataRequired, NumberRange, Optional, ValidationError
 
 
 OUTPUT_FOLDER = environ.get("OUTPUT_FOLDER", "output")
@@ -82,3 +83,34 @@ class TimelapseForm(FlaskForm):
         validators=[Optional(), NumberRange(min=1)],
         default=int(environ.get("DEFAULT_FRAMERATE", 15)),
     )
+
+    def validate_base_url(form, field):
+        url = f"{field.data}/server/ping"
+        headers = {
+            'Accept': 'application/json',
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("res") == "pong":
+                    return True
+        except Exception as e:
+            pass
+
+        raise ValidationError("Invalid base URL")
+    
+    def validate_api_key(form, field):
+        url = f"{form.base_url.data}/server/about"
+        headers = {
+            'Accept': 'application/json',
+            'x-api-key': field.data,
+        }
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                return True
+        except Exception as e:
+            pass
+
+        raise ValidationError("Invalid API key")

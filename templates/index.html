@@ -35,6 +35,13 @@
             {{ render_field(form.do_not_compile_video) }}
             {{ render_field(form.framerate) }}
 
+            {{ render_field(form.label) }}
+            {{ render_field(form.label_size) }}
+            {{ render_field(form.label_pos) }}
+            {{ render_field(form.label_format) }}
+            {{ render_field(form.label_padding) }}
+            {{ render_field(form.label_fill) }}
+
             <button type="submit" id="submitButton" class="button-primary">Generate Timelapse</button>
             <button type="button" id="cancelButton" class="button-danger" style="display:none;">Cancel Processing</button>
         </form>

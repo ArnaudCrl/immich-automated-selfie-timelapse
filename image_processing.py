@@ -438,16 +438,16 @@ def process_asset_worker(asset: dict, config: dict):
     dt = datetime.fromisoformat(asset['fileCreatedAt'].replace("Z", "+00:00"))
     timestamp = dt.strftime("%Y%m%d_%H%M%S")
 
-    # TODO: use in config
-    label = True
-    label_size = 12
-    label_left = True
-    label_top = False
-    label_format = "%Y-%m-%d"
-    label_padding = 10
-    label_fill = "white"
+    if config["label"]:
+        label_size = config["label_size"]
+        label_pos = config["label_pos"]
+        label_format = config["label_format"]
+        label_padding = config["label_padding"]
+        label_fill = config["label_fill"]
 
-    if label:
+        label_top = label_pos in ("top_left", "top_right")
+        label_left = label_pos in ("top_left", "bottom_left")
+
         draw = ImageDraw.Draw(aligned_face)
         font = ImageFont.load_default(size=label_size)
         text = dt.strftime(format=label_format)

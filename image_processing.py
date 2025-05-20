@@ -341,7 +341,7 @@ def crop_and_align_face(
         ear_threshold (float): Threshold for eye visibility.
 
     Returns:
-        PIL.Image or None: The aligned face image if successful, None otherwise.
+        Tuple[PIL.Image, float] or None: The aligned face image and its score if successful, None otherwise.
     """
     try:
         # Convert image to numpy array for OpenCV processing
@@ -396,7 +396,11 @@ def crop_and_align_face(
         aligned_face = cv2.cvtColor(aligned_face, cv2.COLOR_BGR2RGB)
         aligned_face = Image.fromarray(aligned_face)
 
-        return aligned_face
+        # TODO: Calculate a better score based on pose and eye visibility
+        # This score is used if config["keep"] to select the best images in a period
+        score = yaw
+
+        return aligned_face, score
 
     except Exception as e:
         logger.error(f"Error in crop_and_align_face: {str(e)}")
@@ -431,7 +435,7 @@ def process_asset_worker(asset: dict, config: dict):
     matching_person = next((p for p in asset.get('people', []) if p.get('id') == config["person_id"]), None)
     face_data = matching_person.get('faces', [])[0]
     
-    aligned_face = crop_and_align_face(
+    result = crop_and_align_face(
         image,
         face_data,
         resize_size=config["resize_size"],
@@ -440,8 +444,10 @@ def process_asset_worker(asset: dict, config: dict):
         ear_threshold=config["ear_threshold"],
     )
 
-    if aligned_face is None:
+    if result is None:
         return None
+    
+    aligned_face, score = result
 
     dt = datetime.fromisoformat(asset['fileCreatedAt'].replace("Z", "+00:00"))
     timestamp = dt.strftime("%Y%m%d_%H%M%S")
@@ -465,7 +471,8 @@ def process_asset_worker(asset: dict, config: dict):
 
     filename = os.path.join(OUTPUT_FOLDER, f"{timestamp}.jpg")
     aligned_face.save(filename)
-    return filename
+
+    return filename, score
 
 def process_faces(config: dict, progress_callback=None, cancel_flag=None):
     """
@@ -489,14 +496,10 @@ def process_faces(config: dict, progress_callback=None, cancel_flag=None):
     assets = get_assets_with_person(config["api_key"], config["base_url"], config["person_id"], config["date_from"], config["date_to"])
     logger.info(f"Found {len(assets)} assets containing the person.")
 
-    if config["keep"]:
-        assets = filter_assets_by_period(assets, config)
-        logger.info(f"{len(assets)} assets after applying keep filters.")
-
     total_assets = len(assets)
     if progress_callback:
         progress_callback(0, total_assets)
-    processed_files = []
+    processed_assets = []
     completed_count = 0
 
     initializer_args = [LANDMARK_MODEL]
@@ -513,12 +516,16 @@ def process_faces(config: dict, progress_callback=None, cancel_flag=None):
                 for f in future_to_asset:
                     f.cancel()
                 executor.shutdown(wait=False)
-                return processed_files
+                return False
 
             try:
                 result = future.result()
                 if result is not None:
-                    processed_files.append(result)
+                    filename, score = result
+                    asset = future_to_asset[future]
+                    asset["_filename"] = filename
+                    asset["_score"] = score
+                    processed_assets.append(asset)
             except Exception as e:
                 logger.info(f"Asset processing failed: {e}")
 
@@ -526,5 +533,11 @@ def process_faces(config: dict, progress_callback=None, cancel_flag=None):
             if progress_callback:
                 progress_callback(completed_count, total_assets)
 
-    logger.info(f"Finished processing. {len(processed_files)} images saved out of {total_assets} assets.")
-    return processed_files
+    logger.info(f"Finished processing. {len(processed_assets)} images saved out of {total_assets} assets.")
+    
+    
+    if config["keep"]:
+        filtered_assets = filter_assets_by_period(processed_assets, config)
+        logger.info(f"{len(filtered_assets)} assets after applying keep filters.")
+    
+    return True

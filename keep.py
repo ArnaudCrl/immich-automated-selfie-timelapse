@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from collections import defaultdict
 
@@ -30,6 +31,7 @@ def filter_assets_by_period(assets, config):
     ]
 
     filtered = assets
+    filenames_to_remove = set()
     for period, max_per in periods:
         if max_per and max_per > 0:
             buckets = defaultdict(list)
@@ -39,8 +41,11 @@ def filter_assets_by_period(assets, config):
                 buckets[key].append(asset)
             filtered = []
             for bucket in buckets.values():
-                # TODO: Sort by smallest head pose deviation + hightest eye aspect ratio
-                bucket_sorted = sorted(bucket, key=lambda a: a['fileCreatedAt'])
+                bucket_sorted = sorted(bucket, key=lambda a: a['_score'])
                 filtered.extend(bucket_sorted[:max_per])
+                filenames_to_remove.update(asset['_filename'] for asset in bucket_sorted[max_per:])
+
+    for filename in filenames_to_remove:
+        os.remove(filename)
 
     return filtered

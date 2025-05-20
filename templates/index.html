@@ -22,32 +22,46 @@
         <form method="post" id="timelapseForm">
             {{ form.hidden_tag() }}
 
-            {{ render_field(form.base_url) | safe }}
-            {{ render_field(form.api_key) }}
-            {{ render_field(form.person_id) }}
-            {{ render_field(form.date_from) }}
-            {{ render_field(form.date_to) }}
-            {{ render_field(form.resize_size) }}
-            {{ render_field(form.face_resolution_threshold) }}
-            {{ render_field(form.pose_threshold) }}
-            {{ render_field(form.ear_threshold) }}
-            {{ render_field(form.max_workers) }}
-            {{ render_field(form.do_not_compile_video) }}
-            {{ render_field(form.framerate) }}
+            <details open>
+                <summary>Connection settings</summary>
+                {{ render_field(form.base_url) }}
+                {{ render_field(form.api_key) }}
+                {{ render_field(form.person_id) }}
+            </details>
 
-            {{ render_field(form.label) }}
-            {{ render_field(form.label_size) }}
-            {{ render_field(form.label_pos) }}
-            {{ render_field(form.label_format) }}
-            {{ render_field(form.label_padding) }}
-            {{ render_field(form.label_fill) }}
+            <details>
+                <summary>Date range</summary>
+                {{ render_field(form.date_from) }}
+                {{ render_field(form.date_to) }}
 
-            {{ render_field(form.keep) }}
-            {{ render_field(form.keep_hourly) }}
-            {{ render_field(form.keep_daily) }}
-            {{ render_field(form.keep_weekly) }}
-            {{ render_field(form.keep_monthly) }}
-            {{ render_field(form.keep_yearly) }}
+                {{ render_field(form.keep) }}
+                {{ render_field(form.keep_hourly) }}
+                {{ render_field(form.keep_daily) }}
+                {{ render_field(form.keep_weekly) }}
+                {{ render_field(form.keep_monthly) }}
+                {{ render_field(form.keep_yearly) }}
+            </details>
+
+            <details>
+                <summary>Processing options</summary>
+                {{ render_field(form.resize_size) }}
+                {{ render_field(form.face_resolution_threshold) }}
+                {{ render_field(form.pose_threshold) }}
+                {{ render_field(form.ear_threshold) }}
+                {{ render_field(form.max_workers) }}
+                {{ render_field(form.do_not_compile_video) }}
+                {{ render_field(form.framerate) }}
+            </details>
+
+            <details>
+                <summary>Label options</summary>
+                {{ render_field(form.label) }}
+                {{ render_field(form.label_size) }}
+                {{ render_field(form.label_pos) }}
+                {{ render_field(form.label_format) }}
+                {{ render_field(form.label_padding) }}
+                {{ render_field(form.label_fill) }}
+            </details>
 
             <button type="submit" id="submitButton" class="button-primary">Generate Timelapse</button>
             <button type="button" id="cancelButton" class="button-danger" style="display:none;">Cancel Processing</button>

@@ -19,23 +19,6 @@ h1 {
     color: #333;
 }
 
-.connection-status {
-    text-align: center;
-    padding: 10px;
-    margin: 15px 0;
-    border-radius: 4px;
-}
-
-.connected {
-    background-color: #d4edda;
-    color: #155724;
-}
-
-.disconnected {
-    background-color: #f8d7da;
-    color: #721c24;
-}
-
 .warning {
     background-color: #fff3cd;
     color: #856404;
@@ -49,19 +32,15 @@ form {
     margin-top: 20px;
 }
 
-.form-group {
-    margin-bottom: 15px;
-}
-
-label {
-    display: block;
-    margin-bottom: 10px;
+.field {
+    margin: 10px;
     color: #555;
 }
 
 input[type="text"],
 input[type="number"],
 input[type="date"],
+input[type="url"],
 select {
     width: calc(100% - 20px);
     padding: 8px 10px;
@@ -69,17 +48,6 @@ select {
     border: 1px solid #ccc;
     border-radius: 4px;
     font-size: 14px;
-}
-
-.checkbox-container {
-    display: flex;
-    align-items: center;
-    margin-top: 10px;
-}
-
-.checkbox-container label {
-    margin-left: 10px;
-    margin-bottom: 0;
 }
 
 .button-primary {
@@ -144,22 +112,31 @@ progress {
     height: 25px;
 }
 
-.section-header {
-    margin-top: 25px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
-    font-weight: bold;
+details {
+    margin-top: 20px;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    background: #fafbfc;
 }
 
-.flex-row {
-    display: flex;
-    gap: 15px;
+details[open] {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    background: #f5f7fa;
 }
 
-.flex-row>div {
-    flex: 1;
+details summary {
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: 600;
+    padding: 14px 18px;
+    outline: none;
+    border-radius: 6px 6px 0 0;
+    background: #e9ecef;
+    color: #333;
+    user-select: none;
+    transition: background 0.2s;
 }
 
-.hidden {
-    display: none;
+details[open] summary {
+    background: #dde3ea;
 }

@@ -17,9 +17,9 @@ class TimelapseForm(FlaskForm):
         default=environ.get("IMMICH_API_KEY", ""),
     )
 
-    base_url = fields.StringField(
+    base_url = fields.URLField(
         label="Base URL",
-        validators=[validators.DataRequired(), validators.URL()],
+        validators=[validators.DataRequired()],
         default=environ.get("IMMICH_BASE_URL", ""),
     )
 

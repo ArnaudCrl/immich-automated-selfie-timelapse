@@ -319,7 +319,15 @@ def calculate_eye_alignment_transform(
     # Convert to 2x3 matrix for OpenCV
     return M[:2, :]
 
-def crop_and_align_face(image, face_data, resize_size, face_resolution_threshold, pose_threshold, left_eye_pos, ear_threshold):
+def crop_and_align_face(
+        image: Image,
+        face_data: dict,
+        resize_size: int,
+        face_resolution_threshold: int,
+        pose_threshold: float,
+        ear_threshold: float,
+        left_eye_pos: Tuple[float, float] = (0.35, 0.4),
+    ):
     """
     Aligns a face in an image by positioning the eyes at specified locations.
 
@@ -369,10 +377,10 @@ def crop_and_align_face(image, face_data, resize_size, face_resolution_threshold
 
         # Calculate transformation matrix
         rotation_matrix = calculate_eye_alignment_transform(
-            left_eye_center,
-            right_eye_center,
-            resize_size,
-            left_eye_pos
+            left_eye_center=left_eye_center,
+            right_eye_center=right_eye_center,
+            output_size=resize_size,
+            desired_left_eye_pos=left_eye_pos,
         )
 
         # Apply transformation
@@ -429,7 +437,6 @@ def process_asset_worker(asset: dict, config: dict):
         resize_size=config["resize_size"],
         face_resolution_threshold=config["face_resolution_threshold"],
         pose_threshold=config["pose_threshold"],
-        left_eye_pos=config["left_eye_pos"],
         ear_threshold=config["ear_threshold"],
     )
 

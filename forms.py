@@ -6,8 +6,8 @@ from flask_wtf import FlaskForm
 from wtforms import fields, validators
 
 
-OUTPUT_FOLDER = environ.get("OUTPUT_FOLDER", "output")
-LANDMARK_MODEL = environ.get("LANDMARK_MODEL", "shape_predictor_68_face_landmarks.dat")
+OUTPUT_FOLDER = "output"
+LANDMARK_MODEL = "shape_predictor_68_face_landmarks.dat"
 
 
 class TimelapseForm(FlaskForm):
@@ -26,71 +26,71 @@ class TimelapseForm(FlaskForm):
     person_id = fields.StringField(
         label="Person ID",
         validators=[validators.DataRequired()],
-        default=environ.get("DEFAULT_PERSON_ID", ""),
+        default=environ.get("PERSON_ID", ""),
     )
 
     date_from = fields.DateField(
         label="From Date",
         validators=[validators.Optional()],
-        default=datetime.strptime(environ.get("DEFAULT_DATE_FROM"), "%Y-%m-%d") if environ.get("DEFAULT_DATE_FROM") else None,
+        default=datetime.strptime(environ.get("DATE_FROM"), "%Y-%m-%d") if environ.get("DATE_FROM") else None,
     )
 
     date_to = fields.DateField(
         label="To Date",
         validators=[validators.Optional()],
-        default=datetime.strptime(environ.get("DEFAULT_DATE_TO"), "%Y-%m-%d") if environ.get("DEFAULT_DATE_TO") else None,
+        default=datetime.strptime(environ.get("DATE_TO"), "%Y-%m-%d") if environ.get("DATE_TO") else None,
     )
 
     resize_size = fields.IntegerField(
         label="Output Image Size",
         validators=[validators.Optional(), validators.NumberRange(min=1)],
-        default=int(environ.get("DEFAULT_RESIZE_SIZE", 512)),
+        default=int(environ.get("RESIZE_SIZE", 512)),
     )
 
     face_resolution_threshold = fields.IntegerField(
         label="Minimum Face Resolution",
         validators=[validators.Optional(), validators.NumberRange(min=1)],
-        default=int(environ.get("DEFAULT_FACE_RESOLUTION_THRESHOLD", 80)),
+        default=int(environ.get("FACE_RESOLUTION_THRESHOLD", 80)),
     )
 
     pose_threshold = fields.FloatField(
         "Maximum Head Pose Deviation",
         validators=[validators.Optional(), validators.NumberRange(min=0)],
-        default=float(environ.get("DEFAULT_POSE_THRESHOLD", 25.0)),
+        default=float(environ.get("POSE_THRESHOLD", 25.0)),
     )
 
     ear_threshold = fields.FloatField(
         label="Minimum Eye Aspect Ratio",
         validators=[validators.Optional(), validators.NumberRange(min=0, max=1)],
-        default=float(environ.get("DEFAULT_EAR_THRESHOLD", 0.2)),
+        default=float(environ.get("EAR_THRESHOLD", 0.2)),
     )
 
     max_workers = fields.SelectField(
         "Max Workers (CPU cores)",
         coerce=int,
         choices=[(i, str(i)) for i in range(cpu_count() + 1)],
-        default=int(environ.get("DEFAULT_MAX_WORKERS", 1)),
+        default=int(environ.get("MAX_WORKERS", 1)),
     )
 
     do_not_compile_video = fields.BooleanField(
         label="Do not compile images into a video",
-        default=environ.get("DEFAULT_DO_NOT_COMPILE_VIDEO", "").lower() in ("true", "1", "yes"),
+        default=environ.get("DO_NOT_COMPILE_VIDEO", "").lower() in ("true", "1", "yes"),
     )
 
     framerate = fields.IntegerField(
         label="Frames per second",
         validators=[validators.Optional(), validators.NumberRange(min=1)],
-        default=int(environ.get("DEFAULT_FRAMERATE", 15)),
+        default=int(environ.get("FRAMERATE", 15)),
     )
 
     label = fields.BooleanField(
         label="Add date label",
-        default=environ.get("DEFAULT_LABEL", "").lower() in ("true", "1", "yes"),
+        default=environ.get("LABEL", "").lower() in ("true", "1", "yes"),
     )
     label_size = fields.IntegerField(
         label="Label font size",
         validators=[validators.Optional(), validators.NumberRange(min=1)],
-        default=int(environ.get("DEFAULT_LABEL_SIZE", 12)),
+        default=int(environ.get("LABEL_SIZE", 12)),
     )
     label_pos = fields.SelectField(
         label="Label position",
@@ -100,27 +100,27 @@ class TimelapseForm(FlaskForm):
             ("bottom_left", "Bottom Left"),
             ("bottom_right", "Bottom Right"),
         ],
-        default=environ.get("DEFAULT_LABEL_POS", "bottom_left"),
+        default=environ.get("LABEL_POS", "bottom_left"),
     )
     label_format = fields.StringField(
         label="Label date format",
         validators=[validators.Optional()],
-        default=environ.get("DEFAULT_LABEL_FORMAT", "%Y-%m-%d"),
+        default=environ.get("LABEL_FORMAT", "%Y-%m-%d"),
     )
     label_padding = fields.IntegerField(
         label="Label padding",
         validators=[validators.Optional(), validators.NumberRange(min=0)],
-        default=int(environ.get("DEFAULT_LABEL_PADDING", 10)),
+        default=int(environ.get("LABEL_PADDING", 10)),
     )
     label_fill = fields.ColorField(
         label="Label fill color",
         validators=[validators.Optional()],
-        default=environ.get("DEFAULT_LABEL_FILL", "white"),
+        default=environ.get("LABEL_FILL", "white"),
     )
 
     keep = fields.BooleanField(
         label="Filter images with a maxium of images per period",
-        default=environ.get("DEFAULT_CONFIG", "").lower() in ("true", "1", "yes"),
+        default=environ.get("KEEP", "").lower() in ("true", "1", "yes"),
     )
     keep_hourly = fields.IntegerField(
         label="Max per hour",

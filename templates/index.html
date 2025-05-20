@@ -22,7 +22,7 @@
         <form method="post" id="timelapseForm">
             {{ form.hidden_tag() }}
 
-            {{ render_field(form.base_url) }}
+            {{ render_field(form.base_url) | safe }}
             {{ render_field(form.api_key) }}
             {{ render_field(form.person_id) }}
             {{ render_field(form.date_from) }}
@@ -41,6 +41,13 @@
             {{ render_field(form.label_format) }}
             {{ render_field(form.label_padding) }}
             {{ render_field(form.label_fill) }}
+
+            {{ render_field(form.keep) }}
+            {{ render_field(form.keep_hourly) }}
+            {{ render_field(form.keep_daily) }}
+            {{ render_field(form.keep_weekly) }}
+            {{ render_field(form.keep_monthly) }}
+            {{ render_field(form.keep_yearly) }}
 
             <button type="submit" id="submitButton" class="button-primary">Generate Timelapse</button>
             <button type="button" id="cancelButton" class="button-danger" style="display:none;">Cancel Processing</button>

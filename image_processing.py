@@ -12,6 +12,7 @@ import logging
 from typing import Tuple
 from immich_api import get_assets_with_person, download_asset
 from forms import OUTPUT_FOLDER, LANDMARK_MODEL
+from keep import filter_assets_by_period
 
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/jpeg",
@@ -480,6 +481,10 @@ def process_faces(config: dict, progress_callback=None, cancel_flag=None):
 
     assets = get_assets_with_person(config["api_key"], config["base_url"], config["person_id"], config["date_from"], config["date_to"])
     logger.info(f"Found {len(assets)} assets containing the person.")
+
+    if config["keep"]:
+        assets = filter_assets_by_period(assets, config)
+        logger.info(f"{len(assets)} assets after applying keep filters.")
 
     total_assets = len(assets)
     if progress_callback:

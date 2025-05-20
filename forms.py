@@ -118,6 +118,36 @@ class TimelapseForm(FlaskForm):
         default=environ.get("DEFAULT_LABEL_FILL", "white"),
     )
 
+    keep = fields.BooleanField(
+        label="Filter images with a maxium of images per period",
+        default=environ.get("DEFAULT_CONFIG", "").lower() in ("true", "1", "yes"),
+    )
+    keep_hourly = fields.IntegerField(
+        label="Max per hour",
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+        default=int(environ.get("KEEP_HOURLY", 1)),
+    )
+    keep_daily = fields.IntegerField(
+        label="Max per day",
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+        default=int(environ.get("KEEP_DAILY", 3)),
+    )
+    keep_weekly = fields.IntegerField(
+        label="Max per week",
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+        default=int(environ.get("KEEP_WEEKLY", 10)),
+    )
+    keep_monthly = fields.IntegerField(
+        label="Max per month",
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+        default=int(environ.get("KEEP_MONTHLY", 20)),
+    )
+    keep_yearly = fields.IntegerField(
+        label="Max per year",
+        validators=[validators.Optional(), validators.NumberRange(min=0)],
+        default=int(environ.get("KEEP_YEARLY", 50)),
+    )
+
     def validate_base_url(form, field):
         url = f"{field.data}/server/ping"
         headers = {

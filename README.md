@@ -56,6 +56,14 @@ Once the service is started, access the webpage to configure the tool: http://12
 - For best looking results, I still recommend a manual pass over the final image folder to remove some outliers. The face orientation detection is not perfect at all. Hopefully someday I can get better results.
 - Contributions and improvements are welcome.
 
+## Development
+
+If you are a programmer or developer, copy `.env.example` to `.env` and update its content with your values. Install system dependencies required for OpenCV and dlib as in the first RUN command in `Dockerfile`. Install python dependencies from `requirements.txt` in your virtual environment, plus `python-dotenv` for Flask to be able to read your `.env` file. Download [shape_predictor_68_face_landmarks.dat](https://github.com/JeffTrain/selfie/raw/master/shape_predictor_68_face_landmarks.dat) and run the app with
+
+```sh
+flask --app main --debug run
+```
+
 ## License
 
 This project is open source and available under the MIT License.

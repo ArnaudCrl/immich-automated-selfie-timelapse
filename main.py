@@ -149,7 +149,7 @@ def index() -> str:
         if form.errors:
             error = "Form validation failed. Please check your input."
 
-    return render_template("index.html",
+    return render_template("main.html",
                            form=form,
                            message=message,
                            error=error,

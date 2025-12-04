@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 from typing import Callable, Dict, List, Tuple
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, send_from_directory
 
 from image_processing import process_faces
 from compile_timelapse import compile_timelapse
@@ -20,6 +20,10 @@ log.addFilter(ProgressRouteFilter())
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "dev"
+
+@app.route('/_app/<path:filename>')
+def serve_app_files(filename):
+    return send_from_directory('templates/_app', filename)
 
 # Global state
 PROGRESS_INFO: Dict[str, any] = {"completed": 0, "total": 0, "status": "idle"}
@@ -149,7 +153,7 @@ def index() -> str:
         if form.errors:
             error = "Form validation failed. Please check your input."
 
-    return render_template("main.html",
+    return render_template("page1.html",
                            form=form,
                            message=message,
                            error=error,

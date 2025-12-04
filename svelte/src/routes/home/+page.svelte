@@ -1,5 +1,6 @@
 <script lang="ts">
-  import SettingAccordion from "$lib/components/setting-accordion.svelte";
+  import SettingAccordion from "./components/setting-accordion.svelte";
+  import Person from "./components/person.svelte";
   import {
     HStack,
     ThemeSwitcher,
@@ -8,6 +9,9 @@
     Heading,
     Stack,
   } from "@immich/ui";
+  import {
+    mdiAccountOutline,
+  } from '@mdi/js';
   import type { Component } from "svelte";
 
   const settings: Array<{
@@ -18,18 +22,18 @@
     icon: string;
   }> = [
     {
-      component: null as unknown as Component,
+      component: Person,
       title: "Title",
       subtitle: "Subtitle",
       key: "key",
-      icon: "icon",
+      icon: mdiAccountOutline,
     },
   ];
 </script>
 
 <Stack>
   <div class="border">
-    <AppShell class="h-[400px]">
+    <AppShell>
       <AppShellHeader>
         <nav class="flex items-center justify-between md:gap-2 p-2">
           <div class="flex gap-2 place-items-center">

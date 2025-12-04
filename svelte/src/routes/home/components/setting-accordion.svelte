@@ -68,7 +68,15 @@
     <div>
       <div class="flex gap-2 place-items-center">
         {#if icon}
-          <!-- <Icon path={icon} class="text-immich-primary dark:text-immich-dark-primary" size="24" ariaHidden /> -->
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            role="img"
+            aria-hidden="true"
+          >
+            <path d={icon} fill="currentColor" />
+          </svg>
         {/if}
         <h2 class="font-medium text-immich-primary dark:text-immich-dark-primary">
           {title}
@@ -93,6 +101,7 @@
         stroke-width="2"
         viewBox="0 0 24 24"
         stroke="currentColor"
+        class="rotating"
       >
         <path d="M19 9l-7 7-7-7" />
       </svg>
@@ -111,7 +120,7 @@
     transition: transform 0.2s ease-in;
   }
 
-  [aria-expanded='true'] svg {
+  [aria-expanded='true'] svg.rotating {
     transform: rotate(0.5turn);
   }
 </style>

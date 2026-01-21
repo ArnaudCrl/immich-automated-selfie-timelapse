@@ -74,3 +74,41 @@ def download_asset(api_key, base_url, asset_id, use_original=True):
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.content
+
+
+def validate_api_credentials(base_url: str, api_key: str) -> bool:
+    """
+    Check if the provided API key is valid by making a test request.
+    Args:
+        base_url (str): Base URL of the API.
+        api_key (str): API key for authentication.
+
+    Returns:
+        bool: True if the API key works with the base URL, False otherwise.
+    """
+    url = f"{base_url}/server/about"
+    headers = {
+        'Accept': 'application/json',
+        'x-api-key': api_key,
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("res") == "pong"
+    except Exception as e:
+        return False
+
+
+def validate_base_url(base_url: str) -> bool:
+    url = f"{base_url}/server/ping"
+    headers = {
+        'Accept': 'application/json',
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return "version" in data
+    except Exception as e:
+        return False

@@ -46,9 +46,27 @@ Once the service is started, access the webpage to configure the tool: http://12
 
 ## Development
 
-If you are a programmer or developer, copy `.env.example` to `.env` and update its content with your values. Install system dependencies required for OpenCV and dlib as in the first RUN command in `Dockerfile`. Install python dependencies from `requirements.txt` in your virtual environment, plus `python-dotenv` for Flask to be able to read your `.env` file. Download [shape_predictor_68_face_landmarks.dat](https://github.com/JeffTrain/selfie/raw/master/shape_predictor_68_face_landmarks.dat) and run the app with
+If you are a developer, you need few system depencies to be able to run the app from source.
 
 ```sh
+cp .env.example .env  # then update its content with your values
+sudo apt-get install build-essential cmake ffmpeg libsm6 libxext6 libxrender-dev libgl1-mesa-glx
+wget -nd https://github.com/JeffTrain/selfie/raw/master/shape_predictor_68_face_landmarks.dat
+```
+Then you need to run the frontend and the backend in two separate terminal tabs.
+
+```sh
+cd svelte/
+npm install
+npm run build:watch
+```
+
+```sh
+cd flaskapp/
+uv venv -p python3.10
+source .venv/bin/activate
+uv pip install -r requirements.txt
+uv pip install -r requirements-dev.txt
 flask --app main --debug run
 ```
 

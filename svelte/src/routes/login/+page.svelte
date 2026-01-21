@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import {
+	Alert,
 	Button,
 	Field,
 	Input,
@@ -13,16 +14,33 @@
 	immichLogo,
 	VStack,
   } from "@immich/ui";
+  import { dev } from "$app/environment";
+
+  const formAction: string = dev ? "http://localhost:5000/login" : "/login";
+
+  let baseUrl: string = "";
+  let apiKey: string = "";
+  let baseUrlIsValid: boolean = true;
+  let apiKeyIsValid: boolean = true;
 
   const onSubmit = async (event: Event) => {
 	event.preventDefault();
-	// Add form submission logic here
+	const form = event.target as HTMLFormElement;
+	const formData = new FormData(form);
+	console.log("Form data:", Object.fromEntries(formData.entries()));
+	const response = await fetch(formAction, {
+	  method: "POST",
+	  body: formData,
+	});
+	if (response.ok) {
+	  window.location.href = dev ? "http://localhost:5000/home" : "/home";
+	} else {
+	  // read response to determine which field is invalid
+	  const result = await response.json();
+	  baseUrlIsValid = result.baseUrlIsValid;
+	  apiKeyIsValid = result.apiKeyIsValid;
+	}
   };
-
-  let baseUrl = "";
-  let apiKey = "";
-
-  $: valid = baseUrl.length > 0 && apiKey.length > 0;
 </script>
 
 <section class="min-w-dvw flex min-h-dvh items-center justify-center relative">
@@ -42,7 +60,7 @@
 	  <VStack>
 		<img
 		  alt="Timelapse selfie logo"
-		  src="/logo.gif"
+		  src="/_app/logo.gif"
 		  class="h-24 aspect-square"
 		/>
 		<Heading size="large" class="font-semibold" color="primary" tag="h1">
@@ -52,17 +70,26 @@
 	</CardHeader>
 	<CardBody class="p-8">
 	  <form onsubmit={onSubmit} method="post" class="flex flex-col gap-4">
-		<Field label="Immich base URL" required>
+		{#if !baseUrlIsValid || !apiKeyIsValid}
+		    <Alert color="danger" title="Invalid credentials" closable />
+		{/if}
+		<Field label="Immich base URL" required invalid={!baseUrlIsValid}>
 		  <Input
 			bind:value={baseUrl}
+			name="baseUrl"
 			type="url"
 			autocomplete="url"
-			placeholder="http://192.168.1.10:2283"
+			placeholder="http://192.168.1.94:2283/api"
 		  />
 		</Field>
 
-		<Field label="API Key" required>
-			<PasswordInput bind:value={apiKey} autocomplete="new-password" />
+		<Field label="API Key" required invalid={!apiKeyIsValid}>
+			<PasswordInput
+			  bind:value={apiKey}
+			  name="apiKey"
+			  autocomplete="new-password"
+			  placeholder="abcdefghijklmnopqrstuvwxyz"
+			/>
 		</Field>
 
 		<Button
@@ -71,8 +98,9 @@
 		  size="giant"
 		  shape="round"
 		  fullWidth
-		  disabled={!valid}>Log in</Button
 		>
+			Log in
+		</Button>
 	  </form>
 	</CardBody>
   </Card>

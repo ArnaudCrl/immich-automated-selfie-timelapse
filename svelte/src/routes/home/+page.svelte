@@ -9,10 +9,9 @@
     Heading,
     Stack,
   } from "@immich/ui";
-  import {
-    mdiAccountOutline,
-  } from '@mdi/js';
+  import { mdiAccountOutline } from "@mdi/js";
   import type { Component } from "svelte";
+  import { fade } from "svelte/transition";
 
   const settings: Array<{
     component: Component;
@@ -38,9 +37,9 @@
         <nav class="flex items-center justify-between md:gap-2 p-2">
           <div class="flex gap-2 place-items-center">
             <a href="/" class="flex gap-2 text-4xl">
-                <img src="/logo.gif" class="h-12" alt="Timelapse selfie logo" />
-                <div class="p-4">
-                  <Heading size="tiny">Immich Selfie Timelapse Tool</Heading>
+              <img src="/logo.gif" class="h-12" alt="Timelapse selfie logo" />
+              <div class="p-4">
+                <Heading size="tiny">Immich Selfie Timelapse Tool</Heading>
               </div>
             </a>
           </div>
@@ -55,9 +54,13 @@
           <section class="w-full pb-28 sm:w-5/6 md:w-[896px]">
             {#each settings as { component: Component, title, subtitle, key, icon } (key)}
               <SettingAccordion {title} {subtitle} {key} {icon}>
-                {#if Component}
-                  <svelte:component this={Component} />
-                {/if}
+                <div in:fade={{ duration: 500 }}>
+                  <div class="ms-4 mt-4 flex flex-col gap-4">
+                    {#if Component}
+                      <svelte:component this={Component} />
+                    {/if}
+                  </div>
+                </div>
               </SettingAccordion>
             {/each}
           </section>

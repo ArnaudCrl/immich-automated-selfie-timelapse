@@ -5,3 +5,5 @@ shape_predictor_68_face_landmarks.dat
 output/
 __pycache__/
 .env
+flaskapp/.flaskenv
+.vscode/

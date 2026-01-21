@@ -95,12 +95,14 @@ def validate_api_credentials(base_url: str, api_key: str) -> bool:
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            return data.get("res") == "pong"
+            return "version" in data
     except Exception as e:
         return False
 
 
-def validate_base_url(base_url: str) -> bool:
+def validate_base_url(base_url: str) -> bool | str:
+    base_url = base_url.rstrip('/')
+    base_url = base_url if base_url.endswith('/api') else f"{base_url}/api"
     url = f"{base_url}/server/ping"
     headers = {
         'Accept': 'application/json',
@@ -108,7 +110,6 @@ def validate_base_url(base_url: str) -> bool:
     try:
         response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
-            data = response.json()
-            return "version" in data
+            return base_url
     except Exception as e:
         return False

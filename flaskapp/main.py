@@ -1,8 +1,7 @@
 import logging
 import os
-import threading
-from typing import Callable, Dict, List, Tuple
-from flask import Flask, jsonify, render_template, redirect, url_for, send_from_directory, request
+from flask import Flask, session, jsonify, redirect, url_for, send_from_directory, request, g
+from functools import wraps
 
 from immich_api import validate_api_credentials, validate_base_url
 
@@ -18,46 +17,51 @@ class ProgressRouteFilter(logging.Filter):
 log = logging.getLogger('werkzeug')
 log.addFilter(ProgressRouteFilter())
 
-IMMICH_BASE_URL = os.getenv("IMMICH_BASE_URL", "")
-IMMICH_API_KEY = os.getenv("IMMICH_API_KEY", "") 
-
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-here'  # TODO: replace with a real secret key
+
+IMMICH_BASE_URL = os.getenv("IMMICH_BASE_URL", "")
+IMMICH_API_KEY = os.getenv("IMMICH_API_KEY", "")
+
+def is_logged_in():
+    if "IMMICH_BASE_URL" in session and "IMMICH_API_KEY" in session:
+        if validate_api_credentials(session["IMMICH_BASE_URL"], session["IMMICH_API_KEY"]):
+            return True
+    if validate_api_credentials(IMMICH_BASE_URL, IMMICH_API_KEY):
+        return True
+    return False
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if is_logged_in():
+            return f(*args, **kwargs)
+        else:
+            return redirect(url_for('login', next=request.url))
+    return decorated_function
 
 @app.route("/", methods=["GET"])
-def index():
-    if validate_api_credentials(IMMICH_BASE_URL, IMMICH_API_KEY):
-        return redirect(url_for("home"))
-    else:
-        return redirect(url_for("login"))
-
-@app.route("/home", methods=["GET"])
+@login_required
 def home():
-    print(IMMICH_BASE_URL, IMMICH_API_KEY)
-    if validate_api_credentials(IMMICH_BASE_URL, IMMICH_API_KEY):
-        return send_from_directory("../svelte/build", "home.html")
-    else:
-        return redirect(url_for("login"))
+    return send_from_directory("../svelte/build", "home.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    global IMMICH_BASE_URL, IMMICH_API_KEY 
+    if is_logged_in():
+        return redirect(url_for('home'))
     if request.method == "POST":
         base_url = request.form.get("baseUrl", "").strip()
         api_key = request.form.get("apiKey", "").strip()
-        print(f"Received login attempt with baseUrl: {base_url} and apiKey: {api_key}")
-        if validate_api_credentials(base_url, api_key):
-            IMMICH_BASE_URL = base_url
-            IMMICH_API_KEY = api_key            
-            return jsonify({"baseUrlIsValid": True, "apiKeyIsValid": True}), 200
-        else:
-            if validate_base_url(base_url):
-                return jsonify({"baseUrlIsValid": True, "apiKeyIsValid": False}), 401
-            return jsonify({"baseUrlIsValid": False, "apiKeyIsValid": False}), 401
+        if validate_base_url(base_url):
+            base_url = validate_base_url(base_url)
+            if validate_api_credentials(base_url, api_key):
+                session['IMMICH_BASE_URL'] = base_url
+                session['IMMICH_API_KEY'] = api_key        
+                return jsonify({"error": False}), 200
+            return jsonify({"error": True, "message": "Server reachable but API key denied", "field": "apiKey"}), 401
+        return jsonify({"error": True, "message": "Server unreachable", "field": "baseUrl"}), 401
     else:
-        if validate_api_credentials(IMMICH_BASE_URL, IMMICH_API_KEY):
-            return redirect(url_for("home"))
-        else:
-            return send_from_directory("../svelte/build", "login.html")
+        return send_from_directory("../svelte/build", "login.html")
 
 @app.route('/_app/<path:filename>')
 def serve_app_files(filename):

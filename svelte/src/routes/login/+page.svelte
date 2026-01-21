@@ -14,31 +14,29 @@
 	immichLogo,
 	VStack,
   } from "@immich/ui";
-  import { dev } from "$app/environment";
-
-  const formAction: string = dev ? "http://localhost:5000/login" : "/login";
 
   let baseUrl: string = "";
   let apiKey: string = "";
-  let baseUrlIsValid: boolean = true;
-  let apiKeyIsValid: boolean = true;
+  let error: boolean = false;
+  let errorMessage: string = "";
+  let errorField: string = "";
 
   const onSubmit = async (event: Event) => {
 	event.preventDefault();
 	const form = event.target as HTMLFormElement;
 	const formData = new FormData(form);
-	console.log("Form data:", Object.fromEntries(formData.entries()));
-	const response = await fetch(formAction, {
+	const response = await fetch("/login", {
 	  method: "POST",
 	  body: formData,
 	});
 	if (response.ok) {
-	  window.location.href = dev ? "http://localhost:5000/home" : "/home";
+	  window.location.href = "/";
 	} else {
 	  // read response to determine which field is invalid
 	  const result = await response.json();
-	  baseUrlIsValid = result.baseUrlIsValid;
-	  apiKeyIsValid = result.apiKeyIsValid;
+	  error = true;
+	  errorMessage = result.message;
+	  errorField = result.field;
 	}
   };
 </script>
@@ -70,10 +68,10 @@
 	</CardHeader>
 	<CardBody class="p-8">
 	  <form onsubmit={onSubmit} method="post" class="flex flex-col gap-4">
-		{#if !baseUrlIsValid || !apiKeyIsValid}
-		    <Alert color="danger" title="Invalid credentials" closable />
+		{#if error}
+		    <Alert color="danger" title={errorMessage} closable />
 		{/if}
-		<Field label="Immich base URL" required invalid={!baseUrlIsValid}>
+		<Field label="Immich base URL" required invalid={error && errorField == "baseUrl"}>
 		  <Input
 			bind:value={baseUrl}
 			name="baseUrl"
@@ -83,7 +81,7 @@
 		  />
 		</Field>
 
-		<Field label="API Key" required invalid={!apiKeyIsValid}>
+		<Field label="API Key" required invalid={error && errorField == "apiKey"}>
 			<PasswordInput
 			  bind:value={apiKey}
 			  name="apiKey"

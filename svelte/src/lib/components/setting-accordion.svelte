@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount, type Snippet } from 'svelte';
-  import { slide } from 'svelte/transition';
+  import { fade,slide } from 'svelte/transition';
 
   interface Props {
     title: string;
     subtitle?: string;
-    key: string;
+    key?: string;
     isOpen?: boolean;
     autoScrollTo?: boolean;
     icon?: string;
@@ -16,7 +16,7 @@
   let {
     title,
     subtitle = '',
-    key,
+    key = '',
     isOpen = false,
     autoScrollTo = false,
     icon = '',
@@ -110,7 +110,11 @@
 
   {#if isOpen}
     <ul transition:slide={{ duration: 150 }} class="mb-2 ms-4">
-      {@render children?.()}
+      <div in:fade={{ duration: 500 }}>
+        <div class="ms-4 mt-4 flex flex-col gap-4">
+          {@render children?.()}
+        </div>
+      </div>
     </ul>
   {/if}
 </div>

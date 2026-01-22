@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { fade } from "svelte/transition";
-  import type { Component } from "svelte";
+  import type { Snippet } from "svelte";
   import {
     HStack,
     ThemeSwitcher,
@@ -8,23 +7,17 @@
     AppShellHeader,
     Heading,
     Stack,
+    AppShellSidebar,
+    NavbarItem,
   } from "@immich/ui";
-  import SettingAccordion from "./setting-accordion.svelte";
+  import { mdiHome } from "@mdi/js";
 
   interface Props {
-    settings: Array<{
-      fields: Array<{
-        component: Component<any>;
-        props: Record<string, any>;
-      }>;
-      title: string;
-      subtitle: string;
-      key: string;
-      icon: string;
-    }>;
+    children?: Snippet;
+    currentTab?: string;
   }
 
-  let { settings }: Props = $props();
+  let { children, currentTab }: Props = $props();
 </script>
 
 <Stack>
@@ -46,23 +39,17 @@
         </nav>
       </AppShellHeader>
 
+      <AppShellSidebar class="pt-2" open>
+        <Stack class="pe-4">
+          <NavbarItem icon={mdiHome} title="Item 1" href="/" active={currentTab === "tab1"} />
+          <NavbarItem icon={mdiHome} title="Item 2" href="#" active={currentTab === "tab2"} />
+        </Stack>
+      </AppShellSidebar>
+
       <div class="p-4">
         <section id="setting-content" class="flex place-content-center sm:mx-4">
           <section class="w-full pb-28 sm:w-5/6 md:w-[896px]">
-            {#each settings as { fields, title, subtitle, key, icon } (key)}
-              <SettingAccordion {title} {subtitle} {key} {icon}>
-                <div in:fade={{ duration: 500 }}>
-                  <div class="ms-4 mt-4 flex flex-col gap-4">
-                    {#if fields}
-                      {#each fields as { component, props }}
-                        {@const FieldComponent = component}
-                        <FieldComponent {...props} />
-                      {/each}
-                    {/if}
-                  </div>
-                </div>
-              </SettingAccordion>
-            {/each}
+            {@render children?.()}
           </section>
         </section>
       </div>

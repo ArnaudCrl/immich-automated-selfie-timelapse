@@ -1,29 +1,37 @@
 <script lang="ts">
-  import { FieldInput, FieldNumberInput, SettingsLayout } from "$lib/components";
-  import { mdiAccountOutline } from "@mdi/js";
-
-  const settings = [
-    {
-      fields: [
-        {
-          component: FieldInput,
-          props: {
-            label: "Text field",
-          },
-        },
-        {
-          component: FieldNumberInput,
-          props: {
-            label: "Number field",
-          },
-        },
-      ],
-      title: "Accordion title",
-      subtitle: "Accordion subtitle",
-      key: "accordion-key",
-      icon: mdiAccountOutline,
-    },
-  ];
+  	import { SettingAccordion, SettingsLayout } from "$lib/components";
+  	import { mdiAccountOutline } from "@mdi/js";
+	import { DatePicker, Field, Input, NumberInput, Select, Stack, Switch } from "@immich/ui";
 </script>
 
-<SettingsLayout settings={settings} />
+<SettingsLayout currentTab="tab1">
+  	<SettingAccordion
+		title="Accordion title"
+		key="accordion1"
+		icon={mdiAccountOutline}
+  	>
+	<Stack gap={4}>
+		<Field label="Text input">
+			<Input placeholder="placeholder" />
+		</Field>
+		<Field label="Date picker">
+			<DatePicker />
+		</Field>
+		<Field label="Switch">
+    		<Switch checked />
+  		</Field>
+		<Field label="Select">
+			<Select
+				data={[
+					{ label: 'Svelte', value: 'svelte' },
+					{ label: 'React', value: 'react' },
+					{ label: 'Angular', value: 'angular' },
+				]}
+			/>
+		</Field>
+		<Field label="Number input">
+			<NumberInput />
+		</Field>
+	  </Stack>
+  	</SettingAccordion>
+</SettingsLayout>

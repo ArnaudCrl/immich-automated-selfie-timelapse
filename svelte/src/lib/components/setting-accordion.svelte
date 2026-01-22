@@ -62,7 +62,7 @@
   <button
     type="button"
     aria-expanded={isOpen}
-    {onclick}
+    onclick={onclick}
     class="flex w-full place-items-center justify-between text-start"
   >
     <div>

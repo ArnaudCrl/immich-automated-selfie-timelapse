@@ -16,7 +16,7 @@
 
 <Stack gap={4}>
   <Field {label} {description} {required}>
-    <Input {placeholder} {value} />
+    <Input {placeholder} bind:value />
     {#if helperText}
       <HelperText>{helperText}</HelperText>
     {/if}

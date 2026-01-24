@@ -1,6 +1,16 @@
+# Rust
+/target
+Cargo.lock
+
+# IDE
 .idea
-dlib-19.24.99-cp312-cp312-win_amd64.whl
-mmod_human_face_detector.dat
-shape_predictor_68_face_landmarks.dat
+.vscode
+
+# Output
 output/
-__pycache__/
+
+# Configuration with secrets
+config.toml
+
+# OS
+.DS_Store

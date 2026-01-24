@@ -1,0 +1,51 @@
+# Immich Selfie Timelapse Configuration
+# Copy this file to config.toml and fill in your values.
+# Environment variables (IMMICH_API_KEY, IMMICH_BASE_URL) override these settings.
+
+# Output directory for processed images and video
+output_dir = "output"
+
+[api]
+# Your Immich API key (get from Immich user settings)
+api_key = "your-api-key-here"
+
+# Immich server URL (include /api suffix)
+base_url = "http://192.168.1.100:2283/api"
+
+# Request timeout in seconds
+timeout_secs = 30
+
+[processing]
+# Output image size (width and height in pixels)
+resize_size = 512
+
+# Minimum face size in pixels (faces smaller than this are skipped)
+face_resolution_threshold = 80
+
+# Maximum head yaw angle in degrees (filters out turned heads)
+pose_threshold = 25.0
+
+# Eye Aspect Ratio threshold (filters out closed eyes)
+ear_threshold = 0.2
+
+# Target position for left eye as [x%, y%] from top-left
+left_eye_pos = [0.35, 0.4]
+
+# Target position for right eye as [x%, y%] from top-left
+right_eye_pos = [0.65, 0.4]
+
+# Number of parallel workers (defaults to CPU count)
+# max_workers = 4
+
+[video]
+# Output video framerate
+framerate = 15
+
+# Whether to compile video after processing
+enabled = true
+
+# Video codec
+codec = "libx264"
+
+# Constant Rate Factor (quality: lower = better, 18-28 recommended)
+crf = 23

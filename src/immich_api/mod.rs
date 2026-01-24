@@ -21,19 +21,7 @@ pub struct ServerInfo {
     pub version: String,
 }
 
-/// Face data from Immich.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FaceData {
-    pub bounding_box_x1: f32,
-    pub bounding_box_y1: f32,
-    pub bounding_box_x2: f32,
-    pub bounding_box_y2: f32,
-    pub image_width: u32,
-    pub image_height: u32,
-}
-
-/// Person data from Immich.
+/// Person data. Obtained from the /people Immich endpoint.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Person {
@@ -41,7 +29,7 @@ pub struct Person {
     pub name: Option<String>,
 }
 
-/// Asset data from Immich.
+/// Asset data from Immich. May contain one or more person inside. Obtained from /search/metadata Immich endpoint.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset {
@@ -60,6 +48,18 @@ pub struct PersonWithFaces {
     pub id: String,
     pub name: Option<String>,
     pub faces: Option<Vec<FaceData>>,
+}
+
+/// Face data from Immich.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FaceData {
+    pub bounding_box_x1: f32,
+    pub bounding_box_y1: f32,
+    pub bounding_box_x2: f32,
+    pub bounding_box_y2: f32,
+    pub image_width: u32,
+    pub image_height: u32,
 }
 
 /// Search response from Immich.
@@ -144,7 +144,7 @@ impl ImmichClient {
         let mut page = 1u32;
 
         loop {
-            let params = SearchParams {
+            let params: SearchParams = SearchParams {
                 person_ids: Some(vec![person_id.to_string()]),
                 taken_after: taken_after.map(|s| s.to_string()),
                 taken_before: taken_before.map(|s| s.to_string()),
@@ -249,5 +249,98 @@ mod tests {
         };
         let client = ImmichClient::new(&config);
         assert!(client.is_ok());
+    }
+
+    /// Helper to create a client for the demo server
+    fn demo_client() -> ImmichClient {
+        let config = ApiConfig {
+            api_key: "1bpgd3LpG30Zr3IEPNV3sWhIEqMuUGmzK3jWNh59JU".to_string(), // Generate a new API key in the public Immich demo for debugging purposes.
+            base_url: "https://demo.immich.app/api".to_string(),
+            timeout_secs: 30,
+        };
+        ImmichClient::new(&config).expect("Failed to create client")
+    }
+
+    #[tokio::test]
+    #[ignore] // Run with: cargo test -- --ignored
+    async fn test_demo_validate_connection() {
+        let client = demo_client();
+        let result = client.validate_connection().await;
+
+        match &result {
+            Ok(info) => println!("Connected to Immich version: {}", info.version),
+            Err(e) => println!("Connection failed: {:?}", e),
+        }
+
+        assert!(result.is_ok(), "Failed to connect: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_demo_get_people() {
+        let client = demo_client();
+        let result = client.get_people().await;
+
+        match &result {
+            Ok(people) => {
+                println!("Found {} people:", people.len());
+                for person in people.iter().take(10) {
+                    println!(
+                        "  - {} ({})",
+                        person.name.as_deref().unwrap_or("unnamed"),
+                        person.id
+                    );
+                }
+            }
+            Err(e) => println!("Failed to get people: {:?}", e),
+        }
+
+        assert!(result.is_ok(), "Failed to get people: {:?}", result.err());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_demo_search_assets_with_person() {
+        let client = demo_client();
+
+        // First get a person ID
+        let people = client.get_people().await.expect("Failed to get people");
+
+        if people.is_empty() {
+            println!("No people found, skipping asset search test");
+            return;
+        }
+
+        let person = &people[0];
+        println!(
+            "Searching assets for: {} ({})",
+            person.name.as_deref().unwrap_or("unnamed"),
+            person.id
+        );
+
+        let result = client.get_assets_with_person(&person.id, None, None).await;
+
+        match &result {
+            Ok(assets) => {
+                println!("Found {} assets for person", assets.len());
+                for asset in assets.iter().take(5) {
+                    println!("  - {} (created: {:?})", asset.id, asset.file_created_at);
+                    if let Some(people) = &asset.people {
+                        for p in people {
+                            if let Some(faces) = &p.faces {
+                                println!("    Faces: {}", faces.len());
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => println!("Failed to search assets: {:?}", e),
+        }
+
+        assert!(
+            result.is_ok(),
+            "Failed to search assets: {:?}",
+            result.err()
+        );
     }
 }

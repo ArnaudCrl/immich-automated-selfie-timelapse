@@ -1,11 +1,14 @@
+<!-- Inspired from https://github.com/immich-app/immich/blob/main/web/src/lib/components/shared-components/settings/setting-accordion.svelte -->
+
 <script lang="ts">
+  import { Icon } from '@immich/ui';
   import { onDestroy, onMount, type Snippet } from 'svelte';
-  import { fade,slide } from 'svelte/transition';
+  import { slide } from 'svelte/transition';
 
   interface Props {
     title: string;
     subtitle?: string;
-    key?: string;
+    key: string;
     isOpen?: boolean;
     autoScrollTo?: boolean;
     icon?: string;
@@ -16,7 +19,7 @@
   let {
     title,
     subtitle = '',
-    key = '',
+    key,
     isOpen = false,
     autoScrollTo = false,
     icon = '',
@@ -54,7 +57,7 @@
 </script>
 
 <div
-  class="border-2 rounded-2xl border-primary/20 my-4 px-6 py-4 transition-all {isOpen
+  class="border-2 rounded-2xl border-primary/20 mt-4 px-6 py-4 transition-all {isOpen
     ? 'border-primary/60 shadow-md'
     : ''}"
   bind:this={accordionElement}
@@ -62,23 +65,15 @@
   <button
     type="button"
     aria-expanded={isOpen}
-    onclick={onclick}
+    {onclick}
     class="flex w-full place-items-center justify-between text-start"
   >
     <div>
       <div class="flex gap-2 place-items-center">
         {#if icon}
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            role="img"
-            aria-hidden="true"
-          >
-            <path d={icon} fill="currentColor" />
-          </svg>
+          <Icon {icon} class="text-primary" size="24" aria-hidden />
         {/if}
-        <h2 class="font-medium text-immich-primary dark:text-immich-dark-primary">
+        <h2 class="font-medium text-primary">
           {title}
         </h2>
       </div>
@@ -101,7 +96,6 @@
         stroke-width="2"
         viewBox="0 0 24 24"
         stroke="currentColor"
-        class="rotating"
       >
         <path d="M19 9l-7 7-7-7" />
       </svg>
@@ -110,11 +104,7 @@
 
   {#if isOpen}
     <ul transition:slide={{ duration: 150 }} class="mb-2 ms-4">
-      <div in:fade={{ duration: 500 }}>
-        <div class="ms-4 mt-4 flex flex-col gap-4">
-          {@render children?.()}
-        </div>
-      </div>
+      {@render children?.()}
     </ul>
   {/if}
 </div>
@@ -124,7 +114,7 @@
     transition: transform 0.2s ease-in;
   }
 
-  [aria-expanded='true'] svg.rotating {
+  [aria-expanded='true'] svg {
     transform: rotate(0.5turn);
   }
 </style>

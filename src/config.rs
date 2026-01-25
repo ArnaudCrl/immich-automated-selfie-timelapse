@@ -145,8 +145,8 @@ impl Config {
     /// Load configuration from a TOML file.
     pub fn from_file(path: impl AsRef<std::path::Path>) -> crate::error::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&content)
-            .map_err(|e| crate::error::Error::Config(e.to_string()))?;
+        let config: Config =
+            toml::from_str(&content).map_err(|e| crate::error::Error::Config(e.to_string()))?;
         Ok(config)
     }
 

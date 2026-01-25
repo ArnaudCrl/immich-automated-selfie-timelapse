@@ -1,6 +1,7 @@
 //! HTTP route handlers.
 
 use crate::immich_api::ImmichClient;
+use crate::job::{run_job, JobParams};
 use crate::web::state::{AppState, JobStatus, Progress};
 use axum::{
     extract::State,
@@ -169,17 +170,27 @@ async fn start_processing(
         .await;
 
     // Create cancellation channel
-    let (cancel_tx, _cancel_rx) = tokio::sync::oneshot::channel();
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
     state.set_cancel_sender(cancel_tx).await;
 
-    // TODO: Spawn actual processing task
-    // For now, just return success
     tracing::info!(
         "Starting processing for person {} (date range: {:?} - {:?})",
         request.person_id,
         request.date_from,
         request.date_to
     );
+
+    // Spawn the processing job in the background
+    let job_params = JobParams {
+        person_id: request.person_id,
+        date_from: request.date_from,
+        date_to: request.date_to,
+    };
+
+    let job_state = state.clone();
+    tokio::spawn(async move {
+        run_job(job_state, job_params, cancel_rx).await;
+    });
 
     Ok(Json(StartResponse {
         success: true,

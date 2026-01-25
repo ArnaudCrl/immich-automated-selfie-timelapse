@@ -6,22 +6,56 @@ use crate::web::state::{AppState, JobStatus, Progress};
 use axum::{
     extract::State,
     http::StatusCode,
-    response::Json,
+    response::{Html, IntoResponse, Json},
     routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::services::ServeDir;
 
 /// Create the router with all routes.
 pub fn create_router(state: AppState) -> Router {
+    // Get output directory from config for serving results
+    let output_dir = state
+        .config
+        .try_read()
+        .map(|c| c.output_dir.clone())
+        .unwrap_or_else(|_| std::path::PathBuf::from("output"));
+
     Router::new()
+        // API routes
         .route("/api/health", get(health_check))
         .route("/api/connection", get(check_connection))
         .route("/api/people", get(get_people))
         .route("/api/progress", get(get_progress))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
+        // Serve output files (video, images)
+        .nest_service("/output", ServeDir::new(output_dir))
+        // Serve frontend static files (fallback to index.html for SPA routing)
+        .fallback_service(ServeDir::new("frontend/dist").fallback(get(serve_index)))
         .with_state(state)
+}
+
+/// Serve index.html for SPA routing.
+async fn serve_index() -> impl IntoResponse {
+    match tokio::fs::read_to_string("frontend/dist/index.html").await {
+        Ok(html) => Html(html).into_response(),
+        Err(_) => Html(
+            r#"<!DOCTYPE html>
+<html>
+<head><title>Immich Timelapse</title></head>
+<body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0f0f0f; color: #e0e0e0;">
+  <div style="text-align: center;">
+    <h1>Frontend not built</h1>
+    <p>Run <code style="background: #333; padding: 0.25rem 0.5rem; border-radius: 4px;">cd frontend && npm install && npm run build</code></p>
+    <p style="margin-top: 1rem; color: #888;">Or use <code style="background: #333; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run dev</code> for development</p>
+  </div>
+</body>
+</html>"#,
+        )
+        .into_response(),
+    }
 }
 
 /// Health check endpoint.
@@ -169,9 +203,8 @@ async fn start_processing(
         })
         .await;
 
-    // Create cancellation channel
-    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
-    state.set_cancel_sender(cancel_tx).await;
+    // Create cancellation token
+    let cancel_token = state.create_cancel_token().await;
 
     tracing::info!(
         "Starting processing for person {} (date range: {:?} - {:?})",
@@ -189,7 +222,7 @@ async fn start_processing(
 
     let job_state = state.clone();
     tokio::spawn(async move {
-        run_job(job_state, job_params, cancel_rx).await;
+        run_job(job_state, job_params, cancel_token).await;
     });
 
     Ok(Json(StartResponse {
@@ -203,15 +236,7 @@ async fn cancel_processing(State(state): State<AppState>) -> Json<StartResponse>
     let cancelled = state.request_cancel().await;
 
     if cancelled {
-        state
-            .update_progress(Progress {
-                status: JobStatus::Cancelled,
-                completed: 0,
-                total: 0,
-                message: Some("Cancelled by user".to_string()),
-            })
-            .await;
-
+        // The job will update its own status when it detects cancellation
         Json(StartResponse {
             success: true,
             message: "Cancellation requested".to_string(),

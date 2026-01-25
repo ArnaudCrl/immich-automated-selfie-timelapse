@@ -3,6 +3,7 @@
 use crate::config::Config;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
+use tokio_util::sync::CancellationToken;
 
 /// Job status.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,8 +48,8 @@ pub struct AppState {
     /// Channel for broadcasting progress updates.
     pub progress_tx: broadcast::Sender<Progress>,
 
-    /// Cancellation signal sender.
-    pub cancel_tx: Arc<RwLock<Option<tokio::sync::oneshot::Sender<()>>>>,
+    /// Cancellation token for the current job.
+    pub cancel_token: Arc<RwLock<Option<CancellationToken>>>,
 }
 
 impl AppState {
@@ -59,7 +60,7 @@ impl AppState {
             config: Arc::new(RwLock::new(config)),
             progress: Arc::new(RwLock::new(Progress::default())),
             progress_tx,
-            cancel_tx: Arc::new(RwLock::new(None)),
+            cancel_token: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -71,17 +72,24 @@ impl AppState {
 
     /// Request cancellation of the current job.
     pub async fn request_cancel(&self) -> bool {
-        let mut cancel_tx = self.cancel_tx.write().await;
-        if let Some(tx) = cancel_tx.take() {
-            let _ = tx.send(());
+        let cancel_token = self.cancel_token.read().await;
+        if let Some(token) = cancel_token.as_ref() {
+            token.cancel();
             true
         } else {
             false
         }
     }
 
-    /// Set the cancellation sender for a new job.
-    pub async fn set_cancel_sender(&self, tx: tokio::sync::oneshot::Sender<()>) {
-        *self.cancel_tx.write().await = Some(tx);
+    /// Create a new cancellation token for a job.
+    pub async fn create_cancel_token(&self) -> CancellationToken {
+        let token = CancellationToken::new();
+        *self.cancel_token.write().await = Some(token.clone());
+        token
+    }
+
+    /// Clear the cancellation token when job completes.
+    pub async fn clear_cancel_token(&self) {
+        *self.cancel_token.write().await = None;
     }
 }

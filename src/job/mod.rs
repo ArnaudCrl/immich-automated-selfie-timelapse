@@ -19,7 +19,8 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
 
 /// Parameters for starting a processing job.
 #[derive(Debug, Clone)]
@@ -33,8 +34,11 @@ pub struct JobParams {
 ///
 /// This is the main entry point for background job processing.
 /// It handles progress reporting and cancellation.
-pub async fn run_job(state: AppState, params: JobParams, cancel_rx: oneshot::Receiver<()>) {
-    let result = run_job_inner(state.clone(), params, cancel_rx).await;
+pub async fn run_job(state: AppState, params: JobParams, cancel_token: CancellationToken) {
+    let result = run_job_inner(state.clone(), params, cancel_token).await;
+
+    // Clear the cancellation token when done
+    state.clear_cancel_token().await;
 
     match result {
         Ok(output_path) => {
@@ -75,7 +79,7 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_rx: oneshot::Rec
 async fn run_job_inner(
     state: AppState,
     params: JobParams,
-    mut cancel_rx: oneshot::Receiver<()>,
+    cancel_token: CancellationToken,
 ) -> Result<PathBuf> {
     let config = state.config.read().await.clone();
 
@@ -97,7 +101,7 @@ async fn run_job_inner(
         .await;
 
     // Check for cancellation
-    if cancel_rx.try_recv().is_ok() {
+    if cancel_token.is_cancelled() {
         return Err(Error::Cancelled);
     }
 
@@ -156,26 +160,43 @@ async fn run_job_inner(
     let mut handles = Vec::with_capacity(assets_with_faces.len());
 
     for (asset, face_data) in assets_with_faces {
+        // Check for cancellation before spawning more tasks
+        if cancel_token.is_cancelled() {
+            break;
+        }
+
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let client = client.clone();
         let config = config.clone();
         let images_dir = images_dir.clone();
         let completed = completed.clone();
         let state = state.clone();
+        let task_cancel_token = cancel_token.clone();
 
         let handle = tokio::spawn(async move {
+            // Check cancellation at start of task
+            if task_cancel_token.is_cancelled() {
+                drop(permit);
+                return AssetResult::Skipped {
+                    asset_id: asset.id.clone(),
+                    reason: "Cancelled".to_string(),
+                };
+            }
+
             let result = process_single_asset(&client, &config, &asset, &face_data, &images_dir).await;
 
-            // Update progress
-            let done = completed.fetch_add(1, Ordering::SeqCst) + 1;
-            state
-                .update_progress(Progress {
-                    status: JobStatus::Running,
-                    completed: done,
-                    total,
-                    message: Some(format!("Processing images... ({}/{})", done, total)),
-                })
-                .await;
+            // Update progress (only if not cancelled)
+            if !task_cancel_token.is_cancelled() {
+                let done = completed.fetch_add(1, Ordering::SeqCst) + 1;
+                state
+                    .update_progress(Progress {
+                        status: JobStatus::Running,
+                        completed: done,
+                        total,
+                        message: Some(format!("Processing images... ({}/{})", done, total)),
+                    })
+                    .await;
+            }
 
             drop(permit);
             result
@@ -184,20 +205,39 @@ async fn run_job_inner(
         handles.push(handle);
     }
 
-    // Check for cancellation periodically while waiting
+    // Collect abort handles for cancellation
+    let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
+
+    // Spawn a task to monitor cancellation and abort all tasks if cancelled
+    let abort_handles_clone = abort_handles.clone();
+    let cancel_monitor_token = cancel_token.clone();
+    let cancel_monitor = tokio::spawn(async move {
+        cancel_monitor_token.cancelled().await;
+        for handle in abort_handles_clone {
+            handle.abort();
+        }
+    });
+
+    // Wait for all tasks to complete
     let mut results = Vec::with_capacity(handles.len());
     for handle in handles {
-        tokio::select! {
-            _ = &mut cancel_rx => {
-                return Err(Error::Cancelled);
+        match handle.await {
+            Ok(result) => results.push(result),
+            Err(e) if e.is_cancelled() => {
+                // Task was aborted due to cancellation
             }
-            result = handle => {
-                results.push(result.unwrap_or(AssetResult::Error {
-                    asset_id: "unknown".to_string(),
-                    error: "Task panicked".to_string(),
-                }));
+            Err(e) => {
+                tracing::error!("Task panicked: {:?}", e);
             }
         }
+    }
+
+    // Clean up the cancel monitor
+    cancel_monitor.abort();
+
+    // Check if we were cancelled
+    if cancel_token.is_cancelled() {
+        return Err(Error::Cancelled);
     }
 
     // Count results
@@ -228,7 +268,7 @@ async fn run_job_inner(
     }
 
     // Check for cancellation before video compilation
-    if cancel_rx.try_recv().is_ok() {
+    if cancel_token.is_cancelled() {
         return Err(Error::Cancelled);
     }
 

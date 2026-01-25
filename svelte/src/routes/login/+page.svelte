@@ -26,6 +26,7 @@
     });
     if (response.ok) {
       // TODO: continue
+      error = false;
     } else {
       // read response to determine which field is invalid
       const result = await response.json();

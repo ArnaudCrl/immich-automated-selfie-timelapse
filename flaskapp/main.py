@@ -3,6 +3,7 @@ import os
 from flask import Flask, session, jsonify, redirect, url_for, send_from_directory, request, g
 from flask_cors import CORS
 from functools import wraps
+from datetime import datetime
 
 from immich_api import validate_api_credentials, validate_base_url
 
@@ -21,16 +22,24 @@ log.addFilter(ProgressRouteFilter())
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # TODO: replace with a real secret key
 
-CORS(app, supports_credentials=True)
+CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
 
 def is_logged_in():
-    return validate_api_credentials(
-        base_url=session.get("IMMICH_BASE_URL"),
-        api_key=session.get("IMMICH_API_KEY")
-    ) or validate_api_credentials(
-        base_url=os.getenv("IMMICH_BASE_URL", ""),
-        api_key=os.getenv("IMMICH_API_KEY", "")
-    )
+    print("session dict:", dict(session))
+    print("Session IMMICH_BASE_URL:", session.get("IMMICH_BASE_URL"))
+    print("Session IMMICH_API_KEY:", session.get("IMMICH_API_KEY"))
+    print("Env IMMICH_BASE_URL:", os.getenv("IMMICH_BASE_URL"))
+    print("Env IMMICH_API_KEY:", os.getenv("IMMICH_API_KEY"))
+    if session.get("IMMICH_BASE_URL") and session.get("IMMICH_API_KEY"):
+        return validate_api_credentials(
+            base_url=session.get("IMMICH_BASE_URL"),
+            api_key=session.get("IMMICH_API_KEY")
+        )
+    else:
+        return validate_api_credentials(
+            base_url=os.getenv("IMMICH_BASE_URL"),
+            api_key=os.getenv("IMMICH_API_KEY")
+        )
 
 def login_required(f):
     @wraps(f)
@@ -41,19 +50,21 @@ def login_required(f):
             return "Unauthorized", 401
     return decorated_function
 
-@app.route("/", methods=["GET"])
-@login_required
-def home():
-    return send_from_directory("../svelte/build", "home.html")
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
-        return jsonify({
-            "IMMICH_BASE_URL": session.get("IMMICH_BASE_URL") or os.getenv("IMMICH_BASE_URL"),
-            "IMMICH_API_KEY": session.get("IMMICH_API_KEY") or os.getenv("IMMICH_API_KEY"),
-            "isLoggedIn": is_logged_in()
-        })
+        if session.get("IMMICH_BASE_URL") and session.get("IMMICH_API_KEY"):
+            return jsonify({
+                "IMMICH_BASE_URL": session.get("IMMICH_BASE_URL"),
+                "IMMICH_API_KEY": session.get("IMMICH_API_KEY"),
+                "isLoggedIn": is_logged_in()
+            })
+        else:
+            return jsonify({
+                "IMMICH_BASE_URL": os.getenv("IMMICH_BASE_URL"),
+                "IMMICH_API_KEY": os.getenv("IMMICH_API_KEY"),
+                "isLoggedIn": is_logged_in()
+            })
     elif request.method == "POST":
         base_url = request.form.get("baseUrl", "").strip()
         api_key = request.form.get("apiKey", "").strip()
@@ -61,28 +72,71 @@ def login():
             base_url = validate_base_url(base_url)
             if validate_api_credentials(base_url, api_key):
                 session['IMMICH_BASE_URL'] = base_url
-                session['IMMICH_API_KEY'] = api_key        
+                session['IMMICH_API_KEY'] = api_key
                 return jsonify({"error": False}), 200
             return jsonify({"error": True, "message": "Server reachable but API key denied", "field": "apiKey"}), 401
         return jsonify({"error": True, "message": "Server unreachable", "field": "baseUrl"}), 401
-    else:
-        return send_from_directory("../svelte/build", "login.html")
+
+
+def get_v(key: str, default=None):
+    return session.get(key, os.getenv(key, default))
 
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
     if request.method == "GET":
-        # TODO: load settings from session or .env
         return jsonify({
-            "textInput": "default text",
-            "dateValue": "2024-01-01",
-            "switchValue": True,
-            "selectValue": "svelte",
-            "numberValue": 10
+            "searchTakenAfter": get_v("SEARCH_TAKEN_AFTER", "1970-01-01"),
+            "searchTakenBefore": get_v("SEARCH_TAKEN_BEFORE", datetime.today().strftime("%Y-%m-%d")),
+            "searchAlbumId": get_v("SEARCH_ALBUM_ID", ""),
+            "searchIsFavorite": get_v("SEARCH_IS_FAVORITE", False),
+
+            "keep": get_v("KEEP", True),
+            "keepHourly": int(get_v("KEEP_HOURLY", 1)),
+            "keepDaily": int(get_v("KEEP_DAILY", 3)),
+            "keepWeekly": int(get_v("KEEP_WEEKLY", 10)),
+            "keepMonthly": int(get_v("KEEP_MONTHLY", 20)),
+            "keepYearly": int(get_v("KEEP_YEARLY", 50)),
+
+            "faceResizeSize": int(get_v("FACE_RESIZE_SIZE", 520)),
+            "faceResolutionThreshold": int(get_v("FACE_RESOLUTION_THRESHOLD", 80)),
+            "facePaddingRatio": float(get_v("FACE_PADDING_RATIO", 1.2)),
+
+            "label": get_v("LABEL", True),
+            "labelSize": int(get_v("LABEL_SIZE", 12)),
+            "labelPos": get_v("LABEL_POS", "bottom_left"),
+            "labelFormat": get_v("LABEL_FORMAT", "%Y-%m-%d"),
+            "labelPadding": int(get_v("LABEL_PADDING", 10)),
+            "labelFill": get_v("LABEL_FILL", "#FFFFFF"),
+
+            "videoCompile": get_v("VIDEO_COMPILE", True),
+            "videoFramerate": int(get_v("VIDEO_FRAMERATE", 15)),
+            "videoWorkers": int(get_v("VIDEO_WORKERS", 4)),
         })
     elif request.method == "POST":
-        # TODO: save settings in session
-        pass
+        session['SEARCH_TAKEN_AFTER'] = request.form.get("searchTakenAfter")
+        session['SEARCH_TAKEN_BEFORE'] = request.form.get("searchTakenBefore")
+        session['SEARCH_ALBUM_ID'] = request.form.get("searchAlbumId", "")
+        session['SEARCH_IS_FAVORITE'] = request.form.get("searchIsFavorite") == "true"
+        session['KEEP'] = request.form.get("keep") == "true"
+        session['KEEP_HOURLY'] = int(request.form.get("keepHourly"))
+        session['KEEP_DAILY'] = int(request.form.get("keepDaily"))
+        session['KEEP_WEEKLY'] = int(request.form.get("keepWeekly"))
+        session['KEEP_MONTHLY'] = int(request.form.get("keepMonthly"))
+        session['KEEP_YEARLY'] = int(request.form.get("keepYearly"))
+        session['FACE_RESIZE_SIZE'] = int(request.form.get("faceResizeSize"))
+        session['FACE_RESOLUTION_THRESHOLD'] = int(request.form.get("faceResolutionThreshold"))
+        session['FACE_PADDING_RATIO'] = float(request.form.get("facePaddingRatio"))
+        session['LABEL'] = request.form.get("label") == "true"
+        session['LABEL_SIZE'] = int(request.form.get("labelSize"))
+        session['LABEL_POS'] = request.form.get("labelPos")
+        session['LABEL_FORMAT'] = request.form.get("labelFormat")
+        session['LABEL_PADDING'] = int(request.form.get("labelPadding"))
+        session['LABEL_FILL'] = request.form.get("labelFill")
+        session['VIDEO_COMPILE'] = request.form.get("videoCompile") == "true"
+        session['VIDEO_FRAMERATE'] = int(request.form.get("videoFramerate"))
+        session['VIDEO_WORKERS'] = int(request.form.get("videoWorkers"))
+        return jsonify({"success": True}), 200
 
 
 # def check_output_folder(output_folder) -> Tuple[bool, int]:

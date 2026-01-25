@@ -1,6 +1,7 @@
 import logging
 import os
 from flask import Flask, session, jsonify, redirect, url_for, send_from_directory, request, g
+from flask_cors import CORS
 from functools import wraps
 
 from immich_api import validate_api_credentials, validate_base_url
@@ -20,16 +21,16 @@ log.addFilter(ProgressRouteFilter())
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # TODO: replace with a real secret key
 
-IMMICH_BASE_URL = os.getenv("IMMICH_BASE_URL", "")
-IMMICH_API_KEY = os.getenv("IMMICH_API_KEY", "")
+CORS(app, supports_credentials=True)
 
 def is_logged_in():
-    if "IMMICH_BASE_URL" in session and "IMMICH_API_KEY" in session:
-        if validate_api_credentials(session["IMMICH_BASE_URL"], session["IMMICH_API_KEY"]):
-            return True
-    if validate_api_credentials(IMMICH_BASE_URL, IMMICH_API_KEY):
-        return True
-    return False
+    return validate_api_credentials(
+        base_url=session.get("IMMICH_BASE_URL"),
+        api_key=session.get("IMMICH_API_KEY")
+    ) or validate_api_credentials(
+        base_url=os.getenv("IMMICH_BASE_URL", ""),
+        api_key=os.getenv("IMMICH_API_KEY", "")
+    )
 
 def login_required(f):
     @wraps(f)
@@ -37,7 +38,7 @@ def login_required(f):
         if is_logged_in():
             return f(*args, **kwargs)
         else:
-            return redirect(url_for('login', next=request.url))
+            return "Unauthorized", 401
     return decorated_function
 
 @app.route("/", methods=["GET"])
@@ -47,9 +48,13 @@ def home():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if is_logged_in():
-        return redirect(url_for('home'))
-    if request.method == "POST":
+    if request.method == "GET":
+        return jsonify({
+            "IMMICH_BASE_URL": session.get("IMMICH_BASE_URL") or os.getenv("IMMICH_BASE_URL"),
+            "IMMICH_API_KEY": session.get("IMMICH_API_KEY") or os.getenv("IMMICH_API_KEY"),
+            "isLoggedIn": is_logged_in()
+        })
+    elif request.method == "POST":
         base_url = request.form.get("baseUrl", "").strip()
         api_key = request.form.get("apiKey", "").strip()
         if validate_base_url(base_url):
@@ -63,9 +68,21 @@ def login():
     else:
         return send_from_directory("../svelte/build", "login.html")
 
-@app.route('/_app/<path:filename>')
-def serve_app_files(filename):
-    return send_from_directory('../svelte/build/_app', filename)
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    if request.method == "GET":
+        # TODO: load settings from session or .env
+        return jsonify({
+            "textInput": "default text",
+            "dateValue": "2024-01-01",
+            "switchValue": True,
+            "selectValue": "svelte",
+            "numberValue": 10
+        })
+    elif request.method == "POST":
+        # TODO: save settings in session
+        pass
 
 
 # def check_output_folder(output_folder) -> Tuple[bool, int]:

@@ -7,8 +7,11 @@
     PasswordInput,
   } from "@immich/ui";
 
-  let baseUrl: string = "";
-  let apiKey: string = "";
+  export let data;
+  
+  let baseUrl: string = data.IMMICH_BASE_URL;
+  let apiKey: string = data.IMMICH_API_KEY;
+  let isLoggedIn: boolean = data.isLoggedIn;
   let error: boolean = false;
   let errorMessage: string = "";
   let errorField: string = "";
@@ -17,12 +20,12 @@
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
-    const response = await fetch("/login", {
+    const response = await fetch("http://localhost:5000/login", {
       method: "POST",
       body: formData,
     });
     if (response.ok) {
-      window.location.href = "/";
+      // TODO: continue
     } else {
       // read response to determine which field is invalid
       const result = await response.json();
@@ -61,6 +64,6 @@
   </Field>
 
   <Button class="mt-4" type="submit" size="giant" shape="round" fullWidth>
-    Log in
+    {isLoggedIn ? "Update" : "Login"}
   </Button>
 </form>

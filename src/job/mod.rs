@@ -183,7 +183,15 @@ async fn run_job_inner(
                 };
             }
 
-            let result = process_single_asset(&client, &config, &asset, &face_data, &images_dir).await;
+            let result = process_single_asset(
+                &client,
+                &config,
+                &asset,
+                &face_data,
+                &images_dir,
+                &task_cancel_token,
+            )
+            .await;
 
             // Update progress (only if not cancelled)
             if !task_cancel_token.is_cancelled() {
@@ -205,35 +213,16 @@ async fn run_job_inner(
         handles.push(handle);
     }
 
-    // Collect abort handles for cancellation
-    let abort_handles: Vec<_> = handles.iter().map(|h| h.abort_handle()).collect();
-
-    // Spawn a task to monitor cancellation and abort all tasks if cancelled
-    let abort_handles_clone = abort_handles.clone();
-    let cancel_monitor_token = cancel_token.clone();
-    let cancel_monitor = tokio::spawn(async move {
-        cancel_monitor_token.cancelled().await;
-        for handle in abort_handles_clone {
-            handle.abort();
-        }
-    });
-
     // Wait for all tasks to complete
     let mut results = Vec::with_capacity(handles.len());
     for handle in handles {
         match handle.await {
             Ok(result) => results.push(result),
-            Err(e) if e.is_cancelled() => {
-                // Task was aborted due to cancellation
-            }
             Err(e) => {
                 tracing::error!("Task panicked: {:?}", e);
             }
         }
     }
-
-    // Clean up the cancel monitor
-    cancel_monitor.abort();
 
     // Check if we were cancelled
     if cancel_token.is_cancelled() {
@@ -286,12 +275,17 @@ async fn run_job_inner(
         let output_video = config.output_dir.join("timelapse.mp4");
         let state_clone = state.clone();
 
-        compile_timelapse(&images_dir, &output_video, &config.video, move |frame, total| {
-            // Note: This callback is sync, so we can't easily update state here.
-            // The FFmpeg wrapper already handles this internally.
-            tracing::debug!("Video progress: {}/{}", frame, total);
-            let _ = (&state_clone, frame, total); // Suppress unused warning
-        })
+        compile_timelapse(
+            &images_dir,
+            &output_video,
+            &config.video,
+            move |frame, total| {
+                // Note: This callback is sync, so we can't easily update state here.
+                // The FFmpeg wrapper already handles this internally.
+                tracing::debug!("Video progress: {}/{}", frame, total);
+                let _ = (&state_clone, frame, total); // Suppress unused warning
+            },
+        )
         .await?;
 
         Ok(output_video)
@@ -323,6 +317,7 @@ async fn process_single_asset(
     asset: &Asset,
     face_data: &FaceData,
     output_dir: &Path,
+    cancel_token: &CancellationToken,
 ) -> AssetResult {
     let asset_id = &asset.id;
 
@@ -348,6 +343,14 @@ async fn process_single_asset(
         };
     }
 
+    // Check before download (potentially slow)
+    if cancel_token.is_cancelled() {
+        return AssetResult::Skipped {
+            asset_id: asset_id.clone(),
+            reason: "Cancelled".to_string(),
+        };
+    }
+
     // Download image
     let image_bytes = match client.download_asset(asset_id).await {
         Ok(bytes) => bytes,
@@ -358,6 +361,14 @@ async fn process_single_asset(
             };
         }
     };
+
+    // Check after download, before CPU-intensive processing
+    if cancel_token.is_cancelled() {
+        return AssetResult::Skipped {
+            asset_id: asset_id.clone(),
+            reason: "Cancelled".to_string(),
+        };
+    }
 
     // Decode image
     let img = match image::load_from_memory(&image_bytes) {
@@ -381,6 +392,14 @@ async fn process_single_asset(
         }
     };
 
+    // Check before file I/O
+    if cancel_token.is_cancelled() {
+        return AssetResult::Skipped {
+            asset_id: asset_id.clone(),
+            reason: "Cancelled".to_string(),
+        };
+    }
+
     // Generate timestamp-based filename for sorting
     let timestamp = asset
         .file_created_at
@@ -392,7 +411,13 @@ async fn process_single_asset(
     // Sanitize timestamp for filename (replace colons and other invalid chars)
     let safe_timestamp: String = timestamp
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
 
     let output_path = output_dir.join(format!("{}_{}.jpg", safe_timestamp, asset_id));
@@ -437,7 +462,9 @@ fn crop_face(img: &DynamicImage, face_data: &FaceData, output_size: u32) -> Resu
     let face_height = y2.saturating_sub(y1);
 
     if face_width == 0 || face_height == 0 {
-        return Err(Error::ImageProcessing("Invalid face bounding box".to_string()));
+        return Err(Error::ImageProcessing(
+            "Invalid face bounding box".to_string(),
+        ));
     }
 
     // Expand the crop area to include some context around the face
@@ -451,8 +478,12 @@ fn crop_face(img: &DynamicImage, face_data: &FaceData, output_size: u32) -> Resu
     let center_y = (y1 + y2) / 2;
 
     // Calculate crop bounds, clamped to image dimensions
-    let crop_x1 = center_x.saturating_sub(crop_size / 2).min(img_width.saturating_sub(crop_size));
-    let crop_y1 = center_y.saturating_sub(crop_size / 2).min(img_height.saturating_sub(crop_size));
+    let crop_x1 = center_x
+        .saturating_sub(crop_size / 2)
+        .min(img_width.saturating_sub(crop_size));
+    let crop_y1 = center_y
+        .saturating_sub(crop_size / 2)
+        .min(img_height.saturating_sub(crop_size));
 
     // Ensure we don't exceed image bounds
     let actual_crop_size = crop_size.min(img_width - crop_x1).min(img_height - crop_y1);

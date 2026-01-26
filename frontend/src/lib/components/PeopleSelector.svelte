@@ -70,7 +70,12 @@
           {disabled}
         >
           <div class="avatar">
-            {(person.name || 'U').charAt(0).toUpperCase()}
+            <img
+              src="/api/people/{person.id}/thumbnail"
+              alt={person.name || 'Person'}
+              onerror={(e) => e.target.style.display = 'none'}
+            />
+            <span class="fallback">{(person.name || 'U').charAt(0).toUpperCase()}</span>
           </div>
           <span class="name">{person.name || 'Unnamed'}</span>
         </button>
@@ -162,6 +167,18 @@
     font-weight: 600;
     font-size: 1.25rem;
     color: #fff;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
   }
 
   .name {

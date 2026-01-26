@@ -234,6 +234,39 @@ impl ImmichClient {
         let response: PeopleResponse = response.json().await?;
         Ok(response.people)
     }
+
+    /// Get a person's thumbnail image.
+    /// Returns the image bytes and content-type.
+    pub async fn get_person_thumbnail(&self, person_id: &str) -> Result<(bytes::Bytes, String)> {
+        let url = format!("{}/people/{}/thumbnail", self.base_url, person_id);
+        // tracing::debug!("Fetching thumbnail from: {}", url);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("x-api-key", &self.api_key)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(Error::ImmichApi(format!(
+                "Failed to get thumbnail for person {}: {}",
+                person_id,
+                response.status()
+            )));
+        }
+
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("image/jpeg")
+            .to_string();
+
+        let bytes = response.bytes().await?;
+        tracing::debug!("Thumbnail bytes received: {}", bytes.len());
+        Ok((bytes, content_type))
+    }
 }
 
 #[cfg(test)]

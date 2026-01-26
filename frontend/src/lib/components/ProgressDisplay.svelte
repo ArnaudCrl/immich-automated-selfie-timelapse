@@ -8,6 +8,7 @@
   let statusLabel = $derived({
     idle: 'Idle',
     running: 'Processing',
+    cancelling: 'Cancelling',
     compiling_video: 'Compiling Video',
     completed: 'Completed',
     cancelled: 'Cancelled',
@@ -17,6 +18,7 @@
   let statusClass = $derived({
     idle: '',
     running: 'running',
+    cancelling: 'warning',
     compiling_video: 'running',
     completed: 'success',
     cancelled: 'warning',
@@ -32,7 +34,7 @@
     {/if}
   </div>
 
-  {#if jobStatus === 'running' || jobStatus === 'compiling_video'}
+  {#if jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'}
     <div class="progress-bar">
       <div class="progress-fill" style="width: {percentage}%"></div>
     </div>

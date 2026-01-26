@@ -7,7 +7,9 @@
   let dateTo = $state('');
   let pollInterval = $state(null);
 
-  let isRunning = $derived(jobStatus === 'running' || jobStatus === 'compiling_video');
+  let isRunning = $derived(
+    jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
+  );
 
   async function startProcessing() {
     try {

@@ -11,9 +11,9 @@ repository = "https://github.com/ArnaudCrl/immich-automated-selfie-timelapse"
 tokio = { version = "1", features = ["full"] }
 
 # Web framework
-axum = { version = "0.7", features = ["ws"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "cors"] }
+axum = { version = "0.8", features = ["ws"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
 
 # HTTP client
 reqwest = { version = "0.12", features = ["json", "stream"] }

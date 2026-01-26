@@ -4,9 +4,10 @@ use crate::immich_api::ImmichClient;
 use crate::job::{run_job, JobParams};
 use crate::web::state::{AppState, JobStatus, Progress};
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse, Json},
+    body::Body,
+    extract::{Path, State},
+    http::{header, StatusCode},
+    response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -27,6 +28,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/health", get(health_check))
         .route("/api/connection", get(check_connection))
         .route("/api/people", get(get_people))
+        .route("/api/people/{person_id}/thumbnail", get(get_person_thumbnail))
         .route("/api/progress", get(get_progress))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
@@ -134,6 +136,43 @@ async fn get_people(
     Ok(Json(people_info))
 }
 
+/// Get a person's thumbnail image.
+async fn get_person_thumbnail(
+    State(state): State<AppState>,
+    Path(person_id): Path<String>,
+) -> Result<Response<Body>, (StatusCode, String)> {
+    let config = state.config.read().await;
+    let client = ImmichClient::new(&config.api).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create client: {}", e),
+        )
+    })?;
+
+    let (bytes, content_type) = client.get_person_thumbnail(&person_id).await.map_err(|e| {
+        tracing::error!("Thumbnail fetch failed for {}: {}", person_id, e);
+        (
+            StatusCode::NOT_FOUND,
+            format!("Failed to get thumbnail: {}", e),
+        )
+    })?;
+
+    tracing::debug!(
+        "Thumbnail for {}: {} bytes, type: {}",
+        person_id,
+        bytes.len(),
+        content_type
+    );
+
+    // Return the image with appropriate headers
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CACHE_CONTROL, "public, max-age=3600")
+        .body(Body::from(bytes))
+        .unwrap())
+}
+
 /// Get current progress.
 #[derive(Serialize)]
 struct ProgressResponse {
@@ -149,6 +188,7 @@ async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
     let status_str = match &progress.status {
         JobStatus::Idle => "idle",
         JobStatus::Running => "running",
+        JobStatus::Cancelling => "cancelling",
         JobStatus::CompilingVideo => "compiling_video",
         JobStatus::Completed => "completed",
         JobStatus::Cancelled => "cancelled",

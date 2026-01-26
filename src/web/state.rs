@@ -10,6 +10,7 @@ use tokio_util::sync::CancellationToken;
 pub enum JobStatus {
     Idle,
     Running,
+    Cancelling,
     CompilingVideo,
     Completed,
     Cancelled,
@@ -75,6 +76,13 @@ impl AppState {
         let cancel_token = self.cancel_token.read().await;
         if let Some(token) = cancel_token.as_ref() {
             token.cancel();
+            // Update progress to show cancelling state immediately
+            let mut progress = self.progress.write().await;
+            if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo
+            {
+                progress.status = JobStatus::Cancelling;
+                progress.message = Some("Cancelling...".to_string());
+            }
             true
         } else {
             false

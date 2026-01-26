@@ -48,7 +48,8 @@
 
   let label: boolean = data.label;
   let labelSize: number = data.labelSize;
-  let labelPos: SelectOption = labelPositions.find((p) => p.value === data.labelPos) || labelPositions[0];
+  let labelPos: SelectOption =
+    labelPositions.find((p) => p.value === data.labelPos) || labelPositions[0];
   let labelFormat: string = data.labelFormat;
   let labelPadding: number = data.labelPadding;
   let labelFill: string = data.labelFill;
@@ -87,22 +88,22 @@
       <Field label="Taken from">
         <DatePicker bind:value={searchTakenAfter} />
         <HelperText>
-          If set, we will only select assets from this date onward.
-          You can leave it blank to select from the earliest date.
+          If set, we will only select assets from this date onward. You can
+          leave it blank to select from the earliest date.
         </HelperText>
       </Field>
       <Field label="Taken before">
         <DatePicker bind:value={searchTakenBefore} />
         <HelperText>
-          If set, we will only select assets up to this date.
-          You can leave it blank to select without an upper date limit.
+          If set, we will only select assets up to this date. You can leave it
+          blank to select without an upper date limit.
         </HelperText>
       </Field>
       <Field label="Album ID">
         <Input bind:value={searchAlbumId} />
         <HelperText>
-          If set, we will only select assets from this album UUID.
-          You can leave it blank to select from all albums.
+          If set, we will only select assets from this album UUID. You can leave
+          it blank to select from all albums.
         </HelperText>
       </Field>
       <Field label="Favorites only">
@@ -158,32 +159,29 @@
       <Field label="Face resolution threshold" required="indicator">
         <NumberInput bind:value={faceResolutionThreshold} />
         <HelperText>
-          Minimum face resolution in pixels to include the face.
-          Faces smaller than this will be ignored.
+          Minimum face resolution in pixels to include the face. Faces smaller
+          than this will be ignored.
         </HelperText>
       </Field>
       <Field label="Face padding ratio" required="indicator">
         <NumberInput bind:value={facePaddingRatio} step={0.1} />
         <HelperText>
-          Padding ratio around the detected face (1.0 = no padding).
-          If the face bounding box height is 100 pixels, a padding ratio of 1.2
-          will result in a 120x120 pixel crop.
+          Padding ratio around the detected face (1.0 = no padding). If the face
+          bounding box height is 100 pixels, a padding ratio of 1.2 will result
+          in a 120x120 pixel crop.
         </HelperText>
       </Field>
       <Field label="Face resize size" required="indicator">
         <NumberInput bind:value={faceResizeSize} />
         <HelperText>
-          We will resize all extracted face images to a square of this size (in pixels)
+          We will resize all extracted face images to a square of this size (in
+          pixels)
         </HelperText>
       </Field>
     </Stack>
   </SettingAccordion>
 
-  <SettingAccordion
-    title="Date overlay"
-    key="label"
-    icon={mdiFormatTextbox}
-  >
+  <SettingAccordion title="Date overlay" key="label" icon={mdiFormatTextbox}>
     <Stack gap={4}>
       <Field label="Add date labels to processed face images">
         <Switch bind:checked={label} />
@@ -192,7 +190,11 @@
         <NumberInput bind:value={labelSize} disabled={labelDisabled} />
       </Field>
       <Field label="Position" disabled={labelDisabled}>
-        <Select bind:value={labelPos} data={labelPositions} disabled={labelDisabled} />
+        <Select
+          bind:value={labelPos}
+          data={labelPositions}
+          disabled={labelDisabled}
+        />
       </Field>
       <Field label="Date format" disabled={labelDisabled}>
         <Input bind:value={labelFormat} disabled={labelDisabled} />
@@ -204,16 +206,14 @@
       </Field>
       <Field label="Fill Color" disabled={labelDisabled}>
         <Input bind:value={labelFill} disabled={labelDisabled} />
-        <HelperText>Hex color code for the label text (e.g., #FFFFFF for white)</HelperText>
+        <HelperText
+          >Hex color code for the label text (e.g., #FFFFFF for white)</HelperText
+        >
       </Field>
     </Stack>
   </SettingAccordion>
 
-  <SettingAccordion
-    title="Video output settings"
-    key="video"
-    icon={mdiVideo}
-  >
+  <SettingAccordion title="Video output settings" key="video" icon={mdiVideo}>
     <Stack gap={4}>
       <Field label="Compile video">
         <Switch bind:checked={videoCompile} />

@@ -7,7 +7,7 @@
     ProgressBar,
     Stack,
     Text,
-} from "@immich/ui";
+  } from "@immich/ui";
 
   let personId: string = "";
   let isGenerating: boolean = false;
@@ -31,20 +31,14 @@
 <form onsubmit={onSubmit} method="post" class="flex flex-col gap-4">
   <Stack gap={4}>
     <Field label="Person ID">
-        <Input
-        bind:value={personId}
-        />
-        <HelperText>
-            Enter the UUID of the person from Immich to generate a timelapse video.
-        </HelperText>
+      <Input bind:value={personId} />
+      <HelperText>
+        Enter the UUID of the person from Immich to generate a timelapse video.
+      </HelperText>
     </Field>
 
-    <Button
-        size="giant"
-        shape="round"
-        fullWidth
-    >
-        {isGenerating ? "Cancel" : "Generate timelapse"}
+    <Button size="giant" shape="round" fullWidth>
+      {isGenerating ? "Cancel" : "Generate timelapse"}
     </Button>
   </Stack>
 </form>
@@ -59,4 +53,3 @@
     <ProgressBar progress={0.001} />
   </div>
 </Stack>
-

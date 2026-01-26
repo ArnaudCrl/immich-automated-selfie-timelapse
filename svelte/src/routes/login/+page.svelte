@@ -1,15 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import {
-    Alert,
-    Button,
-    Field,
-    Input,
-    PasswordInput,
-  } from "@immich/ui";
+  import { Alert, Button, Field, Input, PasswordInput } from "@immich/ui";
 
   export let data;
-  
+
   let baseUrl: string = data.IMMICH_BASE_URL;
   let apiKey: string = data.IMMICH_API_KEY;
   let isLoggedIn: boolean = data.isLoggedIn;

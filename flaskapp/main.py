@@ -25,11 +25,6 @@ app.secret_key = 'your-secret-key-here'  # TODO: replace with a real secret key
 CORS(app, origins=["http://localhost:5173"], supports_credentials=True)
 
 def is_logged_in():
-    print("session dict:", dict(session))
-    print("Session IMMICH_BASE_URL:", session.get("IMMICH_BASE_URL"))
-    print("Session IMMICH_API_KEY:", session.get("IMMICH_API_KEY"))
-    print("Env IMMICH_BASE_URL:", os.getenv("IMMICH_BASE_URL"))
-    print("Env IMMICH_API_KEY:", os.getenv("IMMICH_API_KEY"))
     if session.get("IMMICH_BASE_URL") and session.get("IMMICH_API_KEY"):
         return validate_api_credentials(
             base_url=session.get("IMMICH_BASE_URL"),

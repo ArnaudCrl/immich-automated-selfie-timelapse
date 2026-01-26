@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import {
     Alert,
     Button,
@@ -23,10 +24,10 @@
     const response = await fetch("http://localhost:5000/login", {
       method: "POST",
       body: formData,
+      credentials: "include",
     });
     if (response.ok) {
-      // TODO: continue
-      error = false;
+      goto("/settings");
     } else {
       // read response to determine which field is invalid
       const result = await response.json();
@@ -65,6 +66,6 @@
   </Field>
 
   <Button class="mt-4" type="submit" size="giant" shape="round" fullWidth>
-    {isLoggedIn ? "Update" : "Login"}
+    Connect
   </Button>
 </form>

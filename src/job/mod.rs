@@ -14,9 +14,11 @@ use crate::video::compile_timelapse;
 use crate::web::{AppState, JobStatus, Progress};
 
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageFormat};
+use image::{DynamicImage, GenericImageView, ImageFormat, Rgb};
+use imageproc::drawing::{draw_hollow_rect_mut, draw_line_segment_mut};
+use imageproc::rect::Rect;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::Semaphore;
@@ -26,8 +28,58 @@ use tokio_util::sync::CancellationToken;
 #[derive(Debug, Clone)]
 pub struct JobParams {
     pub person_id: String,
+    pub person_name: Option<String>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
+}
+
+/// Output directories for a processing job.
+#[derive(Debug, Clone)]
+struct OutputDirs {
+    /// Directory for final processed images (used for video)
+    images: PathBuf,
+    /// Path for output video
+    video: PathBuf,
+    /// Optional debug directories for visualizing processing stages.
+    debug: Option<DebugDirs>,
+}
+
+/// Debug output directories for visualizing each processing stage.
+/// Each folder contains images with debug overlays showing what happened at that step.
+#[derive(Debug, Clone, Default)]
+#[allow(dead_code)]
+struct DebugDirs {
+    /// Original image with bounding box and crop region overlayed
+    crop: Option<PathBuf>,
+    /// Face with landmark points drawn (future)
+    landmarks: Option<PathBuf>,
+    /// Before/after alignment visualization (future)
+    alignment: Option<PathBuf>,
+}
+
+/// Create a safe folder name from person name or ID.
+fn sanitize_folder_name(name: Option<&str>, id: &str) -> String {
+    let base = name.filter(|n| !n.is_empty()).unwrap_or(id);
+
+    // Replace unsafe characters with underscores
+    let sanitized: String = base
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    // Trim whitespace and limit length
+    let trimmed = sanitized.trim();
+    if trimmed.len() > 50 {
+        trimmed[..50].to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// Run the complete processing pipeline.
@@ -83,9 +135,41 @@ async fn run_job_inner(
 ) -> Result<PathBuf> {
     let config = state.config.read().await.clone();
 
+    // Create person-specific output directory
+    let folder_name = sanitize_folder_name(params.person_name.as_deref(), &params.person_id);
+    let person_dir = config.output_dir.join(&folder_name);
+
     // Create output directories
-    let images_dir = config.output_dir.join("images");
+    let images_dir = person_dir.join("images");
     tokio::fs::create_dir_all(&images_dir).await?;
+
+    // Create debug directories if enabled
+    let debug = if config.processing.keep_intermediates {
+        let debug_base = person_dir.join("debug");
+
+        let crop_dir = debug_base.join("crop");
+        tokio::fs::create_dir_all(&crop_dir).await?;
+
+        // Future directories (created on-demand when those features are implemented):
+        // - debug_base.join("landmarks") - face with landmark points
+        // - debug_base.join("alignment") - before/after alignment
+
+        Some(DebugDirs {
+            crop: Some(crop_dir),
+            landmarks: None,
+            alignment: None,
+        })
+    } else {
+        None
+    };
+
+    let output_dirs = OutputDirs {
+        images: images_dir.clone(),
+        video: person_dir.join("timelapse.mp4"),
+        debug,
+    };
+
+    tracing::info!("Output directory: {}", person_dir.display());
 
     // Create Immich client
     let client = ImmichClient::new(&config.api)?;
@@ -155,7 +239,7 @@ async fn run_job_inner(
     let semaphore = Arc::new(Semaphore::new(config.processing.max_workers));
     let client = Arc::new(client);
     let config = Arc::new(config);
-    let images_dir = Arc::new(images_dir);
+    let output_dirs = Arc::new(output_dirs);
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
 
@@ -168,7 +252,7 @@ async fn run_job_inner(
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         let client = client.clone();
         let config = config.clone();
-        let images_dir = images_dir.clone();
+        let output_dirs = output_dirs.clone();
         let completed = completed.clone();
         let state = state.clone();
         let task_cancel_token = cancel_token.clone();
@@ -188,7 +272,7 @@ async fn run_job_inner(
                 &config,
                 &asset,
                 &face_data,
-                &images_dir,
+                &output_dirs,
                 &task_cancel_token,
             )
             .await;
@@ -272,12 +356,11 @@ async fn run_job_inner(
             })
             .await;
 
-        let output_video = config.output_dir.join("timelapse.mp4");
         let state_clone = state.clone();
 
         compile_timelapse(
-            &images_dir,
-            &output_video,
+            &output_dirs.images,
+            &output_dirs.video,
             &config.video,
             move |frame, total| {
                 // Note: This callback is sync, so we can't easily update state here.
@@ -288,9 +371,9 @@ async fn run_job_inner(
         )
         .await?;
 
-        Ok(output_video)
+        Ok(output_dirs.video.clone())
     } else {
-        Ok(images_dir.to_path_buf())
+        Ok(output_dirs.images.clone())
     }
 }
 
@@ -316,7 +399,7 @@ async fn process_single_asset(
     config: &Config,
     asset: &Asset,
     face_data: &FaceData,
-    output_dir: &Path,
+    output_dirs: &OutputDirs,
     cancel_token: &CancellationToken,
 ) -> AssetResult {
     let asset_id = &asset.id;
@@ -362,44 +445,6 @@ async fn process_single_asset(
         }
     };
 
-    // Check after download, before CPU-intensive processing
-    if cancel_token.is_cancelled() {
-        return AssetResult::Skipped {
-            asset_id: asset_id.clone(),
-            reason: "Cancelled".to_string(),
-        };
-    }
-
-    // Decode image
-    let img = match image::load_from_memory(&image_bytes) {
-        Ok(img) => img,
-        Err(e) => {
-            return AssetResult::Error {
-                asset_id: asset_id.clone(),
-                error: format!("Failed to decode image: {}", e),
-            };
-        }
-    };
-
-    // Crop and resize face
-    let cropped = match crop_face(&img, face_data, config.processing.resize_size) {
-        Ok(cropped) => cropped,
-        Err(e) => {
-            return AssetResult::Error {
-                asset_id: asset_id.clone(),
-                error: format!("Failed to crop face: {}", e),
-            };
-        }
-    };
-
-    // Check before file I/O
-    if cancel_token.is_cancelled() {
-        return AssetResult::Skipped {
-            asset_id: asset_id.clone(),
-            reason: "Cancelled".to_string(),
-        };
-    }
-
     // Generate timestamp-based filename for sorting
     let timestamp = asset
         .file_created_at
@@ -420,11 +465,66 @@ async fn process_single_asset(
         })
         .collect();
 
-    let output_path = output_dir.join(format!("{}_{}.jpg", safe_timestamp, asset_id));
+    let filename = format!("{}_{}.jpg", safe_timestamp, asset_id);
 
-    // Encode and save
+    // Check after download, before CPU-intensive processing
+    if cancel_token.is_cancelled() {
+        return AssetResult::Skipped {
+            asset_id: asset_id.clone(),
+            reason: "Cancelled".to_string(),
+        };
+    }
+
+    // Decode image
+    let img = match image::load_from_memory(&image_bytes) {
+        Ok(img) => img,
+        Err(e) => {
+            return AssetResult::Error {
+                asset_id: asset_id.clone(),
+                error: format!("Failed to decode image: {}", e),
+            };
+        }
+    };
+
+    // Crop face
+    let (_cropped_full, final_image) =
+        match crop_face_with_intermediate(&img, face_data, config.processing.resize_size) {
+            Ok(result) => result,
+            Err(e) => {
+                return AssetResult::Error {
+                    asset_id: asset_id.clone(),
+                    error: format!("Failed to crop face: {}", e),
+                };
+            }
+        };
+
+    // Save debug visualization if enabled
+    if let Some(ref debug) = output_dirs.debug {
+        if let Some(ref crop_dir) = debug.crop {
+            let debug_img = draw_crop_debug(&img, face_data);
+            let debug_path = crop_dir.join(&filename);
+            let mut buffer = Cursor::new(Vec::new());
+            if let Err(e) = debug_img.write_to(&mut buffer, ImageFormat::Jpeg) {
+                tracing::warn!("Failed to encode debug image: {}", e);
+            } else if let Err(e) = tokio::fs::write(&debug_path, buffer.into_inner()).await {
+                tracing::warn!("Failed to save debug image: {}", e);
+            }
+        }
+    }
+
+    // Check before file I/O
+    if cancel_token.is_cancelled() {
+        return AssetResult::Skipped {
+            asset_id: asset_id.clone(),
+            reason: "Cancelled".to_string(),
+        };
+    }
+
+    let output_path = output_dirs.images.join(&filename);
+
+    // Encode and save final image
     let mut buffer = Cursor::new(Vec::new());
-    if let Err(e) = cropped.write_to(&mut buffer, ImageFormat::Jpeg) {
+    if let Err(e) = final_image.write_to(&mut buffer, ImageFormat::Jpeg) {
         return AssetResult::Error {
             asset_id: asset_id.clone(),
             error: format!("Failed to encode image: {}", e),
@@ -446,10 +546,15 @@ async fn process_single_asset(
 }
 
 /// Crop and resize the face from an image using bounding box.
+/// Returns (cropped_full_res, resized_final) for intermediate saving.
 ///
 /// This is a simplified version that just uses the bounding box.
 /// A full implementation would use facial landmarks for alignment.
-fn crop_face(img: &DynamicImage, face_data: &FaceData, output_size: u32) -> Result<DynamicImage> {
+fn crop_face_with_intermediate(
+    img: &DynamicImage,
+    face_data: &FaceData,
+    output_size: u32,
+) -> Result<(DynamicImage, DynamicImage)> {
     let (img_width, img_height) = img.dimensions();
 
     // Convert normalized bounding box to pixel coordinates
@@ -492,13 +597,79 @@ fn crop_face(img: &DynamicImage, face_data: &FaceData, output_size: u32) -> Resu
         return Err(Error::ImageProcessing("Crop area too small".to_string()));
     }
 
-    // Crop the face region
+    // Crop the face region (full resolution)
     let cropped = img.crop_imm(crop_x1, crop_y1, actual_crop_size, actual_crop_size);
 
     // Resize to output size
     let resized = cropped.resize_exact(output_size, output_size, FilterType::Lanczos3);
 
-    Ok(resized)
+    Ok((cropped, resized))
+}
+
+/// Draw debug visualization showing bounding box and crop region.
+/// - Red rectangle: face bounding box from Immich
+/// - Green rectangle: expanded crop region used for processing
+fn draw_crop_debug(img: &DynamicImage, face_data: &FaceData) -> DynamicImage {
+    let (img_width, img_height) = img.dimensions();
+    let mut rgb_img = img.to_rgb8();
+
+    // Face bounding box in pixel coordinates
+    let bbox_x1 = (face_data.bounding_box_x1 * img_width as f32) as i32;
+    let bbox_y1 = (face_data.bounding_box_y1 * img_height as f32) as i32;
+    let bbox_x2 = (face_data.bounding_box_x2 * img_width as f32) as i32;
+    let bbox_y2 = (face_data.bounding_box_y2 * img_height as f32) as i32;
+
+    let face_width = (bbox_x2 - bbox_x1) as u32;
+    let face_height = (bbox_y2 - bbox_y1) as u32;
+
+    // Calculate crop region (same logic as crop_face_with_intermediate)
+    let face_size = face_width.max(face_height);
+    let padding = face_size / 2;
+    let crop_size = face_size + padding * 2;
+
+    let center_x = (bbox_x1 + bbox_x2) / 2;
+    let center_y = (bbox_y1 + bbox_y2) / 2;
+
+    let crop_x1 = (center_x - crop_size as i32 / 2).max(0) as u32;
+    let crop_y1 = (center_y - crop_size as i32 / 2).max(0) as u32;
+    let crop_x1 = crop_x1.min(img_width.saturating_sub(crop_size));
+    let crop_y1 = crop_y1.min(img_height.saturating_sub(crop_size));
+    let actual_crop_size = crop_size.min(img_width - crop_x1).min(img_height - crop_y1);
+
+    // Colors
+    let red = Rgb([255u8, 0, 0]);
+    let green = Rgb([0u8, 255, 0]);
+
+    // Draw face bounding box (red) - draw multiple times for thickness
+    for offset in 0..3i32 {
+        let rect = Rect::at(bbox_x1 - offset, bbox_y1 - offset)
+            .of_size(face_width + offset as u32 * 2, face_height + offset as u32 * 2);
+        draw_hollow_rect_mut(&mut rgb_img, rect, red);
+    }
+
+    // Draw crop region (green) - draw multiple times for thickness
+    for offset in 0..3i32 {
+        let rect = Rect::at(crop_x1 as i32 - offset, crop_y1 as i32 - offset)
+            .of_size(actual_crop_size + offset as u32 * 2, actual_crop_size + offset as u32 * 2);
+        draw_hollow_rect_mut(&mut rgb_img, rect, green);
+    }
+
+    // Draw crosshair at face center
+    let cross_size = 20i32;
+    draw_line_segment_mut(
+        &mut rgb_img,
+        ((center_x - cross_size) as f32, center_y as f32),
+        ((center_x + cross_size) as f32, center_y as f32),
+        red,
+    );
+    draw_line_segment_mut(
+        &mut rgb_img,
+        (center_x as f32, (center_y - cross_size) as f32),
+        (center_x as f32, (center_y + cross_size) as f32),
+        red,
+    );
+
+    DynamicImage::ImageRgb8(rgb_img)
 }
 
 #[cfg(test)]

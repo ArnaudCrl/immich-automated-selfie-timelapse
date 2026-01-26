@@ -91,6 +91,9 @@ pub struct ProcessingConfig {
 
     /// Number of parallel workers for processing.
     pub max_workers: usize,
+
+    /// Keep intermediate images (original, cropped) for inspection.
+    pub keep_intermediates: bool,
 }
 
 impl Default for ProcessingConfig {
@@ -103,6 +106,7 @@ impl Default for ProcessingConfig {
             left_eye_pos: (0.35, 0.4),
             right_eye_pos: (0.65, 0.4),
             max_workers: num_cpus(),
+            keep_intermediates: false,
         }
     }
 }

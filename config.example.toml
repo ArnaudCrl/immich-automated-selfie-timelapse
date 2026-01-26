@@ -37,6 +37,11 @@ right_eye_pos = [0.65, 0.4]
 # Number of parallel workers (defaults to CPU count)
 # max_workers = 4
 
+# Save debug visualizations showing processing steps
+# Saves to: output/{person}/debug/crop/ (image with bounding box and crop region overlayed)
+# Future: debug/landmarks/, debug/alignment/
+keep_intermediates = false
+
 [video]
 # Output video framerate
 framerate = 15

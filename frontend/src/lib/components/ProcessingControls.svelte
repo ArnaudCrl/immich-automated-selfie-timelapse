@@ -18,6 +18,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           person_id: personId,
+          person_name: personName || null,
           date_from: dateFrom || null,
           date_to: dateTo || null,
         }),

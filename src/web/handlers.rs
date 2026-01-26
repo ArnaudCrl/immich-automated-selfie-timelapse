@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
     response::{Html, IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/progress", get(get_progress))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
+        .route("/api/output", delete(cleanup_all_output))
+        .route("/api/output/{folder_name}", delete(cleanup_output_folder))
         // Serve output files (video, images)
         .nest_service("/output", ServeDir::new(output_dir))
         // Serve frontend static files (fallback to index.html for SPA routing)
@@ -207,9 +209,9 @@ async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
 #[derive(Deserialize)]
 struct StartRequest {
     person_id: String,
+    person_name: Option<String>,
     date_from: Option<String>,
     date_to: Option<String>,
-    // Processing options can be added here
 }
 
 #[derive(Serialize)]
@@ -256,6 +258,7 @@ async fn start_processing(
     // Spawn the processing job in the background
     let job_params = JobParams {
         person_id: request.person_id,
+        person_name: request.person_name,
         date_from: request.date_from,
         date_to: request.date_to,
     };
@@ -287,4 +290,118 @@ async fn cancel_processing(State(state): State<AppState>) -> Json<StartResponse>
             message: "No job running to cancel".to_string(),
         })
     }
+}
+
+/// Clean up all output folders.
+async fn cleanup_all_output(
+    State(state): State<AppState>,
+) -> Result<Json<StartResponse>, (StatusCode, String)> {
+    let config = state.config.read().await;
+    let output_dir = &config.output_dir;
+
+    // Check if a job is running
+    {
+        let progress = state.progress.read().await;
+        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
+            return Err((
+                StatusCode::CONFLICT,
+                "Cannot cleanup while a job is running".to_string(),
+            ));
+        }
+    }
+
+    // Remove all contents of output directory
+    if output_dir.exists() {
+        let mut entries = tokio::fs::read_dir(output_dir).await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read output directory: {}", e),
+            )
+        })?;
+
+        let mut deleted_count = 0;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read directory entry: {}", e),
+            )
+        })? {
+            let path = entry.path();
+            if path.is_dir() {
+                tokio::fs::remove_dir_all(&path).await.map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to remove directory {}: {}", path.display(), e),
+                    )
+                })?;
+                deleted_count += 1;
+            }
+        }
+
+        tracing::info!("Cleaned up {} output folders", deleted_count);
+
+        Ok(Json(StartResponse {
+            success: true,
+            message: format!("Deleted {} output folders", deleted_count),
+        }))
+    } else {
+        Ok(Json(StartResponse {
+            success: true,
+            message: "Output directory does not exist".to_string(),
+        }))
+    }
+}
+
+/// Clean up a specific output folder by name.
+async fn cleanup_output_folder(
+    State(state): State<AppState>,
+    Path(folder_name): Path<String>,
+) -> Result<Json<StartResponse>, (StatusCode, String)> {
+    let config = state.config.read().await;
+
+    // Check if a job is running
+    {
+        let progress = state.progress.read().await;
+        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
+            return Err((
+                StatusCode::CONFLICT,
+                "Cannot cleanup while a job is running".to_string(),
+            ));
+        }
+    }
+
+    // Sanitize folder name to prevent path traversal
+    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
+        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
+    }
+
+    let folder_path = config.output_dir.join(&folder_name);
+
+    if !folder_path.exists() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Folder '{}' not found", folder_name),
+        ));
+    }
+
+    if !folder_path.is_dir() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("'{}' is not a directory", folder_name),
+        ));
+    }
+
+    tokio::fs::remove_dir_all(&folder_path).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to remove folder: {}", e),
+        )
+    })?;
+
+    tracing::info!("Cleaned up output folder: {}", folder_name);
+
+    Ok(Json(StartResponse {
+        success: true,
+        message: format!("Deleted folder '{}'", folder_name),
+    }))
 }

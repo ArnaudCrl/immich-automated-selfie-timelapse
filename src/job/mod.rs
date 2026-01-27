@@ -10,7 +10,8 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use crate::face_processing::crop_face_with_intermediate;
 use crate::face_processing::debug::draw_crop_debug;
-use crate::face_processing::{AssetResult, BoundingBox, ProcessedFace};
+use crate::face_processing::load_image_with_orientation;
+use crate::face_processing::{AssetResult, ProcessedFace};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::video::compile_timelapse;
 use crate::web::{AppState, JobStatus, Progress};
@@ -403,16 +404,9 @@ async fn process_single_asset(
 ) -> AssetResult {
     let asset_id = &asset.id;
 
-    // Check face resolution
-    let bbox = BoundingBox {
-        x1: face_data.bounding_box_x1,
-        y1: face_data.bounding_box_y1,
-        x2: face_data.bounding_box_x2,
-        y2: face_data.bounding_box_y2,
-    };
-
-    let face_width = bbox.width() * face_data.image_width as f32;
-    let face_height = bbox.height() * face_data.image_height as f32;
+    // Check face resolution (bounding box coordinates are already in pixels)
+    let face_width = face_data.bounding_box_x2 - face_data.bounding_box_x1;
+    let face_height = face_data.bounding_box_y2 - face_data.bounding_box_y1;
     let face_size = face_width.min(face_height) as u32;
 
     if face_size < config.processing.face_resolution_threshold {
@@ -474,8 +468,9 @@ async fn process_single_asset(
         };
     }
 
-    // Decode image
-    let img = match image::load_from_memory(&image_bytes) {
+    // Decode image and apply EXIF orientation correction.
+    // This ensures bounding box coordinates from Immich align with the image pixels.
+    let img = match load_image_with_orientation(&image_bytes) {
         Ok(img) => img,
         Err(e) => {
             return AssetResult::Error {

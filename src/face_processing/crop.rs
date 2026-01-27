@@ -19,11 +19,16 @@ pub fn crop_face_with_intermediate(
 ) -> Result<(DynamicImage, DynamicImage)> {
     let (img_width, img_height) = img.dimensions();
 
-    // Convert normalized bounding box to pixel coordinates
-    let x1 = (face_data.bounding_box_x1 * img_width as f32) as u32;
-    let y1 = (face_data.bounding_box_y1 * img_height as f32) as u32;
-    let x2 = (face_data.bounding_box_x2 * img_width as f32) as u32;
-    let y2 = (face_data.bounding_box_y2 * img_height as f32) as u32;
+    // Scale bounding box from metadata dimensions to actual image dimensions.
+    // Immich stores bounding box as pixel coordinates relative to image_width/image_height,
+    // but the loaded image may have different dimensions (e.g., if downloaded at different resolution).
+    let scale_x = img_width as f32 / face_data.image_width as f32;
+    let scale_y = img_height as f32 / face_data.image_height as f32;
+
+    let x1 = (face_data.bounding_box_x1 * scale_x) as u32;
+    let y1 = (face_data.bounding_box_y1 * scale_y) as u32;
+    let x2 = (face_data.bounding_box_x2 * scale_x) as u32;
+    let y2 = (face_data.bounding_box_y2 * scale_y) as u32;
 
     let face_width = x2.saturating_sub(x1);
     let face_height = y2.saturating_sub(y1);

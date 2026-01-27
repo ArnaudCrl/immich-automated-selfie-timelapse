@@ -16,16 +16,20 @@ pub fn draw_crop_debug(img: &DynamicImage, face_data: &FaceData) -> DynamicImage
     let (img_width, img_height) = img.dimensions();
     let mut rgb_img = img.to_rgb8();
 
-    // Face bounding box in pixel coordinates
-    let bbox_x1 = (face_data.bounding_box_x1 * img_width as f32) as i32;
-    let bbox_y1 = (face_data.bounding_box_y1 * img_height as f32) as i32;
-    let bbox_x2 = (face_data.bounding_box_x2 * img_width as f32) as i32;
-    let bbox_y2 = (face_data.bounding_box_y2 * img_height as f32) as i32;
+    // Scale bounding box from metadata dimensions to actual image dimensions.
+    // Immich stores bounding box as pixel coordinates relative to image_width/image_height.
+    let scale_x = img_width as f32 / face_data.image_width as f32;
+    let scale_y = img_height as f32 / face_data.image_height as f32;
+
+    let bbox_x1 = (face_data.bounding_box_x1 * scale_x) as i32;
+    let bbox_y1 = (face_data.bounding_box_y1 * scale_y) as i32;
+    let bbox_x2 = (face_data.bounding_box_x2 * scale_x) as i32;
+    let bbox_y2 = (face_data.bounding_box_y2 * scale_y) as i32;
 
     let face_width = (bbox_x2 - bbox_x1) as u32;
     let face_height = (bbox_y2 - bbox_y1) as u32;
 
-    // Calculate crop region (same logic as crop_face_with_intermediate in job/mod.rs)
+    // Calculate crop region (same logic as crop_face_with_intermediate)
     let face_size = face_width.max(face_height);
     let padding = face_size / 2;
     let crop_size = face_size + padding * 2;

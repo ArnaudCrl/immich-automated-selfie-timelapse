@@ -8,15 +8,14 @@
 
 use crate::config::Config;
 use crate::error::{Error, Result};
+use crate::face_processing::crop_face_with_intermediate;
+use crate::face_processing::debug::draw_crop_debug;
 use crate::face_processing::{AssetResult, BoundingBox, ProcessedFace};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::video::compile_timelapse;
 use crate::web::{AppState, JobStatus, Progress};
 
-use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageFormat, Rgb};
-use imageproc::drawing::{draw_hollow_rect_mut, draw_line_segment_mut};
-use imageproc::rect::Rect;
+use image::ImageFormat;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -543,133 +542,6 @@ async fn process_single_asset(
         asset_id: asset_id.clone(),
         timestamp,
     })
-}
-
-/// Crop and resize the face from an image using bounding box.
-/// Returns (cropped_full_res, resized_final) for intermediate saving.
-///
-/// This is a simplified version that just uses the bounding box.
-/// A full implementation would use facial landmarks for alignment.
-fn crop_face_with_intermediate(
-    img: &DynamicImage,
-    face_data: &FaceData,
-    output_size: u32,
-) -> Result<(DynamicImage, DynamicImage)> {
-    let (img_width, img_height) = img.dimensions();
-
-    // Convert normalized bounding box to pixel coordinates
-    let x1 = (face_data.bounding_box_x1 * img_width as f32) as u32;
-    let y1 = (face_data.bounding_box_y1 * img_height as f32) as u32;
-    let x2 = (face_data.bounding_box_x2 * img_width as f32) as u32;
-    let y2 = (face_data.bounding_box_y2 * img_height as f32) as u32;
-
-    let face_width = x2.saturating_sub(x1);
-    let face_height = y2.saturating_sub(y1);
-
-    if face_width == 0 || face_height == 0 {
-        return Err(Error::ImageProcessing(
-            "Invalid face bounding box".to_string(),
-        ));
-    }
-
-    // Expand the crop area to include some context around the face
-    // and make it square for consistent output
-    let face_size = face_width.max(face_height);
-    let padding = face_size / 2; // 50% padding on each side
-    let crop_size = face_size + padding * 2;
-
-    // Calculate center of face
-    let center_x = (x1 + x2) / 2;
-    let center_y = (y1 + y2) / 2;
-
-    // Calculate crop bounds, clamped to image dimensions
-    let crop_x1 = center_x
-        .saturating_sub(crop_size / 2)
-        .min(img_width.saturating_sub(crop_size));
-    let crop_y1 = center_y
-        .saturating_sub(crop_size / 2)
-        .min(img_height.saturating_sub(crop_size));
-
-    // Ensure we don't exceed image bounds
-    let actual_crop_size = crop_size.min(img_width - crop_x1).min(img_height - crop_y1);
-
-    if actual_crop_size < 10 {
-        return Err(Error::ImageProcessing("Crop area too small".to_string()));
-    }
-
-    // Crop the face region (full resolution)
-    let cropped = img.crop_imm(crop_x1, crop_y1, actual_crop_size, actual_crop_size);
-
-    // Resize to output size
-    let resized = cropped.resize_exact(output_size, output_size, FilterType::Lanczos3);
-
-    Ok((cropped, resized))
-}
-
-/// Draw debug visualization showing bounding box and crop region.
-/// - Red rectangle: face bounding box from Immich
-/// - Green rectangle: expanded crop region used for processing
-fn draw_crop_debug(img: &DynamicImage, face_data: &FaceData) -> DynamicImage {
-    let (img_width, img_height) = img.dimensions();
-    let mut rgb_img = img.to_rgb8();
-
-    // Face bounding box in pixel coordinates
-    let bbox_x1 = (face_data.bounding_box_x1 * img_width as f32) as i32;
-    let bbox_y1 = (face_data.bounding_box_y1 * img_height as f32) as i32;
-    let bbox_x2 = (face_data.bounding_box_x2 * img_width as f32) as i32;
-    let bbox_y2 = (face_data.bounding_box_y2 * img_height as f32) as i32;
-
-    let face_width = (bbox_x2 - bbox_x1) as u32;
-    let face_height = (bbox_y2 - bbox_y1) as u32;
-
-    // Calculate crop region (same logic as crop_face_with_intermediate)
-    let face_size = face_width.max(face_height);
-    let padding = face_size / 2;
-    let crop_size = face_size + padding * 2;
-
-    let center_x = (bbox_x1 + bbox_x2) / 2;
-    let center_y = (bbox_y1 + bbox_y2) / 2;
-
-    let crop_x1 = (center_x - crop_size as i32 / 2).max(0) as u32;
-    let crop_y1 = (center_y - crop_size as i32 / 2).max(0) as u32;
-    let crop_x1 = crop_x1.min(img_width.saturating_sub(crop_size));
-    let crop_y1 = crop_y1.min(img_height.saturating_sub(crop_size));
-    let actual_crop_size = crop_size.min(img_width - crop_x1).min(img_height - crop_y1);
-
-    // Colors
-    let red = Rgb([255u8, 0, 0]);
-    let green = Rgb([0u8, 255, 0]);
-
-    // Draw face bounding box (red) - draw multiple times for thickness
-    for offset in 0..3i32 {
-        let rect = Rect::at(bbox_x1 - offset, bbox_y1 - offset)
-            .of_size(face_width + offset as u32 * 2, face_height + offset as u32 * 2);
-        draw_hollow_rect_mut(&mut rgb_img, rect, red);
-    }
-
-    // Draw crop region (green) - draw multiple times for thickness
-    for offset in 0..3i32 {
-        let rect = Rect::at(crop_x1 as i32 - offset, crop_y1 as i32 - offset)
-            .of_size(actual_crop_size + offset as u32 * 2, actual_crop_size + offset as u32 * 2);
-        draw_hollow_rect_mut(&mut rgb_img, rect, green);
-    }
-
-    // Draw crosshair at face center
-    let cross_size = 20i32;
-    draw_line_segment_mut(
-        &mut rgb_img,
-        ((center_x - cross_size) as f32, center_y as f32),
-        ((center_x + cross_size) as f32, center_y as f32),
-        red,
-    );
-    draw_line_segment_mut(
-        &mut rgb_img,
-        (center_x as f32, (center_y - cross_size) as f32),
-        (center_x as f32, (center_y + cross_size) as f32),
-        red,
-    );
-
-    DynamicImage::ImageRgb8(rgb_img)
 }
 
 #[cfg(test)]

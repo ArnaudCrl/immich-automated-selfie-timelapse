@@ -28,7 +28,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/health", get(health_check))
         .route("/api/connection", get(check_connection))
         .route("/api/people", get(get_people))
-        .route("/api/people/{person_id}/thumbnail", get(get_person_thumbnail))
+        .route(
+            "/api/people/{person_id}/thumbnail",
+            get(get_person_thumbnail),
+        )
         .route("/api/progress", get(get_progress))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
@@ -159,20 +162,18 @@ async fn get_person_thumbnail(
         )
     })?;
 
-    tracing::debug!(
-        "Thumbnail for {}: {} bytes, type: {}",
-        person_id,
-        bytes.len(),
-        content_type
-    );
-
     // Return the image with appropriate headers
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type)
         .header(header::CACHE_CONTROL, "public, max-age=3600")
         .body(Body::from(bytes))
-        .unwrap())
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to build response: {}", e),
+            )
+        })
 }
 
 /// Get current progress.
@@ -228,10 +229,7 @@ async fn start_processing(
     {
         let progress = state.progress.read().await;
         if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "A job is already running".to_string(),
-            ));
+            return Err((StatusCode::CONFLICT, "A job is already running".to_string()));
         }
     }
 

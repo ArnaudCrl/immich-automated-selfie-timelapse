@@ -46,14 +46,19 @@ struct OutputDirs {
 
 /// Debug output directories for visualizing each processing stage.
 /// Each folder contains images with debug overlays showing what happened at that step.
+///
+/// Note: `landmarks` and `alignment` fields are placeholders for future features
+/// (facial landmark detection and face alignment). They are intentionally unused
+/// until those features are implemented.
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 struct DebugDirs {
     /// Original image with bounding box and crop region overlayed
     crop: Option<PathBuf>,
-    /// Face with landmark points drawn (future)
+    /// Face with landmark points drawn (future: facial landmark detection)
+    #[allow(dead_code)]
     landmarks: Option<PathBuf>,
-    /// Before/after alignment visualization (future)
+    /// Before/after alignment visualization (future: face alignment)
+    #[allow(dead_code)]
     alignment: Option<PathBuf>,
 }
 
@@ -249,7 +254,10 @@ async fn run_job_inner(
             break;
         }
 
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = match semaphore.clone().acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => continue, // Semaphore closed, skip remaining tasks
+        };
         let client = client.clone();
         let config = config.clone();
         let output_dirs = output_dirs.clone();
@@ -356,17 +364,15 @@ async fn run_job_inner(
             })
             .await;
 
-        let state_clone = state.clone();
-
         compile_timelapse(
             &output_dirs.images,
             &output_dirs.video,
             &config.video,
-            move |frame, total| {
-                // Note: This callback is sync, so we can't easily update state here.
-                // The FFmpeg wrapper already handles this internally.
+            |frame, total| {
+                // Sync callback - just log progress. State updates would require
+                // async context or channels, which adds complexity for minimal benefit
+                // since video compilation is typically fast.
                 tracing::debug!("Video progress: {}/{}", frame, total);
-                let _ = (&state_clone, frame, total); // Suppress unused warning
             },
         )
         .await?;

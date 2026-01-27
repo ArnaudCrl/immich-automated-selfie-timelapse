@@ -157,35 +157,69 @@ impl Config {
     /// Load configuration from environment variables.
     ///
     /// Recognized variables:
-    /// - IMMICH_API_KEY
-    /// - IMMICH_BASE_URL
+    /// - IMMICH_API_KEY - API key for Immich
+    /// - IMMICH_BASE_URL - Base URL of Immich instance
+    /// - OUTPUT_DIR - Output directory for processed images/video
+    /// - RESIZE_SIZE - Output image size in pixels
+    /// - FACE_RESOLUTION_THRESHOLD - Minimum face size in pixels
+    /// - MAX_WORKERS - Number of parallel processing workers
+    /// - VIDEO_FRAMERATE - Output video framerate
+    /// - VIDEO_ENABLED - Whether to compile video (true/false)
+    /// - KEEP_INTERMEDIATES - Keep debug images (true/false)
     pub fn from_env() -> Self {
-        let mut config = Config::default();
-
-        if let Ok(key) = std::env::var("IMMICH_API_KEY") {
-            config.api.api_key = key;
-        }
-        if let Ok(url) = std::env::var("IMMICH_BASE_URL") {
-            config.api.base_url = url;
-        }
-        if let Ok(dir) = std::env::var("OUTPUT_DIR") {
-            config.output_dir = PathBuf::from(dir);
-        }
-
-        config
+        Config::default().with_env()
     }
 
     /// Merge environment variables into an existing config.
     pub fn with_env(mut self) -> Self {
+        // API settings
         if let Ok(key) = std::env::var("IMMICH_API_KEY") {
             self.api.api_key = key;
         }
         if let Ok(url) = std::env::var("IMMICH_BASE_URL") {
             self.api.base_url = url;
         }
+
+        // Output directory
         if let Ok(dir) = std::env::var("OUTPUT_DIR") {
             self.output_dir = PathBuf::from(dir);
         }
+
+        // Processing settings
+        if let Ok(val) = std::env::var("RESIZE_SIZE") {
+            if let Ok(size) = val.parse() {
+                self.processing.resize_size = size;
+            }
+        }
+        if let Ok(val) = std::env::var("FACE_RESOLUTION_THRESHOLD") {
+            if let Ok(threshold) = val.parse() {
+                self.processing.face_resolution_threshold = threshold;
+            }
+        }
+        if let Ok(val) = std::env::var("MAX_WORKERS") {
+            if let Ok(workers) = val.parse() {
+                self.processing.max_workers = workers;
+            }
+        }
+        if let Ok(val) = std::env::var("KEEP_INTERMEDIATES") {
+            self.processing.keep_intermediates = val.eq_ignore_ascii_case("true") || val == "1";
+        }
+
+        // Video settings
+        if let Ok(val) = std::env::var("VIDEO_FRAMERATE") {
+            if let Ok(fps) = val.parse() {
+                self.video.framerate = fps;
+            }
+        }
+        if let Ok(val) = std::env::var("VIDEO_ENABLED") {
+            self.video.enabled = val.eq_ignore_ascii_case("true") || val == "1";
+        }
+        if let Ok(val) = std::env::var("VIDEO_CRF") {
+            if let Ok(crf) = val.parse() {
+                self.video.crf = crf;
+            }
+        }
+
         self
     }
 

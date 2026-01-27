@@ -4,11 +4,16 @@
   import ProcessingControls from './lib/components/ProcessingControls.svelte';
   import ProgressDisplay from './lib/components/ProgressDisplay.svelte';
   import ResultsView from './lib/components/ResultsView.svelte';
+  import SettingsPanel from './lib/components/SettingsPanel.svelte';
 
   let connectionOk = $state(false);
   let selectedPerson = $state(null);
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
+
+  let isJobRunning = $derived(
+    jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
+  );
 
   function handleConnectionChange(data) {
     connectionOk = data.connected;
@@ -31,10 +36,14 @@
   </header>
 
   {#if connectionOk}
+    <section class="settings">
+      <SettingsPanel disabled={isJobRunning} />
+    </section>
+
     <section class="controls">
       <PeopleSelector
         onselect={handlePersonSelect}
-        disabled={jobStatus === 'running' || jobStatus === 'compiling_video'}
+        disabled={isJobRunning}
       />
 
       {#if selectedPerson}

@@ -1,5 +1,6 @@
 //! HTTP route handlers.
 
+use crate::config::{ProcessingConfig, VideoConfig};
 use crate::immich_api::ImmichClient;
 use crate::job::{run_job, JobParams};
 use crate::web::state::{AppState, JobStatus, Progress};
@@ -8,7 +9,7 @@ use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
     response::{Html, IntoResponse, Json, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/cancel", post(cancel_processing))
         .route("/api/output", delete(cleanup_all_output))
         .route("/api/output/{folder_name}", delete(cleanup_output_folder))
+        .route("/api/config", get(get_config))
+        .route("/api/config", put(update_config))
         // Serve output files (video, images)
         .nest_service("/output", ServeDir::new(output_dir))
         // Serve frontend static files (fallback to index.html for SPA routing)
@@ -402,4 +405,110 @@ async fn cleanup_output_folder(
         success: true,
         message: format!("Deleted folder '{}'", folder_name),
     }))
+}
+
+/// Configuration response (excludes sensitive API credentials).
+/// Reuses config types which already derive Serialize.
+#[derive(Serialize)]
+struct ConfigResponse {
+    processing: ProcessingConfig,
+    video: VideoConfig,
+}
+
+/// Get current configuration (excluding sensitive data).
+async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
+    let config = state.config.read().await;
+
+    Json(ConfigResponse {
+        processing: config.processing.clone(),
+        video: config.video.clone(),
+    })
+}
+
+/// Configuration update request.
+#[derive(Deserialize)]
+struct ConfigUpdateRequest {
+    processing: Option<ProcessingConfigUpdate>,
+    video: Option<VideoConfigUpdate>,
+}
+
+#[derive(Deserialize)]
+struct ProcessingConfigUpdate {
+    resize_size: Option<u32>,
+    face_resolution_threshold: Option<u32>,
+    pose_threshold: Option<f32>,
+    ear_threshold: Option<f32>,
+    max_workers: Option<usize>,
+    keep_intermediates: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct VideoConfigUpdate {
+    framerate: Option<u32>,
+    enabled: Option<bool>,
+    codec: Option<String>,
+    crf: Option<u32>,
+}
+
+/// Update configuration.
+async fn update_config(
+    State(state): State<AppState>,
+    Json(update): Json<ConfigUpdateRequest>,
+) -> Result<Json<ConfigResponse>, (StatusCode, String)> {
+    // Check if a job is running
+    {
+        let progress = state.progress.read().await;
+        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
+            return Err((
+                StatusCode::CONFLICT,
+                "Cannot update config while a job is running".to_string(),
+            ));
+        }
+    }
+
+    // Update config
+    {
+        let mut config = state.config.write().await;
+
+        if let Some(proc) = update.processing {
+            if let Some(v) = proc.resize_size {
+                config.processing.resize_size = v;
+            }
+            if let Some(v) = proc.face_resolution_threshold {
+                config.processing.face_resolution_threshold = v;
+            }
+            if let Some(v) = proc.pose_threshold {
+                config.processing.pose_threshold = v;
+            }
+            if let Some(v) = proc.ear_threshold {
+                config.processing.ear_threshold = v;
+            }
+            if let Some(v) = proc.max_workers {
+                config.processing.max_workers = v;
+            }
+            if let Some(v) = proc.keep_intermediates {
+                config.processing.keep_intermediates = v;
+            }
+        }
+
+        if let Some(vid) = update.video {
+            if let Some(v) = vid.framerate {
+                config.video.framerate = v;
+            }
+            if let Some(v) = vid.enabled {
+                config.video.enabled = v;
+            }
+            if let Some(v) = vid.codec {
+                config.video.codec = v;
+            }
+            if let Some(v) = vid.crf {
+                config.video.crf = v;
+            }
+        }
+
+        tracing::info!("Configuration updated");
+    }
+
+    // Return updated config
+    Ok(get_config(State(state)).await)
 }

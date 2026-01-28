@@ -6,10 +6,34 @@
   let dateFrom = $state('');
   let dateTo = $state('');
   let pollInterval = $state(null);
+  let assetCount = $state(null);
+  let loadingCount = $state(false);
 
   let isRunning = $derived(
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
   );
+
+  // Fetch asset count when personId changes
+  $effect(() => {
+    if (personId) {
+      fetchAssetCount(personId);
+    }
+  });
+
+  async function fetchAssetCount(id) {
+    loadingCount = true;
+    assetCount = null;
+    try {
+      const res = await fetch(`/api/people/${encodeURIComponent(id)}/asset-count`);
+      if (res.ok) {
+        assetCount = await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to fetch asset count:', e);
+    } finally {
+      loadingCount = false;
+    }
+  }
 
   async function startProcessing() {
     try {
@@ -95,9 +119,21 @@
 <div class="processing-controls">
   <h2>Create Timelapse</h2>
 
-  <p class="selected-person">
-    Selected: <strong>{personName || 'Unnamed'}</strong>
-  </p>
+  <div class="selected-person">
+    <span class="person-name">
+      Selected: <strong>{personName || 'Unnamed'}</strong>
+    </span>
+    {#if loadingCount}
+      <span class="asset-count loading">Loading images...</span>
+    {:else if assetCount}
+      <span class="asset-count">
+        <span class="count-number">{assetCount.assets_with_faces}</span> images with face data
+        {#if assetCount.total_assets !== assetCount.assets_with_faces}
+          <span class="count-detail">({assetCount.total_assets} total)</span>
+        {/if}
+      </span>
+    {/if}
+  </div>
 
   <div class="date-filters">
     <label>
@@ -139,13 +175,39 @@
   }
 
   .selected-person {
-    font-size: 0.875rem;
-    color: #888;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
     margin-bottom: 1rem;
   }
 
-  .selected-person strong {
+  .person-name {
+    font-size: 0.875rem;
+    color: #888;
+  }
+
+  .person-name strong {
     color: #e0e0e0;
+  }
+
+  .asset-count {
+    font-size: 0.875rem;
+    color: #4f46e5;
+  }
+
+  .asset-count.loading {
+    color: #888;
+    font-style: italic;
+  }
+
+  .count-number {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+
+  .count-detail {
+    color: #666;
+    font-size: 0.75rem;
   }
 
   .date-filters {

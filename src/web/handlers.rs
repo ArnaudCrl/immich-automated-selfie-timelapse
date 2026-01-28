@@ -3,7 +3,7 @@
 use crate::config::{ProcessingConfig, VideoConfig};
 use crate::immich_api::ImmichClient;
 use crate::job::{run_job, JobParams};
-use crate::web::state::{AppState, JobStatus, Progress};
+use crate::web::state::{AppState, JobStatus, Progress, SkipStats};
 use axum::{
     body::Body,
     extract::{Path, State},
@@ -33,9 +33,14 @@ pub fn create_router(state: AppState) -> Router {
             "/api/people/{person_id}/thumbnail",
             get(get_person_thumbnail),
         )
+        .route(
+            "/api/people/{person_id}/asset-count",
+            get(get_person_asset_count),
+        )
         .route("/api/progress", get(get_progress))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
+        .route("/api/output", get(list_output_folders))
         .route("/api/output", delete(cleanup_all_output))
         .route("/api/output/{folder_name}", delete(cleanup_output_folder))
         .route("/api/config", get(get_config))
@@ -179,6 +184,72 @@ async fn get_person_thumbnail(
         })
 }
 
+/// Asset count response for a person.
+#[derive(Serialize)]
+struct AssetCountResponse {
+    total_assets: u32,
+    assets_with_faces: u32,
+}
+
+/// Get the count of assets for a person.
+async fn get_person_asset_count(
+    State(state): State<AppState>,
+    Path(person_id): Path<String>,
+) -> Result<Json<AssetCountResponse>, (StatusCode, String)> {
+    let config = state.config.read().await;
+    let client = ImmichClient::new(&config.api).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create client: {}", e),
+        )
+    })?;
+
+    // Fetch assets for this person
+    let assets = client
+        .get_assets_with_person(&person_id, None, None)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get assets: {}", e),
+            )
+        })?;
+
+    let total_assets = assets.len() as u32;
+
+    // Count assets that have face data for the target person
+    let assets_with_faces = assets
+        .iter()
+        .filter(|asset| {
+            asset.people.as_ref().map_or(false, |people| {
+                people.iter().any(|p| {
+                    p.id == person_id && p.faces.as_ref().map_or(false, |faces| !faces.is_empty())
+                })
+            })
+        })
+        .count() as u32;
+
+    Ok(Json(AssetCountResponse {
+        total_assets,
+        assets_with_faces,
+    }))
+}
+
+/// Skip statistics for API response.
+#[derive(Serialize)]
+struct SkipStatsResponse {
+    face_too_small: u32,
+    eyes_closed: u32,
+    head_turned: u32,
+    too_dark: u32,
+    too_bright: u32,
+    no_face_detected: u32,
+    download_failed: u32,
+    decode_failed: u32,
+    crop_failed: u32,
+    total: u32,
+}
+
 /// Get current progress.
 #[derive(Serialize)]
 struct ProgressResponse {
@@ -186,6 +257,7 @@ struct ProgressResponse {
     completed: u32,
     total: u32,
     message: Option<String>,
+    skip_stats: SkipStatsResponse,
 }
 
 async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
@@ -201,11 +273,25 @@ async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
         JobStatus::Error(_) => "error",
     };
 
+    let skip_stats = &progress.skip_stats;
+
     Json(ProgressResponse {
         status: status_str.to_string(),
         completed: progress.completed,
         total: progress.total,
         message: progress.message.clone(),
+        skip_stats: SkipStatsResponse {
+            face_too_small: skip_stats.face_too_small,
+            eyes_closed: skip_stats.eyes_closed,
+            head_turned: skip_stats.head_turned,
+            too_dark: skip_stats.too_dark,
+            too_bright: skip_stats.too_bright,
+            no_face_detected: skip_stats.no_face_detected,
+            download_failed: skip_stats.download_failed,
+            decode_failed: skip_stats.decode_failed,
+            crop_failed: skip_stats.crop_failed,
+            total: skip_stats.total(),
+        },
     })
 }
 
@@ -243,6 +329,7 @@ async fn start_processing(
             completed: 0,
             total: 0,
             message: Some("Starting...".to_string()),
+            skip_stats: SkipStats::default(),
         })
         .await;
 
@@ -291,6 +378,80 @@ async fn cancel_processing(State(state): State<AppState>) -> Json<StartResponse>
             message: "No job running to cancel".to_string(),
         })
     }
+}
+
+/// Output folder information.
+#[derive(Serialize)]
+struct OutputFolderInfo {
+    name: String,
+    image_count: u32,
+    size_bytes: u64,
+    has_video: bool,
+}
+
+/// List all output folders with their stats.
+async fn list_output_folders(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<OutputFolderInfo>>, (StatusCode, String)> {
+    let config = state.config.read().await;
+    let output_dir = &config.output_dir;
+
+    let mut folders = Vec::new();
+
+    if output_dir.exists() {
+        let mut entries = tokio::fs::read_dir(output_dir).await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read output directory: {}", e),
+            )
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to read directory entry: {}", e),
+            )
+        })? {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = entry.file_name().to_string_lossy().to_string();
+
+                // Count images in the images subfolder
+                let images_dir = path.join("images");
+                let mut image_count = 0u32;
+                let mut size_bytes = 0u64;
+
+                if images_dir.exists() {
+                    if let Ok(mut img_entries) = tokio::fs::read_dir(&images_dir).await {
+                        while let Ok(Some(img_entry)) = img_entries.next_entry().await {
+                            let img_path = img_entry.path();
+                            if img_path.extension().map_or(false, |ext| ext == "jpg") {
+                                image_count += 1;
+                                if let Ok(metadata) = tokio::fs::metadata(&img_path).await {
+                                    size_bytes += metadata.len();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check for video file
+                let has_video = path.join("timelapse.mp4").exists();
+
+                folders.push(OutputFolderInfo {
+                    name,
+                    image_count,
+                    size_bytes,
+                    has_video,
+                });
+            }
+        }
+    }
+
+    // Sort by name
+    folders.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(Json(folders))
 }
 
 /// Clean up all output folders.

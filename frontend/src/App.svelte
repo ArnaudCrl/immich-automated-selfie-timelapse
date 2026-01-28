@@ -1,5 +1,6 @@
 <script>
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
+  import OutputManager from './lib/components/OutputManager.svelte';
   import PeopleSelector from './lib/components/PeopleSelector.svelte';
   import ProcessingControls from './lib/components/ProcessingControls.svelte';
   import ProgressDisplay from './lib/components/ProgressDisplay.svelte';
@@ -67,6 +68,10 @@
         <ResultsView />
       </section>
     {/if}
+
+    <section class="output">
+      <OutputManager disabled={isJobRunning} />
+    </section>
   {:else}
     <section class="not-connected">
       <p>Connect to your Immich server to get started.</p>

@@ -17,6 +17,35 @@ pub enum JobStatus {
     Error(String),
 }
 
+/// Detailed statistics for skipped images.
+#[derive(Debug, Clone, Default)]
+pub struct SkipStats {
+    pub face_too_small: u32,
+    pub eyes_closed: u32,
+    pub head_turned: u32,
+    pub too_dark: u32,
+    pub too_bright: u32,
+    pub no_face_detected: u32,
+    pub download_failed: u32,
+    pub decode_failed: u32,
+    pub crop_failed: u32,
+}
+
+impl SkipStats {
+    /// Total number of skipped images.
+    pub fn total(&self) -> u32 {
+        self.face_too_small
+            + self.eyes_closed
+            + self.head_turned
+            + self.too_dark
+            + self.too_bright
+            + self.no_face_detected
+            + self.download_failed
+            + self.decode_failed
+            + self.crop_failed
+    }
+}
+
 /// Progress information for a running job.
 #[derive(Debug, Clone)]
 pub struct Progress {
@@ -24,6 +53,7 @@ pub struct Progress {
     pub completed: u32,
     pub total: u32,
     pub message: Option<String>,
+    pub skip_stats: SkipStats,
 }
 
 impl Default for Progress {
@@ -33,6 +63,7 @@ impl Default for Progress {
             completed: 0,
             total: 0,
             message: None,
+            skip_stats: SkipStats::default(),
         }
     }
 }

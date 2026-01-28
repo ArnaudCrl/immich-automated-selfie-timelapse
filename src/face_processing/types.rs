@@ -39,13 +39,33 @@ impl BoundingBox {
 }
 
 /// Facial landmarks (68-point model).
+///
+/// This struct requires exactly 68 landmark points following the standard
+/// dlib/iBUG 68-point face landmark format. Use `Landmarks::new()` to
+/// construct with validation.
 #[derive(Debug, Clone)]
 pub struct Landmarks {
-    /// All 68 landmark points.
-    pub points: Vec<Point>,
+    /// All 68 landmark points (validated on construction).
+    points: [Point; 68],
 }
 
+/// Expected number of landmark points.
+pub const LANDMARK_COUNT: usize = 68;
+
 impl Landmarks {
+    /// Create a new Landmarks from a vector of points.
+    ///
+    /// Returns `None` if the vector doesn't contain exactly 68 points.
+    pub fn new(points: Vec<Point>) -> Option<Self> {
+        let points: [Point; LANDMARK_COUNT] = points.try_into().ok()?;
+        Some(Self { points })
+    }
+
+    /// Get all landmark points.
+    pub fn points(&self) -> &[Point; 68] {
+        &self.points
+    }
+
     /// Left eye center (average of points 36-41).
     pub fn left_eye_center(&self) -> Point {
         let eye_points = &self.points[36..42];
@@ -126,13 +146,49 @@ pub struct ProcessedFace {
     pub timestamp: String,
 }
 
+/// Reason why an image was skipped during processing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SkipReason {
+    FaceTooSmall,
+    EyesClosed,
+    HeadTurned,
+    TooDark,
+    TooBright,
+    NoFaceDetected,
+    DownloadFailed,
+    DecodeFailed,
+    CropFailed,
+    Cancelled,
+}
+
+impl std::fmt::Display for SkipReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SkipReason::FaceTooSmall => write!(f, "Face too small"),
+            SkipReason::EyesClosed => write!(f, "Eyes closed"),
+            SkipReason::HeadTurned => write!(f, "Head turned"),
+            SkipReason::TooDark => write!(f, "Too dark"),
+            SkipReason::TooBright => write!(f, "Too bright"),
+            SkipReason::NoFaceDetected => write!(f, "No face detected"),
+            SkipReason::DownloadFailed => write!(f, "Download failed"),
+            SkipReason::DecodeFailed => write!(f, "Decode failed"),
+            SkipReason::CropFailed => write!(f, "Crop failed"),
+            SkipReason::Cancelled => write!(f, "Cancelled"),
+        }
+    }
+}
+
 /// Processing result for a single asset.
 #[derive(Debug)]
 pub enum AssetResult {
     /// Successfully processed.
     Success(ProcessedFace),
     /// Skipped (face too small, bad pose, etc.).
-    Skipped { asset_id: String, reason: String },
+    Skipped {
+        asset_id: String,
+        reason: SkipReason,
+        detail: Option<String>,
+    },
     /// Error during processing.
     Error { asset_id: String, error: String },
 }

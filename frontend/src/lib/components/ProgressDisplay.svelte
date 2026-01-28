@@ -24,6 +24,40 @@
     cancelled: 'warning',
     error: 'error',
   }[jobStatus] || '');
+
+  // Skip statistics from the backend
+  let skipStats = $derived(progress.skip_stats || {
+    face_too_small: 0,
+    eyes_closed: 0,
+    head_turned: 0,
+    too_dark: 0,
+    too_bright: 0,
+    no_face_detected: 0,
+    download_failed: 0,
+    decode_failed: 0,
+    crop_failed: 0,
+    total: 0,
+  });
+
+  let hasSkips = $derived(skipStats.total > 0);
+
+  // Calculate kept (successful) count: completed - skipped
+  let keptCount = $derived(Math.max(0, progress.completed - skipStats.total));
+
+  // Filter to only show non-zero skip reasons
+  let skipReasons = $derived(
+    [
+      { label: 'Face too small', count: skipStats.face_too_small },
+      { label: 'Eyes closed', count: skipStats.eyes_closed },
+      { label: 'Head turned', count: skipStats.head_turned },
+      { label: 'Too dark', count: skipStats.too_dark },
+      { label: 'Too bright', count: skipStats.too_bright },
+      { label: 'No face detected', count: skipStats.no_face_detected },
+      { label: 'Download failed', count: skipStats.download_failed },
+      { label: 'Decode failed', count: skipStats.decode_failed },
+      { label: 'Crop failed', count: skipStats.crop_failed },
+    ].filter(r => r.count > 0)
+  );
 </script>
 
 <div class="progress-display">
@@ -42,6 +76,27 @@
 
   {#if progress.message}
     <p class="message">{progress.message}</p>
+  {/if}
+
+  {#if (jobStatus === 'running' || jobStatus === 'completed' || jobStatus === 'cancelled') && progress.completed > 0}
+    <div class="skip-stats">
+      <div class="skip-header">
+        <span class="skip-label">Discarded:Kept</span>
+        <span class="skip-totals">
+          <span class="skipped-count">{skipStats.total}</span>
+          <span class="separator">:</span>
+          <span class="kept-count">{keptCount}</span>
+        </span>
+      </div>
+      <ul class="skip-reasons">
+        {#each skipReasons as reason}
+          <li class="skip-reason">
+            <span class="reason-label">{reason.label}</span>
+            <span class="reason-count">{reason.count}</span>
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
 </div>
 
@@ -109,5 +164,72 @@
   .message {
     font-size: 0.875rem;
     color: #888;
+  }
+
+  /* Skip statistics */
+  .skip-stats {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #252525;
+  }
+
+  .skip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .skip-label {
+    font-size: 0.75rem;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .skip-totals {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .skipped-count {
+    color: #f59e0b;
+  }
+
+  .separator {
+    color: #666;
+  }
+
+  .kept-count {
+    color: #22c55e;
+  }
+
+  .skip-reasons {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.25rem;
+  }
+
+  .skip-reason {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.375rem 0.5rem;
+    background: #252525;
+    border-radius: 4px;
+    font-size: 0.75rem;
+  }
+
+  .reason-label {
+    color: #888;
+  }
+
+  .reason-count {
+    color: #e0e0e0;
+    font-weight: 500;
   }
 </style>

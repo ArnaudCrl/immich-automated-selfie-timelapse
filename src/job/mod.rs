@@ -11,10 +11,10 @@ use crate::error::{Error, Result};
 use crate::face_processing::crop_face_with_intermediate;
 use crate::face_processing::debug::draw_crop_debug;
 use crate::face_processing::load_image_with_orientation;
-use crate::face_processing::{AssetResult, ProcessedFace};
+use crate::face_processing::{AssetResult, ProcessedFace, SkipReason};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::video::compile_timelapse;
-use crate::web::{AppState, JobStatus, Progress};
+use crate::web::{AppState, JobStatus, Progress, SkipStats};
 
 use image::ImageFormat;
 use std::io::Cursor;
@@ -97,6 +97,9 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
     // Clear the cancellation token when done
     state.clear_cancel_token().await;
 
+    // Get final skip stats from progress
+    let final_skip_stats = state.progress.read().await.skip_stats.clone();
+
     match result {
         Ok(output_path) => {
             state
@@ -105,6 +108,7 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     completed: 0,
                     total: 0,
                     message: Some(format!("Video saved to: {}", output_path.display())),
+                    skip_stats: final_skip_stats,
                 })
                 .await;
         }
@@ -115,6 +119,7 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     completed: 0,
                     total: 0,
                     message: Some("Job cancelled by user".to_string()),
+                    skip_stats: final_skip_stats,
                 })
                 .await;
         }
@@ -126,6 +131,7 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     completed: 0,
                     total: 0,
                     message: Some(e.to_string()),
+                    skip_stats: final_skip_stats,
                 })
                 .await;
         }
@@ -186,6 +192,7 @@ async fn run_job_inner(
             completed: 0,
             total: 0,
             message: Some("Fetching assets from Immich...".to_string()),
+            skip_stats: SkipStats::default(),
         })
         .await;
 
@@ -236,6 +243,7 @@ async fn run_job_inner(
             completed: 0,
             total,
             message: Some(format!("Processing {} images...", total)),
+            skip_stats: SkipStats::default(),
         })
         .await;
 
@@ -245,6 +253,17 @@ async fn run_job_inner(
     let client = Arc::new(client);
     let config = Arc::new(config);
     let output_dirs = Arc::new(output_dirs);
+
+    // Atomic counters for real-time skip statistics
+    let skip_face_too_small = Arc::new(AtomicU32::new(0));
+    let skip_eyes_closed = Arc::new(AtomicU32::new(0));
+    let skip_head_turned = Arc::new(AtomicU32::new(0));
+    let skip_too_dark = Arc::new(AtomicU32::new(0));
+    let skip_too_bright = Arc::new(AtomicU32::new(0));
+    let skip_no_face = Arc::new(AtomicU32::new(0));
+    let skip_download_failed = Arc::new(AtomicU32::new(0));
+    let skip_decode_failed = Arc::new(AtomicU32::new(0));
+    let skip_crop_failed = Arc::new(AtomicU32::new(0));
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
 
@@ -265,13 +284,25 @@ async fn run_job_inner(
         let state = state.clone();
         let task_cancel_token = cancel_token.clone();
 
+        // Clone skip counters for this task
+        let skip_face_too_small = skip_face_too_small.clone();
+        let skip_eyes_closed = skip_eyes_closed.clone();
+        let skip_head_turned = skip_head_turned.clone();
+        let skip_too_dark = skip_too_dark.clone();
+        let skip_too_bright = skip_too_bright.clone();
+        let skip_no_face = skip_no_face.clone();
+        let skip_download_failed = skip_download_failed.clone();
+        let skip_decode_failed = skip_decode_failed.clone();
+        let skip_crop_failed = skip_crop_failed.clone();
+
         let handle = tokio::spawn(async move {
             // Check cancellation at start of task
             if task_cancel_token.is_cancelled() {
                 drop(permit);
                 return AssetResult::Skipped {
                     asset_id: asset.id.clone(),
-                    reason: "Cancelled".to_string(),
+                    reason: SkipReason::Cancelled,
+                    detail: None,
                 };
             }
 
@@ -285,15 +316,43 @@ async fn run_job_inner(
             )
             .await;
 
-            // Update progress (only if not cancelled)
+            // Update skip counters based on result
+            if let AssetResult::Skipped { reason, .. } = &result {
+                match reason {
+                    SkipReason::FaceTooSmall => skip_face_too_small.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::EyesClosed => skip_eyes_closed.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::HeadTurned => skip_head_turned.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::TooDark => skip_too_dark.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::TooBright => skip_too_bright.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::NoFaceDetected => skip_no_face.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::DownloadFailed => skip_download_failed.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::DecodeFailed => skip_decode_failed.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::CropFailed => skip_crop_failed.fetch_add(1, Ordering::SeqCst),
+                    SkipReason::Cancelled => 0, // Don't count cancellation
+                };
+            }
+
+            // Update progress with current skip stats (only if not cancelled)
             if !task_cancel_token.is_cancelled() {
                 let done = completed.fetch_add(1, Ordering::SeqCst) + 1;
+                let current_skip_stats = SkipStats {
+                    face_too_small: skip_face_too_small.load(Ordering::SeqCst),
+                    eyes_closed: skip_eyes_closed.load(Ordering::SeqCst),
+                    head_turned: skip_head_turned.load(Ordering::SeqCst),
+                    too_dark: skip_too_dark.load(Ordering::SeqCst),
+                    too_bright: skip_too_bright.load(Ordering::SeqCst),
+                    no_face_detected: skip_no_face.load(Ordering::SeqCst),
+                    download_failed: skip_download_failed.load(Ordering::SeqCst),
+                    decode_failed: skip_decode_failed.load(Ordering::SeqCst),
+                    crop_failed: skip_crop_failed.load(Ordering::SeqCst),
+                };
                 state
                     .update_progress(Progress {
                         status: JobStatus::Running,
                         completed: done,
                         total,
                         message: Some(format!("Processing images... ({}/{})", done, total)),
+                        skip_stats: current_skip_stats,
                     })
                     .await;
             }
@@ -321,19 +380,29 @@ async fn run_job_inner(
         return Err(Error::Cancelled);
     }
 
+    // Get final skip statistics from atomic counters
+    let skip_stats = SkipStats {
+        face_too_small: skip_face_too_small.load(Ordering::SeqCst),
+        eyes_closed: skip_eyes_closed.load(Ordering::SeqCst),
+        head_turned: skip_head_turned.load(Ordering::SeqCst),
+        too_dark: skip_too_dark.load(Ordering::SeqCst),
+        too_bright: skip_too_bright.load(Ordering::SeqCst),
+        no_face_detected: skip_no_face.load(Ordering::SeqCst),
+        download_failed: skip_download_failed.load(Ordering::SeqCst),
+        decode_failed: skip_decode_failed.load(Ordering::SeqCst),
+        crop_failed: skip_crop_failed.load(Ordering::SeqCst),
+    };
+
     // Count results
     let successful = results
         .iter()
         .filter(|r| matches!(r, AssetResult::Success(_)))
         .count();
-    let skipped = results
-        .iter()
-        .filter(|r| matches!(r, AssetResult::Skipped { .. }))
-        .count();
     let errors = results
         .iter()
         .filter(|r| matches!(r, AssetResult::Error { .. }))
         .count();
+    let skipped = skip_stats.total();
 
     tracing::info!(
         "Processing complete: {} successful, {} skipped, {} errors",
@@ -341,6 +410,17 @@ async fn run_job_inner(
         skipped,
         errors
     );
+
+    // Update progress with final skip stats
+    state
+        .update_progress(Progress {
+            status: JobStatus::Running,
+            completed: total,
+            total,
+            message: Some("Processing complete, preparing video...".to_string()),
+            skip_stats: skip_stats.clone(),
+        })
+        .await;
 
     if successful == 0 {
         return Err(Error::ImageProcessing(
@@ -361,6 +441,7 @@ async fn run_job_inner(
                 completed: 0,
                 total: successful as u32,
                 message: Some("Compiling video...".to_string()),
+                skip_stats: skip_stats.clone(),
             })
             .await;
 
@@ -418,10 +499,11 @@ async fn process_single_asset(
     if face_size < config.processing.face_resolution_threshold {
         return AssetResult::Skipped {
             asset_id: asset_id.clone(),
-            reason: format!(
-                "Face too small: {}px (threshold: {}px)",
+            reason: SkipReason::FaceTooSmall,
+            detail: Some(format!(
+                "{}px (threshold: {}px)",
                 face_size, config.processing.face_resolution_threshold
-            ),
+            )),
         };
     }
 
@@ -429,7 +511,8 @@ async fn process_single_asset(
     if cancel_token.is_cancelled() {
         return AssetResult::Skipped {
             asset_id: asset_id.clone(),
-            reason: "Cancelled".to_string(),
+            reason: SkipReason::Cancelled,
+            detail: None,
         };
     }
 
@@ -470,7 +553,8 @@ async fn process_single_asset(
     if cancel_token.is_cancelled() {
         return AssetResult::Skipped {
             asset_id: asset_id.clone(),
-            reason: "Cancelled".to_string(),
+            reason: SkipReason::Cancelled,
+            detail: None,
         };
     }
 
@@ -516,7 +600,8 @@ async fn process_single_asset(
     if cancel_token.is_cancelled() {
         return AssetResult::Skipped {
             asset_id: asset_id.clone(),
-            reason: "Cancelled".to_string(),
+            reason: SkipReason::Cancelled,
+            detail: None,
         };
     }
 

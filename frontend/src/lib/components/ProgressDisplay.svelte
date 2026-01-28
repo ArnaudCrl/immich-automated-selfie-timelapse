@@ -25,6 +25,11 @@
     error: 'error',
   }[jobStatus] || '');
 
+  let canCancel = $derived(jobStatus === 'running' || jobStatus === 'compiling_video');
+
+  // Person being processed
+  let personDisplay = $derived(progress.person_name || progress.person_id || null);
+
   // Skip statistics from the backend
   let skipStats = $derived(progress.skip_stats || {
     face_too_small: 0,
@@ -38,8 +43,6 @@
     crop_failed: 0,
     total: 0,
   });
-
-  let hasSkips = $derived(skipStats.total > 0);
 
   // Calculate kept (successful) count: completed - skipped
   let keptCount = $derived(Math.max(0, progress.completed - skipStats.total));
@@ -58,14 +61,32 @@
       { label: 'Crop failed', count: skipStats.crop_failed },
     ].filter(r => r.count > 0)
   );
+
+  async function cancelProcessing() {
+    try {
+      await fetch('/api/cancel', { method: 'POST' });
+    } catch (e) {
+      console.error('Cancel failed:', e);
+    }
+  }
 </script>
 
 <div class="progress-display">
   <div class="header">
-    <span class="status {statusClass}">{statusLabel}</span>
-    {#if progress.total > 0}
-      <span class="count">{progress.completed} / {progress.total}</span>
-    {/if}
+    <div class="header-left">
+      <span class="status {statusClass}">{statusLabel}</span>
+      {#if personDisplay}
+        <span class="person-name">{personDisplay}</span>
+      {/if}
+    </div>
+    <div class="header-right">
+      {#if progress.total > 0}
+        <span class="count">{progress.completed} / {progress.total}</span>
+      {/if}
+      {#if canCancel}
+        <button class="cancel-btn" onclick={cancelProcessing}>Cancel</button>
+      {/if}
+    </div>
   </div>
 
   {#if jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'}
@@ -114,6 +135,18 @@
     margin-bottom: 1rem;
   }
 
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .person-name {
+    font-size: 0.875rem;
+    color: #e0e0e0;
+    font-weight: 500;
+  }
+
   .status {
     font-weight: 600;
     font-size: 0.875rem;
@@ -142,9 +175,31 @@
     color: #f87171;
   }
 
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
   .count {
     font-size: 0.875rem;
     color: #888;
+  }
+
+  .cancel-btn {
+    padding: 0.375rem 0.75rem;
+    background: #dc2626;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .cancel-btn:hover {
+    background: #b91c1c;
   }
 
   .progress-bar {

@@ -97,18 +97,20 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
     // Clear the cancellation token when done
     state.clear_cancel_token().await;
 
-    // Get final skip stats from progress
-    let final_skip_stats = state.progress.read().await.skip_stats.clone();
+    // Get final state from progress (skip stats and person info)
+    let final_progress = state.progress.read().await.clone();
 
     match result {
         Ok(output_path) => {
             state
                 .update_progress(Progress {
                     status: JobStatus::Completed,
-                    completed: 0,
-                    total: 0,
+                    completed: final_progress.completed,
+                    total: final_progress.total,
                     message: Some(format!("Video saved to: {}", output_path.display())),
-                    skip_stats: final_skip_stats,
+                    skip_stats: final_progress.skip_stats,
+                    person_id: final_progress.person_id,
+                    person_name: final_progress.person_name,
                 })
                 .await;
         }
@@ -116,10 +118,12 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
             state
                 .update_progress(Progress {
                     status: JobStatus::Cancelled,
-                    completed: 0,
-                    total: 0,
+                    completed: final_progress.completed,
+                    total: final_progress.total,
                     message: Some("Job cancelled by user".to_string()),
-                    skip_stats: final_skip_stats,
+                    skip_stats: final_progress.skip_stats,
+                    person_id: final_progress.person_id,
+                    person_name: final_progress.person_name,
                 })
                 .await;
         }
@@ -128,10 +132,12 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
             state
                 .update_progress(Progress {
                     status: JobStatus::Error(e.to_string()),
-                    completed: 0,
-                    total: 0,
+                    completed: final_progress.completed,
+                    total: final_progress.total,
                     message: Some(e.to_string()),
-                    skip_stats: final_skip_stats,
+                    skip_stats: final_progress.skip_stats,
+                    person_id: final_progress.person_id,
+                    person_name: final_progress.person_name,
                 })
                 .await;
         }
@@ -193,6 +199,8 @@ async fn run_job_inner(
             total: 0,
             message: Some("Fetching assets from Immich...".to_string()),
             skip_stats: SkipStats::default(),
+            person_id: Some(params.person_id.clone()),
+            person_name: params.person_name.clone(),
         })
         .await;
 
@@ -244,6 +252,8 @@ async fn run_job_inner(
             total,
             message: Some(format!("Processing {} images...", total)),
             skip_stats: SkipStats::default(),
+            person_id: Some(params.person_id.clone()),
+            person_name: params.person_name.clone(),
         })
         .await;
 
@@ -266,6 +276,10 @@ async fn run_job_inner(
     let skip_crop_failed = Arc::new(AtomicU32::new(0));
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
+
+    // Clone person info for use in spawned tasks
+    let task_person_id = params.person_id.clone();
+    let task_person_name = params.person_name.clone();
 
     for (asset, face_data) in assets_with_faces {
         // Check for cancellation before spawning more tasks
@@ -294,6 +308,10 @@ async fn run_job_inner(
         let skip_download_failed = skip_download_failed.clone();
         let skip_decode_failed = skip_decode_failed.clone();
         let skip_crop_failed = skip_crop_failed.clone();
+
+        // Clone person info for this task
+        let person_id = task_person_id.clone();
+        let person_name = task_person_name.clone();
 
         let handle = tokio::spawn(async move {
             // Check cancellation at start of task
@@ -353,6 +371,8 @@ async fn run_job_inner(
                         total,
                         message: Some(format!("Processing images... ({}/{})", done, total)),
                         skip_stats: current_skip_stats,
+                        person_id: Some(person_id.clone()),
+                        person_name: person_name.clone(),
                     })
                     .await;
             }
@@ -419,6 +439,8 @@ async fn run_job_inner(
             total,
             message: Some("Processing complete, preparing video...".to_string()),
             skip_stats: skip_stats.clone(),
+            person_id: Some(params.person_id.clone()),
+            person_name: params.person_name.clone(),
         })
         .await;
 
@@ -442,6 +464,8 @@ async fn run_job_inner(
                 total: successful as u32,
                 message: Some("Compiling video...".to_string()),
                 skip_stats: skip_stats.clone(),
+                person_id: Some(params.person_id.clone()),
+                person_name: params.person_name.clone(),
             })
             .await;
 

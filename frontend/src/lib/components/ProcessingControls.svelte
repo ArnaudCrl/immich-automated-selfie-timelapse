@@ -1,11 +1,8 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-
   let { personId, personName, jobStatus, onupdate } = $props();
 
   let dateFrom = $state('');
   let dateTo = $state('');
-  let pollInterval = $state(null);
   let assetCount = $state(null);
   let loadingCount = $state(false);
 
@@ -51,7 +48,13 @@
       const data = await res.json();
 
       if (res.ok && data.success) {
-        startPolling();
+        // Notify parent to start polling
+        onupdate?.({
+          status: 'running',
+          completed: 0,
+          total: 0,
+          message: 'Starting...',
+        });
       } else {
         onupdate?.({
           status: 'error',
@@ -77,43 +80,6 @@
       console.error('Cancel failed:', e);
     }
   }
-
-  async function pollProgress() {
-    try {
-      const res = await fetch('/api/progress');
-      const data = await res.json();
-
-      onupdate?.(data);
-
-      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error') {
-        stopPolling();
-      }
-    } catch (e) {
-      console.error('Poll failed:', e);
-    }
-  }
-
-  function startPolling() {
-    stopPolling();
-    pollProgress();
-    pollInterval = setInterval(pollProgress, 500);
-  }
-
-  function stopPolling() {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-  }
-
-  onMount(() => {
-    // Check if there's already a running job
-    pollProgress();
-  });
-
-  onDestroy(() => {
-    stopPolling();
-  });
 </script>
 
 <div class="processing-controls">
@@ -147,15 +113,9 @@
   </div>
 
   <div class="actions">
-    {#if isRunning}
-      <button class="cancel-btn" onclick={cancelProcessing}>
-        Cancel
-      </button>
-    {:else}
-      <button class="start-btn" onclick={startProcessing}>
-        Start Processing
-      </button>
-    {/if}
+    <button class="start-btn" onclick={startProcessing}>
+      Start Processing
+    </button>
   </div>
 </div>
 
@@ -270,14 +230,5 @@
 
   .start-btn:hover {
     background: #4338ca;
-  }
-
-  .cancel-btn {
-    background: #dc2626;
-    color: #fff;
-  }
-
-  .cancel-btn:hover {
-    background: #b91c1c;
   }
 </style>

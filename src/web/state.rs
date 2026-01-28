@@ -54,6 +54,9 @@ pub struct Progress {
     pub total: u32,
     pub message: Option<String>,
     pub skip_stats: SkipStats,
+    /// The person being processed (for display when resuming)
+    pub person_id: Option<String>,
+    pub person_name: Option<String>,
 }
 
 impl Default for Progress {
@@ -64,6 +67,8 @@ impl Default for Progress {
             total: 0,
             message: None,
             skip_stats: SkipStats::default(),
+            person_id: None,
+            person_name: None,
         }
     }
 }

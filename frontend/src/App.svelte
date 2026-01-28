@@ -1,4 +1,5 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
   import OutputManager from './lib/components/OutputManager.svelte';
   import PeopleSelector from './lib/components/PeopleSelector.svelte';
@@ -11,6 +12,7 @@
   let selectedPerson = $state(null);
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
+  let pollInterval = $state(null);
 
   let isJobRunning = $derived(
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
@@ -18,6 +20,10 @@
 
   function handleConnectionChange(data) {
     connectionOk = data.connected;
+    // Check for running job when connection is established
+    if (data.connected) {
+      checkAndPollProgress();
+    }
   }
 
   function handlePersonSelect(person) {
@@ -27,7 +33,66 @@
   function handleJobUpdate(data) {
     jobStatus = data.status;
     progress = data;
+
+    // Start polling if job just started
+    if (data.status === 'running' || data.status === 'compiling_video') {
+      startPolling();
+    }
   }
+
+  async function checkAndPollProgress() {
+    try {
+      const res = await fetch('/api/progress');
+      const data = await res.json();
+
+      jobStatus = data.status;
+      progress = data;
+
+      // If a job is running, start polling
+      if (data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling') {
+        startPolling();
+      }
+    } catch (e) {
+      console.error('Failed to check progress:', e);
+    }
+  }
+
+  async function pollProgress() {
+    try {
+      const res = await fetch('/api/progress');
+      const data = await res.json();
+
+      jobStatus = data.status;
+      progress = data;
+
+      // Stop polling when job completes
+      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error' || data.status === 'idle') {
+        stopPolling();
+      }
+    } catch (e) {
+      console.error('Poll failed:', e);
+    }
+  }
+
+  function startPolling() {
+    if (pollInterval) return; // Already polling
+    pollInterval = setInterval(pollProgress, 500);
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  onMount(() => {
+    // Initial check will happen when connection is established
+  });
+
+  onDestroy(() => {
+    stopPolling();
+  });
 </script>
 
 <main>
@@ -47,7 +112,7 @@
         disabled={isJobRunning}
       />
 
-      {#if selectedPerson}
+      {#if selectedPerson && !isJobRunning}
         <ProcessingControls
           personId={selectedPerson.id}
           personName={selectedPerson.name}

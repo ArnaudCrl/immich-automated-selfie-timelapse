@@ -258,6 +258,8 @@ struct ProgressResponse {
     total: u32,
     message: Option<String>,
     skip_stats: SkipStatsResponse,
+    person_id: Option<String>,
+    person_name: Option<String>,
 }
 
 async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
@@ -292,6 +294,8 @@ async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
             crop_failed: skip_stats.crop_failed,
             total: skip_stats.total(),
         },
+        person_id: progress.person_id.clone(),
+        person_name: progress.person_name.clone(),
     })
 }
 
@@ -322,7 +326,7 @@ async fn start_processing(
         }
     }
 
-    // Reset progress
+    // Reset progress with person info
     state
         .update_progress(Progress {
             status: JobStatus::Running,
@@ -330,6 +334,8 @@ async fn start_processing(
             total: 0,
             message: Some("Starting...".to_string()),
             skip_stats: SkipStats::default(),
+            person_id: Some(request.person_id.clone()),
+            person_name: request.person_name.clone(),
         })
         .await;
 

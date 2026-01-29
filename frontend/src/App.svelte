@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
+  import GalleryView from './lib/components/GalleryView.svelte';
   import OutputManager from './lib/components/OutputManager.svelte';
   import PeopleSelector from './lib/components/PeopleSelector.svelte';
   import ProcessingControls from './lib/components/ProcessingControls.svelte';
@@ -14,9 +15,31 @@
   let progress = $state({ completed: 0, total: 0, message: '' });
   let pollInterval = $state(null);
 
+  // View state management for gallery
+  let currentView = $state('main'); // 'main' | 'gallery'
+  let galleryFolder = $state(null);
+
+  // Output folder management
+  let outputFolderRefreshKey = $state(0);
+  let outputFolders = $state([]);
+
   let isJobRunning = $derived(
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
   );
+
+  function handleFoldersLoaded(folders) {
+    outputFolders = folders;
+  }
+
+  function openGallery(folder) {
+    galleryFolder = folder;
+    currentView = 'gallery';
+  }
+
+  function closeGallery() {
+    galleryFolder = null;
+    currentView = 'main';
+  }
 
   function handleConnectionChange(data) {
     connectionOk = data.connected;
@@ -62,12 +85,17 @@
       const res = await fetch('/api/progress');
       const data = await res.json();
 
+      const previousStatus = jobStatus;
       jobStatus = data.status;
       progress = data;
 
       // Stop polling when job completes
       if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error' || data.status === 'idle') {
         stopPolling();
+        // Refresh output folders when job finishes (was running before)
+        if (previousStatus === 'running' || previousStatus === 'compiling_video' || previousStatus === 'cancelling') {
+          outputFolderRefreshKey++;
+        }
       }
     } catch (e) {
       console.error('Poll failed:', e);
@@ -102,41 +130,57 @@
   </header>
 
   {#if connectionOk}
-    <section class="settings">
-      <SettingsPanel disabled={isJobRunning} />
-    </section>
-
-    <section class="controls">
-      <PeopleSelector
-        onselect={handlePersonSelect}
-        disabled={isJobRunning}
-      />
-
-      {#if selectedPerson && !isJobRunning}
-        <ProcessingControls
-          personId={selectedPerson.id}
-          personName={selectedPerson.name}
-          {jobStatus}
-          onupdate={handleJobUpdate}
+    {#if currentView === 'gallery' && galleryFolder}
+      <section class="gallery">
+        <GalleryView
+          folderName={galleryFolder.name}
+          onBack={closeGallery}
+          disabled={isJobRunning}
         />
+      </section>
+    {:else}
+      <section class="settings">
+        <SettingsPanel disabled={isJobRunning} />
+      </section>
+
+      <section class="controls">
+        <PeopleSelector
+          onselect={handlePersonSelect}
+          disabled={isJobRunning}
+        />
+
+        {#if selectedPerson && !isJobRunning}
+          <ProcessingControls
+            personId={selectedPerson.id}
+            personName={selectedPerson.name}
+            {jobStatus}
+            {outputFolders}
+            onupdate={handleJobUpdate}
+          />
+        {/if}
+      </section>
+
+      {#if jobStatus !== 'idle'}
+        <section class="progress">
+          <ProgressDisplay {jobStatus} {progress} />
+        </section>
       {/if}
-    </section>
 
-    {#if jobStatus !== 'idle'}
-      <section class="progress">
-        <ProgressDisplay {jobStatus} {progress} />
+      {#if jobStatus === 'completed'}
+        <section class="results">
+          <ResultsView />
+        </section>
+      {/if}
+
+      <section class="output">
+        <OutputManager
+          disabled={isJobRunning}
+          onOpenGallery={openGallery}
+          refreshKey={outputFolderRefreshKey}
+          onFoldersLoaded={handleFoldersLoaded}
+        />
       </section>
     {/if}
-
-    {#if jobStatus === 'completed'}
-      <section class="results">
-        <ResultsView />
-      </section>
-    {/if}
-
-    <section class="output">
-      <OutputManager disabled={isJobRunning} />
-    </section>
   {:else}
     <section class="not-connected">
       <p>Connect to your Immich server to get started.</p>

@@ -1,5 +1,5 @@
 <script>
-  let { personId, personName, jobStatus, onupdate } = $props();
+  let { personId, personName, jobStatus, outputFolders = [], onupdate } = $props();
 
   let dateFrom = $state('');
   let dateTo = $state('');
@@ -9,6 +9,29 @@
   let isRunning = $derived(
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
   );
+
+  // Match backend's sanitize_folder_name logic
+  // Uses Unicode-aware regex to match Rust's is_alphanumeric()
+  function sanitizeFolderName(name, id) {
+    const base = name && name.trim() ? name : id;
+    let sanitized = '';
+    for (const c of base) {
+      // \p{L} = Unicode letter, \p{N} = Unicode number (matches Rust's is_alphanumeric)
+      if (/^[\p{L}\p{N}\-_ ]$/u.test(c)) {
+        sanitized += c;
+      } else {
+        sanitized += '_';
+      }
+    }
+    sanitized = sanitized.trim();
+    return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
+  }
+
+  // Check if an output folder already exists for this person
+  let existingFolder = $derived.by(() => {
+    const expectedName = sanitizeFolderName(personName, personId);
+    return outputFolders.find(f => f.name === expectedName);
+  });
 
   // Fetch asset count when personId changes
   $effect(() => {
@@ -80,6 +103,25 @@
       console.error('Cancel failed:', e);
     }
   }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function handleStartClick() {
+    if (existingFolder) {
+      const folder = existingFolder;
+      const message = `"${folder.name}" already has ${folder.image_count} images (${formatSize(folder.size_bytes)})${folder.has_video ? ' and a compiled video' : ''}.\n\nClick OK to overwrite.`;
+
+      if (confirm(message)) {
+        startProcessing();
+      }
+    } else {
+      startProcessing();
+    }
+  }
 </script>
 
 <div class="processing-controls">
@@ -113,7 +155,7 @@
   </div>
 
   <div class="actions">
-    <button class="start-btn" onclick={startProcessing}>
+    <button class="start-btn" onclick={handleStartClick}>
       Start Processing
     </button>
   </div>
@@ -228,7 +270,12 @@
     color: #fff;
   }
 
-  .start-btn:hover {
+  .start-btn:hover:not(:disabled) {
     background: #4338ca;
+  }
+
+  .start-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

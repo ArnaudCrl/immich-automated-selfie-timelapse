@@ -1,12 +1,19 @@
 <script>
   import { onMount } from 'svelte';
 
-  let { disabled = false } = $props();
+  let { disabled = false, onOpenGallery, refreshKey = 0, onFoldersLoaded } = $props();
 
   let folders = $state([]);
   let loading = $state(true);
   let error = $state(null);
   let deleting = $state(null);
+
+  // Re-fetch when refreshKey changes
+  $effect(() => {
+    if (refreshKey > 0) {
+      loadFolders();
+    }
+  });
 
   async function loadFolders() {
     loading = true;
@@ -15,6 +22,8 @@
       const res = await fetch('/api/output');
       if (!res.ok) throw new Error('Failed to load output folders');
       folders = await res.json();
+      // Notify parent about loaded folders (for existing folder warnings)
+      onFoldersLoaded?.(folders);
     } catch (e) {
       error = e.message;
     } finally {
@@ -116,6 +125,13 @@
                 View
               </a>
             {/if}
+            <button
+              class="gallery-btn"
+              onclick={() => onOpenGallery?.(folder)}
+              disabled={disabled || deleting !== null}
+            >
+              Gallery
+            </button>
             <button
               class="delete-btn"
               onclick={() => deleteFolder(folder.name)}
@@ -271,6 +287,26 @@
 
   .view-btn:hover {
     background: #4f46e5;
+  }
+
+  .gallery-btn {
+    padding: 0.375rem 0.75rem;
+    background: #333;
+    border: none;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .gallery-btn:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+
+  .gallery-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .delete-btn {

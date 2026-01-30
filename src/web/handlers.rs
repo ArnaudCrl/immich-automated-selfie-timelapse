@@ -942,7 +942,6 @@ async fn compile_folder_video(
         // Update final status
         match result {
             Ok(_) => {
-                tracing::info!("Video compilation complete for folder: {}", folder_name_clone);
                 job_state
                     .update_progress(Progress {
                         status: JobStatus::Completed,

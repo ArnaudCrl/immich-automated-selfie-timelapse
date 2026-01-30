@@ -39,6 +39,8 @@
   function closeGallery() {
     galleryFolder = null;
     currentView = 'main';
+    // Check for any running job (e.g., video compilation started from gallery)
+    checkAndPollProgress();
   }
 
   function handleConnectionChange(data) {

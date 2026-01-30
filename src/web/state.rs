@@ -17,6 +17,14 @@ pub enum JobStatus {
     Error(String),
 }
 
+impl JobStatus {
+    /// Returns true if this is a terminal status (job has finished).
+    /// Terminal statuses should not be overwritten by non-terminal statuses.
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, JobStatus::Completed | JobStatus::Cancelled | JobStatus::Error(_))
+    }
+}
+
 /// Detailed statistics for skipped images.
 #[derive(Debug, Clone, Default)]
 pub struct SkipStats {
@@ -102,8 +110,26 @@ impl AppState {
     }
 
     /// Update progress and broadcast to all listeners.
+    ///
+    /// Note: This method prevents non-terminal statuses (Running, CompilingVideo)
+    /// from overwriting terminal statuses (Completed, Cancelled, Error). This
+    /// avoids race conditions where fire-and-forget progress updates arrive after
+    /// the job has finished.
     pub async fn update_progress(&self, progress: Progress) {
-        *self.progress.write().await = progress.clone();
+        let mut current = self.progress.write().await;
+
+        // Don't allow non-terminal statuses to overwrite terminal statuses.
+        // This prevents race conditions from fire-and-forget progress callbacks.
+        if current.status.is_terminal() && !progress.status.is_terminal() {
+            tracing::debug!(
+                "Ignoring progress update: current status {:?} is terminal, incoming {:?} is not",
+                current.status,
+                progress.status
+            );
+            return;
+        }
+
+        *current = progress.clone();
         let _ = self.progress_tx.send(progress);
     }
 
@@ -112,9 +138,11 @@ impl AppState {
         let cancel_token = self.cancel_token.read().await;
         if let Some(token) = cancel_token.as_ref() {
             token.cancel();
-            // Update progress to show cancelling state immediately
+            // Update progress to show cancelling state immediately.
+            // Only change to Cancelling if in an active (non-terminal) state.
             let mut progress = self.progress.write().await;
-            if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo
+            if progress.status == JobStatus::Running
+                || progress.status == JobStatus::CompilingVideo
             {
                 progress.status = JobStatus::Cancelling;
                 progress.message = Some("Cancelling...".to_string());

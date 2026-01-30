@@ -5,7 +5,13 @@
   // - Skipped images with reasons
   // - Face landmark visualization
 
-  let videoUrl = $state('/output/timelapse.mp4');
+  let { folderName = null } = $props();
+
+  let videoUrl = $derived(
+    folderName
+      ? `/output/${encodeURIComponent(folderName)}/${encodeURIComponent(folderName)}.mp4`
+      : null
+  );
   let videoError = $state(false);
 
   function handleVideoError() {
@@ -16,7 +22,12 @@
 <div class="results-view">
   <h2>Result</h2>
 
-  {#if videoError}
+  {#if !videoUrl}
+    <div class="video-error">
+      <p>No video available.</p>
+      <p class="hint">Person information was not provided.</p>
+    </div>
+  {:else if videoError}
     <div class="video-error">
       <p>Video not available yet.</p>
       <p class="hint">The video file may still be processing or the path may have changed.</p>
@@ -36,7 +47,7 @@
     </div>
 
     <div class="actions">
-      <a href={videoUrl} download="timelapse.mp4" class="download-btn">
+      <a href={videoUrl} download="{folderName}.mp4" class="download-btn">
         Download Video
       </a>
     </div>

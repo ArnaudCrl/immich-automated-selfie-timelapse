@@ -264,7 +264,6 @@ impl ImmichClient {
             .to_string();
 
         let bytes = response.bytes().await?;
-        tracing::debug!("Thumbnail bytes received: {}", bytes.len());
         Ok((bytes, content_type))
     }
 }

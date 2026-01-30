@@ -180,9 +180,10 @@ async fn run_job_inner(
         None
     };
 
+    let video_filename = format!("{}.mp4", folder_name);
     let output_dirs = OutputDirs {
         images: images_dir.clone(),
-        video: person_dir.join("timelapse.mp4"),
+        video: person_dir.join(&video_filename),
         debug,
     };
 

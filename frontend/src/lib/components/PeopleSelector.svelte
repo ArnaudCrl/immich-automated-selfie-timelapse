@@ -50,7 +50,7 @@
   {:else if error}
     <div class="error">
       {error}
-      <button onclick={loadPeople}>Retry</button>
+      <button type="button" onclick={loadPeople}>Retry</button>
     </div>
   {:else}
     <input
@@ -64,6 +64,7 @@
     <div class="people-grid">
       {#each filteredPeople as person (person.id)}
         <button
+          type="button"
           class="person-card"
           class:selected={selectedId === person.id}
           onclick={() => selectPerson(person)}

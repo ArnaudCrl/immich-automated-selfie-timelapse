@@ -18,6 +18,7 @@
   // View state management for gallery
   let currentView = $state('main'); // 'main' | 'gallery'
   let galleryFolder = $state(null);
+  let savedScrollPosition = $state(0);
 
   // Output folder management
   let outputFolderRefreshKey = $state(0);
@@ -27,13 +28,48 @@
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
   );
 
+  // Match backend's sanitize_folder_name logic for video path construction
+  function sanitizeFolderName(name, id) {
+    const base = name && name.trim() ? name : id;
+    let sanitized = '';
+    for (const c of base) {
+      if (/^[\p{L}\p{N}\-_ ]$/u.test(c)) {
+        sanitized += c;
+      } else {
+        sanitized += '_';
+      }
+    }
+    sanitized = sanitized.trim();
+    return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
+  }
+
+  // Compute folder name from progress for video display
+  let completedFolderName = $derived(
+    progress.person_name || progress.person_id
+      ? sanitizeFolderName(progress.person_name, progress.person_id)
+      : null
+  );
+
   function handleFoldersLoaded(folders) {
     outputFolders = folders;
   }
 
+  function handleFolderDeleted(folderName) {
+    // If the deleted folder matches the completed job's folder, reset to idle
+    // folderName === null means all folders were deleted
+    if (jobStatus === 'completed' && (folderName === null || folderName === completedFolderName)) {
+      jobStatus = 'idle';
+      progress = { completed: 0, total: 0, message: '' };
+    }
+  }
+
   function openGallery(folder) {
+    // Save scroll position before switching to gallery
+    savedScrollPosition = window.scrollY;
     galleryFolder = folder;
     currentView = 'gallery';
+    // Scroll to top for gallery view
+    window.scrollTo(0, 0);
   }
 
   function closeGallery() {
@@ -41,6 +77,10 @@
     currentView = 'main';
     // Check for any running job (e.g., video compilation started from gallery)
     checkAndPollProgress();
+    // Restore scroll position after DOM updates
+    requestAnimationFrame(() => {
+      window.scrollTo(0, savedScrollPosition);
+    });
   }
 
   function handleConnectionChange(data) {
@@ -70,11 +110,16 @@
       const res = await fetch('/api/progress');
       const data = await res.json();
 
-      jobStatus = data.status;
-      progress = data;
+      // Only restore status if a job is actively running, or if we're not in idle state.
+      // This prevents restoring 'completed' status after we've manually dismissed it.
+      const isActiveJob = data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling';
+      if (isActiveJob || jobStatus !== 'idle') {
+        jobStatus = data.status;
+        progress = data;
+      }
 
       // If a job is running, start polling
-      if (data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling') {
+      if (isActiveJob) {
         startPolling();
       }
     } catch (e) {
@@ -170,7 +215,7 @@
 
       {#if jobStatus === 'completed'}
         <section class="results">
-          <ResultsView />
+          <ResultsView folderName={completedFolderName} />
         </section>
       {/if}
 
@@ -180,6 +225,7 @@
           onOpenGallery={openGallery}
           refreshKey={outputFolderRefreshKey}
           onFoldersLoaded={handleFoldersLoaded}
+          onFolderDeleted={handleFolderDeleted}
         />
       </section>
     {/if}

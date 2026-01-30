@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
 
-  let { disabled = false, onOpenGallery, refreshKey = 0, onFoldersLoaded } = $props();
+  let { disabled = false, onOpenGallery, refreshKey = 0, onFoldersLoaded, onFolderDeleted } = $props();
 
   let folders = $state([]);
   let loading = $state(true);
@@ -45,6 +45,8 @@
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || 'Failed to delete folder');
       }
+      // Notify parent that folder was deleted
+      onFolderDeleted?.(name);
       // Reload the list
       await loadFolders();
     } catch (e) {
@@ -68,6 +70,8 @@
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || 'Failed to delete folders');
       }
+      // Notify parent that all folders were deleted (null = all)
+      onFolderDeleted?.(null);
       // Reload the list
       await loadFolders();
     } catch (e) {
@@ -91,7 +95,7 @@
 <div class="output-manager">
   <div class="header">
     <h3>Output Folders</h3>
-    <button class="refresh-btn" onclick={loadFolders} disabled={loading || disabled}>
+    <button type="button" class="refresh-btn" onclick={loadFolders} disabled={loading || disabled}>
       {loading ? '...' : '↻'}
     </button>
   </div>
@@ -118,14 +122,22 @@
           <div class="folder-actions">
             {#if folder.has_video}
               <a
-                href="/output/{encodeURIComponent(folder.name)}/timelapse.mp4"
+                href="/output/{encodeURIComponent(folder.name)}/{encodeURIComponent(folder.name)}.mp4"
                 target="_blank"
-                class="view-btn"
+                class="action-btn"
               >
                 View
               </a>
+              <a
+                href="/output/{encodeURIComponent(folder.name)}/{encodeURIComponent(folder.name)}.mp4"
+                download="{folder.name}.mp4"
+                class="action-btn"
+              >
+                Download
+              </a>
             {/if}
             <button
+              type="button"
               class="gallery-btn"
               onclick={() => onOpenGallery?.(folder)}
               disabled={disabled || deleting !== null}
@@ -133,6 +145,7 @@
               Gallery
             </button>
             <button
+              type="button"
               class="delete-btn"
               onclick={() => deleteFolder(folder.name)}
               disabled={disabled || deleting !== null}
@@ -146,6 +159,7 @@
 
     <div class="actions">
       <button
+        type="button"
         class="delete-all-btn"
         onclick={deleteAll}
         disabled={disabled || deleting !== null || folders.length === 0}
@@ -273,7 +287,7 @@
     gap: 0.5rem;
   }
 
-  .view-btn {
+  .action-btn {
     padding: 0.375rem 0.75rem;
     background: #333;
     border: none;
@@ -285,7 +299,7 @@
     transition: all 0.15s ease;
   }
 
-  .view-btn:hover {
+  .action-btn:hover {
     background: #4f46e5;
   }
 

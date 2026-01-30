@@ -131,7 +131,7 @@
 
 <div class="gallery-view">
   <header class="gallery-header">
-    <button class="back-btn" onclick={onBack} disabled={disabled || deleting || compiling}>
+    <button type="button" class="back-btn" onclick={onBack} disabled={disabled || deleting || compiling}>
       &larr; Back
     </button>
     <h2>
@@ -152,6 +152,7 @@
     <div class="toolbar">
       <div class="selection-controls">
         <button
+          type="button"
           class="toolbar-btn"
           onclick={selectAll}
           disabled={disabled || deleting || compiling || allSelected}
@@ -159,6 +160,7 @@
           Select All
         </button>
         <button
+          type="button"
           class="toolbar-btn"
           onclick={deselectAll}
           disabled={disabled || deleting || compiling || selectedCount === 0}
@@ -166,6 +168,7 @@
           Deselect All
         </button>
         <button
+          type="button"
           class="toolbar-btn delete-btn"
           onclick={deleteSelected}
           disabled={disabled || deleting || compiling || selectedCount === 0}
@@ -213,6 +216,7 @@
         {/if}
       </div>
       <button
+        type="button"
         class="compile-btn"
         onclick={compileVideo}
         disabled={disabled || deleting || compiling || images.length === 0}

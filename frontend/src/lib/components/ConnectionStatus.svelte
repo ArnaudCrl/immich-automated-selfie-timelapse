@@ -45,7 +45,7 @@
     <span>Immich {version}</span>
   {:else}
     <span class="indicator error"></span>
-    <button onclick={checkConnection} class="retry">
+    <button type="button" onclick={checkConnection} class="retry">
       {error} - Retry
     </button>
   {/if}

@@ -133,6 +133,16 @@ impl AppState {
         let _ = self.progress_tx.send(progress);
     }
 
+    /// Reset progress for a new job, bypassing the terminal state check.
+    ///
+    /// Use this when starting a new job to clear any previous terminal state
+    /// (Completed, Cancelled, Error) that would otherwise block progress updates.
+    pub async fn reset_progress(&self, progress: Progress) {
+        let mut current = self.progress.write().await;
+        *current = progress.clone();
+        let _ = self.progress_tx.send(progress);
+    }
+
     /// Request cancellation of the current job.
     pub async fn request_cancel(&self) -> bool {
         let cancel_token = self.cancel_token.read().await;

@@ -84,7 +84,7 @@
         <span class="count">{progress.completed} / {progress.total}</span>
       {/if}
       {#if canCancel}
-        <button class="cancel-btn" onclick={cancelProcessing}>Cancel</button>
+        <button type="button" class="cancel-btn" onclick={cancelProcessing}>Cancel</button>
       {/if}
     </div>
   </div>

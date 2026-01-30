@@ -339,9 +339,9 @@ async fn start_processing(
         }
     }
 
-    // Reset progress with person info
+    // Reset progress with person info (bypasses terminal state check)
     state
-        .update_progress(Progress {
+        .reset_progress(Progress {
             status: JobStatus::Running,
             completed: 0,
             total: 0,
@@ -485,8 +485,9 @@ async fn list_output_folders(
                     }
                 }
 
-                // Check for video file
-                let has_video = path.join("timelapse.mp4").exists();
+                // Check for video file (named after the folder/person)
+                let video_filename = format!("{}.mp4", name);
+                let has_video = path.join(&video_filename).exists();
 
                 folders.push(OutputFolderInfo {
                     name,
@@ -678,10 +679,11 @@ async fn list_folder_images(
     images.sort_by(|a, b| a.filename.cmp(&b.filename));
 
     let total_count = images.len() as u32;
+    let video_filename = format!("{}.mp4", folder_name);
     let video_exists = config
         .output_dir
         .join(&folder_name)
-        .join("timelapse.mp4")
+        .join(&video_filename)
         .exists();
 
     Ok(Json(FolderImagesResponse {
@@ -890,9 +892,9 @@ async fn compile_folder_video(
         ));
     }
 
-    // Set status to compiling video
+    // Set status to compiling video (bypasses terminal state check)
     state
-        .update_progress(Progress {
+        .reset_progress(Progress {
             status: JobStatus::CompilingVideo,
             completed: 0,
             total: image_count,
@@ -908,7 +910,8 @@ async fn compile_folder_video(
 
     // Clone values needed for the async task
     let video_config = config.video.clone();
-    let output_path = folder_path.join("timelapse.mp4");
+    let video_filename = format!("{}.mp4", folder_name);
+    let output_path = folder_path.join(&video_filename);
     let job_state = state.clone();
     let folder_name_clone = folder_name.clone();
 

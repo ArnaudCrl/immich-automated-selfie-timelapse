@@ -79,7 +79,7 @@
 </script>
 
 <div class="settings-panel">
-  <button class="toggle-btn" onclick={toggle}>
+  <button type="button" class="toggle-btn" onclick={toggle}>
     <span class="icon">{isOpen ? '▼' : '▶'}</span>
     Settings
   </button>
@@ -90,11 +90,12 @@
         <p class="loading">Loading settings...</p>
       {:else if error}
         <p class="error">{error}</p>
-        <button class="retry-btn" onclick={loadConfig}>Retry</button>
+        <button type="button" class="retry-btn" onclick={loadConfig}>Retry</button>
       {:else}
         <!-- Tab navigation -->
         <div class="tabs">
           <button
+            type="button"
             class="tab"
             class:active={activeTab === 'face'}
             onclick={() => (activeTab = 'face')}
@@ -102,6 +103,7 @@
             Face
           </button>
           <button
+            type="button"
             class="tab"
             class:active={activeTab === 'output'}
             onclick={() => (activeTab = 'output')}
@@ -109,6 +111,7 @@
             Output
           </button>
           <button
+            type="button"
             class="tab"
             class:active={activeTab === 'video'}
             onclick={() => (activeTab = 'video')}
@@ -276,7 +279,7 @@
         </div>
 
         <div class="actions">
-          <button class="save-btn" onclick={saveConfig} disabled={disabled || saving}>
+          <button type="button" class="save-btn" onclick={saveConfig} disabled={disabled || saving}>
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
           {#if saveMessage}

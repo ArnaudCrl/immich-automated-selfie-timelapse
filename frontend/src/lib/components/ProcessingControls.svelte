@@ -155,7 +155,7 @@
   </div>
 
   <div class="actions">
-    <button class="start-btn" onclick={handleStartClick}>
+    <button type="button" class="start-btn" onclick={handleStartClick}>
       Start Processing
     </button>
   </div>

@@ -9,7 +9,8 @@
   import ResultsView from './lib/components/ResultsView.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
 
-  // LocalStorage keys
+  // Configuration constants
+  const POLL_INTERVAL_MS = 500; // Progress polling interval during job execution
   const STORAGE_KEY_PERSON = 'immich-timelapse-selected-person';
 
   // Load persisted state from localStorage
@@ -182,7 +183,7 @@
 
   function startPolling() {
     if (pollInterval) return; // Already polling
-    pollInterval = setInterval(pollProgress, 500);
+    pollInterval = setInterval(pollProgress, POLL_INTERVAL_MS);
   }
 
   function stopPolling() {

@@ -15,12 +15,15 @@ mod processing;
 
 use crate::web::state::AppState;
 use axum::{
+    http::header,
     response::{Html, IntoResponse},
     routing::{delete, get, post, put},
     Router,
 };
 use serde::Serialize;
+use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 // Re-export handler functions for use in router
 use config::{get_config, update_config};
@@ -89,8 +92,16 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/config", get(get_config))
         .route("/api/config", put(update_config))
-        // Serve output files (video, images)
-        .nest_service("/output", ServeDir::new(output_dir))
+        // Serve output files (video, images) with cache headers
+        .nest_service(
+            "/output",
+            ServiceBuilder::new()
+                .layer(SetResponseHeaderLayer::if_not_present(
+                    header::CACHE_CONTROL,
+                    header::HeaderValue::from_static("public, max-age=86400"),
+                ))
+                .service(ServeDir::new(output_dir)),
+        )
         // Serve frontend static files (fallback to index.html for SPA routing)
         .fallback_service(ServeDir::new("frontend/dist").fallback(get(serve_index)))
         .with_state(state)

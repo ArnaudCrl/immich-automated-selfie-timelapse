@@ -41,19 +41,24 @@
   // Skip statistics from the backend - dynamically handle any keys
   let skipStats = $derived(progress.skip_stats || {});
 
-  // Calculate total from all numeric values in skip_stats
+  // Use the backend-provided total if available, otherwise calculate from individual counts
+  // Note: We exclude 'total' from manual calculation to avoid double-counting
   let skipTotal = $derived(
-    Object.values(skipStats).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0)
+    typeof skipStats.total === 'number'
+      ? skipStats.total
+      : Object.entries(skipStats)
+          .filter(([key, _]) => key !== 'total')
+          .reduce((sum, [_, val]) => sum + (typeof val === 'number' ? val : 0), 0)
   );
 
   // Calculate kept (successful) count: completed - skipped
   let keptCount = $derived(Math.max(0, progress.completed - skipTotal));
 
   // Dynamically build skip reasons from whatever the backend sends
-  // Filter to only show non-zero counts
+  // Filter to only show non-zero counts, exclude the 'total' field
   let skipReasons = $derived(
     Object.entries(skipStats)
-      .filter(([_, count]) => typeof count === 'number' && count > 0)
+      .filter(([key, count]) => key !== 'total' && typeof count === 'number' && count > 0)
       .map(([key, count]) => ({ label: formatLabel(key), count }))
       .sort((a, b) => b.count - a.count) // Sort by count descending
   );
@@ -98,7 +103,7 @@
   {#if (jobStatus === 'running' || jobStatus === 'completed' || jobStatus === 'cancelled') && progress.completed > 0}
     <div class="skip-stats">
       <div class="skip-header">
-        <span class="skip-label">Discarded:Kept</span>
+        <span class="skip-label">Discarded : Kept</span>
         <span class="skip-totals">
           <span class="skipped-count">{skipTotal}</span>
           <span class="separator">:</span>

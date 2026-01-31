@@ -66,6 +66,28 @@
     }
   }
 
+  // Default configuration values (must match backend defaults in config.rs)
+  const DEFAULT_CONFIG = {
+    processing: {
+      resize_size: 512,
+      face_resolution_threshold: 80,
+      pose_threshold: 25.0,
+      ear_threshold: 0.2,
+      max_workers: 4,
+      keep_intermediates: false,
+    },
+    video: {
+      framerate: 15,
+      enabled: true,
+      codec: 'libx264',
+      crf: 23,
+    },
+  };
+
+  function resetToDefaults() {
+    config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  }
+
   function toggle() {
     isOpen = !isOpen;
     if (isOpen && loading) {
@@ -282,6 +304,9 @@
           <button type="button" class="save-btn" onclick={saveConfig} disabled={disabled || saving}>
             {saving ? 'Saving...' : 'Save Settings'}
           </button>
+          <button type="button" class="reset-btn" onclick={resetToDefaults} disabled={disabled || saving}>
+            Reset to Defaults
+          </button>
           {#if saveMessage}
             <span class="save-message">{saveMessage}</span>
           {/if}
@@ -490,6 +515,27 @@
   }
 
   .save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .reset-btn {
+    padding: 0.75rem 1.5rem;
+    background: #333;
+    border: none;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .reset-btn:hover:not(:disabled) {
+    background: #444;
+  }
+
+  .reset-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

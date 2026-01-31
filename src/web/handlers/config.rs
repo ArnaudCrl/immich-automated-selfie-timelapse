@@ -1,28 +1,12 @@
 //! Configuration endpoints.
 
-use crate::config::{ProcessingConfig, VideoConfig};
-use crate::web::state::{AppState, JobStatus};
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
+use crate::config::{
+    AlignmentConfig, BrightnessConfig, FaceResolutionConfig, OutputConfig, ProcessingConfig,
+    VideoConfig,
 };
+use crate::web::state::{AppState, JobStatus};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
-
-/// Validation error with field name and message.
-struct ValidationError {
-    field: &'static str,
-    message: String,
-}
-
-impl ValidationError {
-    fn new(field: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            field,
-            message: message.into(),
-        }
-    }
-}
 
 /// Configuration response (excludes sensitive API credentials).
 #[derive(Serialize)]
@@ -42,6 +26,8 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
 }
 
 /// Configuration update request.
+///
+/// Uses the same nested structure as the config itself for consistency.
 #[derive(Deserialize)]
 pub struct ConfigUpdateRequest {
     pub processing: Option<ProcessingConfigUpdate>,
@@ -51,57 +37,39 @@ pub struct ConfigUpdateRequest {
 /// Processing configuration update fields.
 #[derive(Deserialize)]
 pub struct ProcessingConfigUpdate {
-    pub resize_size: Option<u32>,
-    pub face_resolution_threshold: Option<u32>,
-    pub pose_threshold: Option<f32>,
-    pub ear_threshold: Option<f32>,
     pub max_workers: Option<usize>,
-    pub keep_intermediates: Option<bool>,
+    pub face_resolution: Option<FaceResolutionConfig>,
+    pub brightness: Option<BrightnessConfig>,
+    pub output: Option<OutputConfig>,
+    pub alignment: Option<AlignmentConfig>,
 }
 
 /// Video configuration update fields.
 #[derive(Deserialize)]
 pub struct VideoConfigUpdate {
-    pub framerate: Option<u32>,
     pub enabled: Option<bool>,
+    pub framerate: Option<u32>,
     pub codec: Option<String>,
     pub crf: Option<u32>,
 }
 
+/// Validation error with field name and message.
+struct ValidationError {
+    field: &'static str,
+    message: String,
+}
+
+impl ValidationError {
+    fn new(field: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            field,
+            message: message.into(),
+        }
+    }
+}
+
 /// Validate processing configuration update values.
 fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), ValidationError> {
-    if let Some(v) = proc.resize_size {
-        if v < 64 || v > 4096 {
-            return Err(ValidationError::new(
-                "processing.resize_size",
-                format!("must be between 64 and 4096, got {}", v),
-            ));
-        }
-    }
-    if let Some(v) = proc.face_resolution_threshold {
-        if v == 0 || v > 1000 {
-            return Err(ValidationError::new(
-                "processing.face_resolution_threshold",
-                format!("must be between 1 and 1000, got {}", v),
-            ));
-        }
-    }
-    if let Some(v) = proc.pose_threshold {
-        if v <= 0.0 || v > 90.0 {
-            return Err(ValidationError::new(
-                "processing.pose_threshold",
-                format!("must be between 0 and 90 degrees, got {}", v),
-            ));
-        }
-    }
-    if let Some(v) = proc.ear_threshold {
-        if v <= 0.0 || v > 1.0 {
-            return Err(ValidationError::new(
-                "processing.ear_threshold",
-                format!("must be between 0 and 1, got {}", v),
-            ));
-        }
-    }
     if let Some(v) = proc.max_workers {
         if v == 0 || v > 64 {
             return Err(ValidationError::new(
@@ -110,6 +78,60 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
             ));
         }
     }
+
+    if let Some(ref fr) = proc.face_resolution {
+        if fr.enabled && fr.min_size == 0 {
+            return Err(ValidationError::new(
+                "processing.face_resolution.min_size",
+                "must be greater than 0 when enabled",
+            ));
+        }
+        if fr.min_size > 1000 {
+            return Err(ValidationError::new(
+                "processing.face_resolution.min_size",
+                format!("must be at most 1000, got {}", fr.min_size),
+            ));
+        }
+    }
+
+    if let Some(ref br) = proc.brightness {
+        if br.enabled {
+            if br.min_brightness < 0.0 || br.min_brightness > 1.0 {
+                return Err(ValidationError::new(
+                    "processing.brightness.min_brightness",
+                    format!("must be between 0.0 and 1.0, got {}", br.min_brightness),
+                ));
+            }
+            if br.max_brightness < 0.0 || br.max_brightness > 1.0 {
+                return Err(ValidationError::new(
+                    "processing.brightness.max_brightness",
+                    format!("must be between 0.0 and 1.0, got {}", br.max_brightness),
+                ));
+            }
+            if br.min_brightness >= br.max_brightness {
+                return Err(ValidationError::new(
+                    "processing.brightness",
+                    "min_brightness must be less than max_brightness",
+                ));
+            }
+        }
+    }
+
+    if let Some(ref out) = proc.output {
+        if out.size < 64 {
+            return Err(ValidationError::new(
+                "processing.output.size",
+                format!("must be at least 64, got {}", out.size),
+            ));
+        }
+        if out.size > 4096 {
+            return Err(ValidationError::new(
+                "processing.output.size",
+                format!("must be at most 4096, got {}", out.size),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -132,7 +154,6 @@ fn validate_video_config(vid: &VideoConfigUpdate) -> Result<(), ValidationError>
         }
     }
     if let Some(ref v) = vid.codec {
-        // Allow common video codecs
         let valid_codecs = ["libx264", "libx265", "libvpx", "libvpx-vp9", "libaom-av1"];
         if !valid_codecs.contains(&v.as_str()) {
             return Err(ValidationError::new(
@@ -187,32 +208,29 @@ pub async fn update_config(
         let mut config = state.config.write().await;
 
         if let Some(proc) = update.processing {
-            if let Some(v) = proc.resize_size {
-                config.processing.resize_size = v;
-            }
-            if let Some(v) = proc.face_resolution_threshold {
-                config.processing.face_resolution_threshold = v;
-            }
-            if let Some(v) = proc.pose_threshold {
-                config.processing.pose_threshold = v;
-            }
-            if let Some(v) = proc.ear_threshold {
-                config.processing.ear_threshold = v;
-            }
             if let Some(v) = proc.max_workers {
                 config.processing.max_workers = v;
             }
-            if let Some(v) = proc.keep_intermediates {
-                config.processing.keep_intermediates = v;
+            if let Some(v) = proc.face_resolution {
+                config.processing.face_resolution = v;
+            }
+            if let Some(v) = proc.brightness {
+                config.processing.brightness = v;
+            }
+            if let Some(v) = proc.output {
+                config.processing.output = v;
+            }
+            if let Some(v) = proc.alignment {
+                config.processing.alignment = v;
             }
         }
 
         if let Some(vid) = update.video {
-            if let Some(v) = vid.framerate {
-                config.video.framerate = v;
-            }
             if let Some(v) = vid.enabled {
                 config.video.enabled = v;
+            }
+            if let Some(v) = vid.framerate {
+                config.video.framerate = v;
             }
             if let Some(v) = vid.codec {
                 config.video.codec = v;

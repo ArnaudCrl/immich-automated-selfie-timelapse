@@ -10,35 +10,36 @@
   let saveMessage = $state(null);
   let activeTab = $state('face');
 
-  // Config state
+  // Config state - matches backend nested structure
   let config = $state({
     processing: {
-      resize_size: 512,
-      face_resolution_threshold: 80,
-      pose_threshold: 25.0,
-      ear_threshold: 0.2,
       max_workers: 4,
-      keep_intermediates: false,
-      brightness: null,
+      face_resolution: {
+        enabled: true,
+        min_size: 80,
+      },
+      brightness: {
+        enabled: false,
+        min_brightness: 0.1,
+        max_brightness: 0.95,
+      },
+      output: {
+        size: 512,
+        keep_intermediates: false,
+      },
+      alignment: {
+        enabled: false,
+        left_eye_pos: [0.35, 0.4],
+        right_eye_pos: [0.65, 0.4],
+      },
     },
     video: {
-      framerate: 15,
       enabled: true,
+      framerate: 15,
       codec: 'libx264',
       crf: 23,
     },
   });
-
-  // Helper to ensure brightness config exists
-  function ensureBrightnessConfig() {
-    if (!config.processing.brightness) {
-      config.processing.brightness = {
-        enabled: false,
-        min_brightness: 0.1,
-        max_brightness: 0.95,
-      };
-    }
-  }
 
   async function loadConfig() {
     loading = true;
@@ -81,17 +82,29 @@
   // Default configuration values (must match backend defaults in config.rs)
   const DEFAULT_CONFIG = {
     processing: {
-      resize_size: 512,
-      face_resolution_threshold: 80,
-      pose_threshold: 25.0,
-      ear_threshold: 0.2,
       max_workers: 4,
-      keep_intermediates: false,
-      brightness: null,
+      face_resolution: {
+        enabled: true,
+        min_size: 80,
+      },
+      brightness: {
+        enabled: false,
+        min_brightness: 0.1,
+        max_brightness: 0.95,
+      },
+      output: {
+        size: 512,
+        keep_intermediates: false,
+      },
+      alignment: {
+        enabled: false,
+        left_eye_pos: [0.35, 0.4],
+        right_eye_pos: [0.65, 0.4],
+      },
     },
     video: {
-      framerate: 15,
       enabled: true,
+      framerate: 15,
       codec: 'libx264',
       crf: 23,
     },
@@ -159,72 +172,47 @@
         <div class="tab-content">
           {#if activeTab === 'face'}
             <fieldset disabled={disabled || saving}>
-              <div class="setting-row">
-                <label>
-                  <span class="setting-label">Min Face Size</span>
-                  <span class="setting-hint">Minimum face resolution in pixels</span>
-                </label>
-                <div class="setting-control">
+              <!-- Face Resolution Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Face Resolution</span>
                   <input
-                    type="range"
-                    bind:value={config.processing.face_resolution_threshold}
-                    min="20"
-                    max="200"
-                    step="10"
+                    type="checkbox"
+                    bind:checked={config.processing.face_resolution.enabled}
                   />
-                  <span class="value">{config.processing.face_resolution_threshold}px</span>
                 </div>
+
+                {#if config.processing.face_resolution.enabled}
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Min Face Size</span>
+                      <span class="setting-hint">Minimum face resolution in pixels</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.face_resolution.min_size}
+                        min="20"
+                        max="200"
+                        step="10"
+                      />
+                      <span class="value">{config.processing.face_resolution.min_size}px</span>
+                    </div>
+                  </div>
+                {/if}
               </div>
 
-              <div class="setting-row">
-                <label>
-                  <span class="setting-label">Eye Aspect Ratio</span>
-                  <span class="setting-hint">Threshold for eye openness detection</span>
-                </label>
-                <div class="setting-control">
-                  <input
-                    type="range"
-                    bind:value={config.processing.ear_threshold}
-                    min="0.1"
-                    max="0.5"
-                    step="0.05"
-                  />
-                  <span class="value">{config.processing.ear_threshold.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <label>
-                  <span class="setting-label">Max Head Rotation</span>
-                  <span class="setting-hint">Maximum yaw angle in degrees</span>
-                </label>
-                <div class="setting-control">
-                  <input
-                    type="range"
-                    bind:value={config.processing.pose_threshold}
-                    min="5"
-                    max="90"
-                    step="5"
-                  />
-                  <span class="value">{config.processing.pose_threshold}°</span>
-                </div>
-              </div>
-
-              <!-- Brightness validation section -->
+              <!-- Brightness Section -->
               <div class="setting-section">
                 <div class="section-header">
                   <span class="section-title">Brightness Filter</span>
                   <input
                     type="checkbox"
-                    checked={config.processing.brightness?.enabled ?? false}
-                    onchange={(e) => {
-                      ensureBrightnessConfig();
-                      config.processing.brightness.enabled = e.target.checked;
-                    }}
+                    bind:checked={config.processing.brightness.enabled}
                   />
                 </div>
 
-                {#if config.processing.brightness?.enabled}
+                {#if config.processing.brightness.enabled}
                   <div class="setting-row sub-setting">
                     <label>
                       <span class="setting-label">Min Brightness</span>
@@ -233,16 +221,12 @@
                     <div class="setting-control">
                       <input
                         type="range"
-                        value={config.processing.brightness?.min_brightness ?? 0.1}
-                        oninput={(e) => {
-                          ensureBrightnessConfig();
-                          config.processing.brightness.min_brightness = parseFloat(e.target.value);
-                        }}
+                        bind:value={config.processing.brightness.min_brightness}
                         min="0"
                         max="0.5"
                         step="0.05"
                       />
-                      <span class="value">{(config.processing.brightness?.min_brightness ?? 0.1).toFixed(2)}</span>
+                      <span class="value">{config.processing.brightness.min_brightness.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -254,16 +238,12 @@
                     <div class="setting-control">
                       <input
                         type="range"
-                        value={config.processing.brightness?.max_brightness ?? 0.95}
-                        oninput={(e) => {
-                          ensureBrightnessConfig();
-                          config.processing.brightness.max_brightness = parseFloat(e.target.value);
-                        }}
+                        bind:value={config.processing.brightness.max_brightness}
                         min="0.5"
                         max="1.0"
                         step="0.05"
                       />
-                      <span class="value">{(config.processing.brightness?.max_brightness ?? 0.95).toFixed(2)}</span>
+                      <span class="value">{config.processing.brightness.max_brightness.toFixed(2)}</span>
                     </div>
                   </div>
                 {/if}
@@ -279,12 +259,12 @@
                 <div class="setting-control">
                   <input
                     type="range"
-                    bind:value={config.processing.resize_size}
+                    bind:value={config.processing.output.size}
                     min="128"
                     max="1024"
                     step="64"
                   />
-                  <span class="value">{config.processing.resize_size}px</span>
+                  <span class="value">{config.processing.output.size}px</span>
                 </div>
               </div>
 
@@ -310,7 +290,7 @@
                   <span class="setting-label">Keep Debug Images</span>
                   <span class="setting-hint">Save intermediate processing visualizations</span>
                 </label>
-                <input type="checkbox" bind:checked={config.processing.keep_intermediates} />
+                <input type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
               </div>
             </fieldset>
           {:else if activeTab === 'video'}
@@ -565,9 +545,15 @@
 
   /* Settings section with header */
   .setting-section {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid #333;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #333;
+  }
+
+  .setting-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
   }
 
   .section-header {

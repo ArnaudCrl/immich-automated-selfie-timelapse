@@ -53,6 +53,8 @@ impl ProcessingStep for BrightnessStep {
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
+        let step_config = &config.processing.brightness;
+
         let image = match &ctx.image {
             Some(img) => img,
             None => {
@@ -67,31 +69,29 @@ impl ProcessingStep for BrightnessStep {
         // Store computed brightness for potential use by other steps
         ctx.set_computed("brightness", ComputedValue::Float(brightness));
 
-        // Check brightness thresholds if configured
-        if let Some(ref brightness_config) = config.processing.brightness {
-            if !brightness_config.enabled {
-                return StepOutcome::Continue(ctx);
-            }
+        // Skip validation if disabled
+        if !step_config.enabled {
+            return StepOutcome::Continue(ctx);
+        }
 
-            if brightness < brightness_config.min_brightness {
-                return StepOutcome::Skip {
-                    reason: "too_dark".to_string(),
-                    detail: Some(format!(
-                        "{:.2} (min: {:.2})",
-                        brightness, brightness_config.min_brightness
-                    )),
-                };
-            }
+        if brightness < step_config.min_brightness {
+            return StepOutcome::Skip {
+                reason: "too_dark".to_string(),
+                detail: Some(format!(
+                    "{:.2} (min: {:.2})",
+                    brightness, step_config.min_brightness
+                )),
+            };
+        }
 
-            if brightness > brightness_config.max_brightness {
-                return StepOutcome::Skip {
-                    reason: "too_bright".to_string(),
-                    detail: Some(format!(
-                        "{:.2} (max: {:.2})",
-                        brightness, brightness_config.max_brightness
-                    )),
-                };
-            }
+        if brightness > step_config.max_brightness {
+            return StepOutcome::Skip {
+                reason: "too_bright".to_string(),
+                detail: Some(format!(
+                    "{:.2} (max: {:.2})",
+                    brightness, step_config.max_brightness
+                )),
+            };
         }
 
         StepOutcome::Continue(ctx)
@@ -101,7 +101,6 @@ impl ProcessingStep for BrightnessStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::BrightnessConfig;
     use crate::immich_api::FaceData;
     use image::{DynamicImage, RgbImage, Rgb};
 
@@ -146,15 +145,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_brightness_no_config() {
+    async fn test_brightness_disabled() {
         let step = BrightnessStep;
         let img = create_solid_image(128, 128, 128);
         let ctx = make_ctx_with_image(img);
-        let config = Config::default(); // No brightness config
+        let config = Config::default(); // brightness.enabled = false by default
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {
-                // Should still compute brightness even without thresholds
+                // Should still compute brightness even when disabled
                 let brightness = new_ctx.get_computed("brightness")
                     .and_then(|v| v.as_float())
                     .unwrap();
@@ -171,11 +170,9 @@ mod tests {
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.brightness = Some(BrightnessConfig {
-            enabled: true,
-            min_brightness: 0.2,
-            max_brightness: 0.9,
-        });
+        config.processing.brightness.enabled = true;
+        config.processing.brightness.min_brightness = 0.2;
+        config.processing.brightness.max_brightness = 0.9;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Skip { reason, .. } => {
@@ -192,11 +189,9 @@ mod tests {
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.brightness = Some(BrightnessConfig {
-            enabled: true,
-            min_brightness: 0.1,
-            max_brightness: 0.9,
-        });
+        config.processing.brightness.enabled = true;
+        config.processing.brightness.min_brightness = 0.1;
+        config.processing.brightness.max_brightness = 0.9;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Skip { reason, .. } => {
@@ -207,21 +202,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_brightness_disabled() {
+    async fn test_brightness_within_range() {
         let step = BrightnessStep;
-        let img = create_solid_image(10, 10, 10); // Very dark
+        let img = create_solid_image(128, 128, 128); // Mid-gray
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.brightness = Some(BrightnessConfig {
-            enabled: false, // Disabled
-            min_brightness: 0.2,
-            max_brightness: 0.9,
-        });
+        config.processing.brightness.enabled = true;
+        config.processing.brightness.min_brightness = 0.1;
+        config.processing.brightness.max_brightness = 0.9;
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Should continue even though image is dark
-            _ => panic!("Expected Continue when disabled"),
+            StepOutcome::Continue(_) => {} // Should pass
+            _ => panic!("Expected Continue for mid-range brightness"),
         }
     }
 }

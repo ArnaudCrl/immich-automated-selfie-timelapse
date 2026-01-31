@@ -35,7 +35,7 @@ impl ProcessingStep for CropFaceStep {
 
         // Crop returns (full_res_crop, resized). We want the full_res_crop here
         // and let the resize step handle the final sizing.
-        match crop_face_with_intermediate(image, &ctx.face_data, config.processing.resize_size) {
+        match crop_face_with_intermediate(image, &ctx.face_data, config.processing.output.size) {
             Ok((cropped_full, _resized)) => {
                 // Use the full-resolution cropped image; resize step will handle final size
                 ctx.image = Some(cropped_full);

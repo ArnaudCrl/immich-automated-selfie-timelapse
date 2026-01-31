@@ -31,7 +31,7 @@ impl ProcessingStep for ResizeStep {
             }
         };
 
-        let output_size = config.processing.resize_size;
+        let output_size = config.processing.output.size;
 
         // Resize to square output
         let resized = image.resize_exact(output_size, output_size, FilterType::Lanczos3);
@@ -72,7 +72,7 @@ mod tests {
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.resize_size = 512;
+        config.processing.output.size = 512;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {
@@ -113,7 +113,7 @@ mod tests {
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.resize_size = 256;
+        config.processing.output.size = 256;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {

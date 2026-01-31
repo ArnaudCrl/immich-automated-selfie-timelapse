@@ -133,7 +133,7 @@ impl Pipeline {
                     ctx = new_ctx;
 
                     // Generate debug visualization if enabled
-                    if config.processing.keep_intermediates {
+                    if config.processing.output.keep_intermediates {
                         if let Some(debug_img) = step.debug_visualize(&ctx) {
                             ctx.add_debug_image(step.id(), debug_img);
                         }

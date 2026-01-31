@@ -135,7 +135,7 @@ async fn run_job_inner(
     tokio::fs::create_dir_all(&images_dir).await?;
 
     // Create debug directories if enabled
-    let debug = if config.processing.keep_intermediates {
+    let debug = if config.processing.output.keep_intermediates {
         let debug_base = person_dir.join("debug");
 
         let crop_dir = debug_base.join("crop");
@@ -499,7 +499,7 @@ async fn process_single_asset(
     ctx = ctx.with_bytes(image_bytes);
 
     // Determine debug directory
-    let debug_dir = if config.processing.keep_intermediates {
+    let debug_dir = if config.processing.output.keep_intermediates {
         output_dirs.debug.as_ref().and_then(|d| d.crop.as_ref().map(|p| p.parent().unwrap().to_path_buf()))
     } else {
         None

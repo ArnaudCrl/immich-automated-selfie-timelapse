@@ -94,6 +94,35 @@ pub struct ProcessingConfig {
 
     /// Keep intermediate images (original, cropped) for inspection.
     pub keep_intermediates: bool,
+
+    /// Brightness validation settings (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brightness: Option<BrightnessConfig>,
+}
+
+/// Brightness validation configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrightnessConfig {
+    /// Whether brightness validation is enabled.
+    pub enabled: bool,
+
+    /// Minimum acceptable brightness (0.0-1.0).
+    /// Images darker than this will be skipped.
+    pub min_brightness: f32,
+
+    /// Maximum acceptable brightness (0.0-1.0).
+    /// Images brighter than this will be skipped.
+    pub max_brightness: f32,
+}
+
+impl Default for BrightnessConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            min_brightness: 0.1,
+            max_brightness: 0.95,
+        }
+    }
 }
 
 impl Default for ProcessingConfig {
@@ -107,6 +136,7 @@ impl Default for ProcessingConfig {
             right_eye_pos: (0.65, 0.4),
             max_workers: num_cpus(),
             keep_intermediates: false,
+            brightness: None,
         }
     }
 }

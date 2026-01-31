@@ -19,6 +19,7 @@
       ear_threshold: 0.2,
       max_workers: 4,
       keep_intermediates: false,
+      brightness: null,
     },
     video: {
       framerate: 15,
@@ -27,6 +28,17 @@
       crf: 23,
     },
   });
+
+  // Helper to ensure brightness config exists
+  function ensureBrightnessConfig() {
+    if (!config.processing.brightness) {
+      config.processing.brightness = {
+        enabled: false,
+        min_brightness: 0.1,
+        max_brightness: 0.95,
+      };
+    }
+  }
 
   async function loadConfig() {
     loading = true;
@@ -75,6 +87,7 @@
       ear_threshold: 0.2,
       max_workers: 4,
       keep_intermediates: false,
+      brightness: null,
     },
     video: {
       framerate: 15,
@@ -195,6 +208,65 @@
                   />
                   <span class="value">{config.processing.pose_threshold}°</span>
                 </div>
+              </div>
+
+              <!-- Brightness validation section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Brightness Filter</span>
+                  <input
+                    type="checkbox"
+                    checked={config.processing.brightness?.enabled ?? false}
+                    onchange={(e) => {
+                      ensureBrightnessConfig();
+                      config.processing.brightness.enabled = e.target.checked;
+                    }}
+                  />
+                </div>
+
+                {#if config.processing.brightness?.enabled}
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Min Brightness</span>
+                      <span class="setting-hint">Skip images darker than this</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        value={config.processing.brightness?.min_brightness ?? 0.1}
+                        oninput={(e) => {
+                          ensureBrightnessConfig();
+                          config.processing.brightness.min_brightness = parseFloat(e.target.value);
+                        }}
+                        min="0"
+                        max="0.5"
+                        step="0.05"
+                      />
+                      <span class="value">{(config.processing.brightness?.min_brightness ?? 0.1).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Max Brightness</span>
+                      <span class="setting-hint">Skip images brighter than this</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        value={config.processing.brightness?.max_brightness ?? 0.95}
+                        oninput={(e) => {
+                          ensureBrightnessConfig();
+                          config.processing.brightness.max_brightness = parseFloat(e.target.value);
+                        }}
+                        min="0.5"
+                        max="1.0"
+                        step="0.05"
+                      />
+                      <span class="value">{(config.processing.brightness?.max_brightness ?? 0.95).toFixed(2)}</span>
+                    </div>
+                  </div>
+                {/if}
               </div>
             </fieldset>
           {:else if activeTab === 'output'}
@@ -489,6 +561,39 @@
     height: 1.25rem;
     accent-color: #4f46e5;
     cursor: pointer;
+  }
+
+  /* Settings section with header */
+  .setting-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #333;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #e0e0e0;
+  }
+
+  .section-header input[type='checkbox'] {
+    width: 1.25rem;
+    height: 1.25rem;
+    accent-color: #4f46e5;
+    cursor: pointer;
+  }
+
+  .sub-setting {
+    padding-left: 1rem;
+    border-left: 2px solid #333;
+    margin-left: 0.5rem;
   }
 
   .actions {

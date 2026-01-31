@@ -8,6 +8,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file if present (before anything else)
+    if let Err(e) = dotenvy::dotenv() {
+        // Not an error if .env doesn't exist
+        if !matches!(e, dotenvy::Error::Io(_)) {
+            eprintln!("Warning: Failed to load .env file: {}", e);
+        }
+    }
+
     // Initialize logging
     tracing_subscriber::registry()
         .with(

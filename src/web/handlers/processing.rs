@@ -8,22 +8,29 @@ use axum::{
     response::Json,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use super::StartResponse;
 
 /// Skip statistics for API response.
+///
+/// Uses a dynamic HashMap to support arbitrary skip reasons from pipeline steps.
 #[derive(Serialize)]
 pub struct SkipStatsResponse {
-    pub face_too_small: u32,
-    pub eyes_closed: u32,
-    pub head_turned: u32,
-    pub too_dark: u32,
-    pub too_bright: u32,
-    pub no_face_detected: u32,
-    pub download_failed: u32,
-    pub decode_failed: u32,
-    pub crop_failed: u32,
+    /// Map of skip reason ID to count.
+    #[serde(flatten)]
+    pub counts: HashMap<String, u32>,
+    /// Total number of skipped images.
     pub total: u32,
+}
+
+impl From<&SkipStats> for SkipStatsResponse {
+    fn from(stats: &SkipStats) -> Self {
+        Self {
+            counts: stats.counts().clone(),
+            total: stats.total(),
+        }
+    }
 }
 
 /// Progress response.
@@ -52,25 +59,12 @@ pub async fn get_progress(State(state): State<AppState>) -> Json<ProgressRespons
         JobStatus::Error(_) => "error",
     };
 
-    let skip_stats = &progress.skip_stats;
-
     Json(ProgressResponse {
         status: status_str.to_string(),
         completed: progress.completed,
         total: progress.total,
         message: progress.message.clone(),
-        skip_stats: SkipStatsResponse {
-            face_too_small: skip_stats.face_too_small,
-            eyes_closed: skip_stats.eyes_closed,
-            head_turned: skip_stats.head_turned,
-            too_dark: skip_stats.too_dark,
-            too_bright: skip_stats.too_bright,
-            no_face_detected: skip_stats.no_face_detected,
-            download_failed: skip_stats.download_failed,
-            decode_failed: skip_stats.decode_failed,
-            crop_failed: skip_stats.crop_failed,
-            total: skip_stats.total(),
-        },
+        skip_stats: SkipStatsResponse::from(&progress.skip_stats),
         person_id: progress.person_id.clone(),
         person_name: progress.person_name.clone(),
     })

@@ -1,8 +1,9 @@
 //! Application state for the web server.
 
 use crate::config::Config;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{broadcast, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -27,89 +28,99 @@ impl JobStatus {
 }
 
 /// Detailed statistics for skipped images.
+///
+/// Uses a HashMap to support dynamic skip reasons from pipeline steps.
 #[derive(Debug, Clone, Default)]
 pub struct SkipStats {
-    pub face_too_small: u32,
-    pub eyes_closed: u32,
-    pub head_turned: u32,
-    pub too_dark: u32,
-    pub too_bright: u32,
-    pub no_face_detected: u32,
-    pub download_failed: u32,
-    pub decode_failed: u32,
-    pub crop_failed: u32,
+    /// Map of skip reason ID to count.
+    counts: HashMap<String, u32>,
 }
 
 impl SkipStats {
+    /// Create new empty skip stats.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get the count for a specific reason.
+    pub fn get(&self, reason: &str) -> u32 {
+        self.counts.get(reason).copied().unwrap_or(0)
+    }
+
+    /// Set the count for a specific reason.
+    pub fn set(&mut self, reason: impl Into<String>, count: u32) {
+        self.counts.insert(reason.into(), count);
+    }
+
+    /// Get all counts as a reference to the underlying HashMap.
+    pub fn counts(&self) -> &HashMap<String, u32> {
+        &self.counts
+    }
+
     /// Total number of skipped images.
     pub fn total(&self) -> u32 {
-        self.face_too_small
-            + self.eyes_closed
-            + self.head_turned
-            + self.too_dark
-            + self.too_bright
-            + self.no_face_detected
-            + self.download_failed
-            + self.decode_failed
-            + self.crop_failed
+        self.counts.values().sum()
     }
 }
 
 /// Atomic version of SkipStats for thread-safe concurrent updates.
 ///
-/// This consolidates all skip counters into a single struct that can be
-/// shared across async tasks with Arc, avoiding the need to clone multiple
-/// individual atomic counters.
+/// Uses a HashMap with atomic counters to support dynamic skip reasons
+/// from pipeline steps. New reasons are added on first increment.
 #[derive(Debug, Default)]
 pub struct AtomicSkipStats {
-    pub face_too_small: AtomicU32,
-    pub eyes_closed: AtomicU32,
-    pub head_turned: AtomicU32,
-    pub too_dark: AtomicU32,
-    pub too_bright: AtomicU32,
-    pub no_face_detected: AtomicU32,
-    pub download_failed: AtomicU32,
-    pub decode_failed: AtomicU32,
-    pub crop_failed: AtomicU32,
+    /// Map of skip reason to atomic counter.
+    /// Uses std::sync::RwLock for synchronous access (required for HashMap mutations).
+    counts: StdRwLock<HashMap<String, Arc<AtomicU32>>>,
 }
 
 impl AtomicSkipStats {
-    /// Create a new AtomicSkipStats with all counters at zero.
+    /// Create a new AtomicSkipStats with no counters.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Increment a specific counter and return the new value.
-    pub fn increment(&self, reason: &crate::face_processing::SkipReason) -> u32 {
-        use crate::face_processing::SkipReason;
-        let counter = match reason {
-            SkipReason::FaceTooSmall => &self.face_too_small,
-            SkipReason::EyesClosed => &self.eyes_closed,
-            SkipReason::HeadTurned => &self.head_turned,
-            SkipReason::TooDark => &self.too_dark,
-            SkipReason::TooBright => &self.too_bright,
-            SkipReason::NoFaceDetected => &self.no_face_detected,
-            SkipReason::DownloadFailed => &self.download_failed,
-            SkipReason::DecodeFailed => &self.decode_failed,
-            SkipReason::CropFailed => &self.crop_failed,
-            SkipReason::Cancelled => return 0, // Don't count cancellation
-        };
-        counter.fetch_add(1, Ordering::SeqCst) + 1
+    /// Increment a counter for the given reason string.
+    ///
+    /// If the reason doesn't exist yet, it's created with an initial count of 1.
+    /// Returns the new count value.
+    pub fn increment(&self, reason: &str) -> u32 {
+        // First, try to get existing counter with read lock
+        {
+            let counts = self.counts.read().unwrap();
+            if let Some(counter) = counts.get(reason) {
+                return counter.fetch_add(1, Ordering::SeqCst) + 1;
+            }
+        }
+
+        // Counter doesn't exist, need write lock to create it
+        let mut counts = self.counts.write().unwrap();
+
+        // Double-check after acquiring write lock (another thread may have created it)
+        if let Some(counter) = counts.get(reason) {
+            return counter.fetch_add(1, Ordering::SeqCst) + 1;
+        }
+
+        // Create new counter starting at 1
+        let counter = Arc::new(AtomicU32::new(1));
+        counts.insert(reason.to_string(), counter);
+        1
     }
 
     /// Get a snapshot of the current stats as a non-atomic SkipStats.
     pub fn snapshot(&self) -> SkipStats {
-        SkipStats {
-            face_too_small: self.face_too_small.load(Ordering::SeqCst),
-            eyes_closed: self.eyes_closed.load(Ordering::SeqCst),
-            head_turned: self.head_turned.load(Ordering::SeqCst),
-            too_dark: self.too_dark.load(Ordering::SeqCst),
-            too_bright: self.too_bright.load(Ordering::SeqCst),
-            no_face_detected: self.no_face_detected.load(Ordering::SeqCst),
-            download_failed: self.download_failed.load(Ordering::SeqCst),
-            decode_failed: self.decode_failed.load(Ordering::SeqCst),
-            crop_failed: self.crop_failed.load(Ordering::SeqCst),
+        let counts = self.counts.read().unwrap();
+        let mut stats = SkipStats::new();
+        for (reason, counter) in counts.iter() {
+            stats.set(reason.clone(), counter.load(Ordering::SeqCst));
         }
+        stats
+    }
+
+    /// Reset all counters to zero.
+    pub fn reset(&self) {
+        let mut counts = self.counts.write().unwrap();
+        counts.clear();
     }
 }
 

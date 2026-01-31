@@ -3,20 +3,18 @@
 //! Handles the complete pipeline:
 //! 1. Fetching assets from Immich for a specific person
 //! 2. Downloading and processing images in parallel
-//! 3. Cropping faces using bounding boxes
+//! 3. Processing images through the extensible pipeline
 //! 4. Compiling processed images into a timelapse video
 
 use crate::config::Config;
 use crate::error::{Error, Result};
-use crate::face_processing::crop_face_with_intermediate;
-use crate::face_processing::debug::draw_crop_debug;
-use crate::face_processing::load_image_with_orientation;
-use crate::face_processing::{AssetResult, ProcessedFace, SkipReason};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
+use crate::pipeline::{Pipeline, PipelineContext, PipelineResult};
 use crate::utils::sanitize_folder_name;
 use crate::video::compile_timelapse;
 use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress, SkipStats};
 
+use bytes::Bytes;
 use image::ImageFormat;
 use std::io::Cursor;
 use std::path::PathBuf;
@@ -234,6 +232,10 @@ async fn run_job_inner(
         })
         .await;
 
+    // Create the processing pipeline
+    let pipeline = Arc::new(Pipeline::with_default_steps());
+    tracing::debug!("Pipeline steps: {:?}", pipeline.step_ids());
+
     // Process images in parallel with concurrency limit
     let completed = Arc::new(AtomicU32::new(0));
     let semaphore = Arc::new(Semaphore::new(config.processing.max_workers));
@@ -266,6 +268,7 @@ async fn run_job_inner(
         let completed = completed.clone();
         let state = state.clone();
         let task_cancel_token = cancel_token.clone();
+        let pipeline = pipeline.clone();
 
         // Clone skip stats for this task
         let skip_stats = skip_stats.clone();
@@ -278,10 +281,8 @@ async fn run_job_inner(
             // Check cancellation at start of task
             if task_cancel_token.is_cancelled() {
                 drop(permit);
-                return AssetResult::Skipped {
+                return AssetProcessResult::Cancelled {
                     asset_id: asset.id.clone(),
-                    reason: SkipReason::Cancelled,
-                    detail: None,
                 };
             }
 
@@ -292,13 +293,10 @@ async fn run_job_inner(
                 &face_data,
                 &output_dirs,
                 &task_cancel_token,
+                &skip_stats,
+                &pipeline,
             )
             .await;
-
-            // Update skip counters based on result
-            if let AssetResult::Skipped { reason, .. } = &result {
-                skip_stats.increment(reason);
-            }
 
             // Update progress with current skip stats (only if not cancelled)
             if !task_cancel_token.is_cancelled() {
@@ -346,11 +344,11 @@ async fn run_job_inner(
     // Count results
     let successful = results
         .iter()
-        .filter(|r| matches!(r, AssetResult::Success(_)))
+        .filter(|r| matches!(r, AssetProcessResult::Success { .. }))
         .count();
     let errors = results
         .iter()
-        .filter(|r| matches!(r, AssetResult::Error { .. }))
+        .filter(|r| matches!(r, AssetProcessResult::Error { .. }))
         .count();
     let skipped = final_skip_stats.total();
 
@@ -434,7 +432,23 @@ fn find_face_for_person(asset: &Asset, person_id: &str) -> Option<FaceData> {
     None
 }
 
-/// Process a single asset: download, crop face, save.
+/// Result of processing a single asset.
+///
+/// Fields are kept for debugging/logging purposes even if not currently read.
+#[derive(Debug)]
+#[allow(dead_code)]
+enum AssetProcessResult {
+    /// Successfully processed.
+    Success { asset_id: String },
+    /// Skipped for some reason.
+    Skipped { asset_id: String, reason: String },
+    /// Error during processing.
+    Error { asset_id: String, error: String },
+    /// Cancelled by user.
+    Cancelled { asset_id: String },
+}
+
+/// Process a single asset using the pipeline.
 async fn process_single_asset(
     client: &ImmichClient,
     config: &Config,
@@ -442,44 +456,10 @@ async fn process_single_asset(
     face_data: &FaceData,
     output_dirs: &OutputDirs,
     cancel_token: &CancellationToken,
-) -> AssetResult {
+    skip_stats: &Arc<AtomicSkipStats>,
+    pipeline: &Pipeline,
+) -> AssetProcessResult {
     let asset_id = &asset.id;
-
-    // Check face resolution (bounding box coordinates are already in pixels)
-    let face_width = face_data.bounding_box_x2 - face_data.bounding_box_x1;
-    let face_height = face_data.bounding_box_y2 - face_data.bounding_box_y1;
-    let face_size = face_width.min(face_height) as u32;
-
-    if face_size < config.processing.face_resolution_threshold {
-        return AssetResult::Skipped {
-            asset_id: asset_id.clone(),
-            reason: SkipReason::FaceTooSmall,
-            detail: Some(format!(
-                "{}px (threshold: {}px)",
-                face_size, config.processing.face_resolution_threshold
-            )),
-        };
-    }
-
-    // Check before download (potentially slow)
-    if cancel_token.is_cancelled() {
-        return AssetResult::Skipped {
-            asset_id: asset_id.clone(),
-            reason: SkipReason::Cancelled,
-            detail: None,
-        };
-    }
-
-    // Download image
-    let image_bytes = match client.download_asset(asset_id).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            return AssetResult::Error {
-                asset_id: asset_id.clone(),
-                error: format!("Download failed: {}", e),
-            };
-        }
-    };
 
     // Generate timestamp-based filename for sorting
     let timestamp = asset
@@ -489,99 +469,96 @@ async fn process_single_asset(
         .cloned()
         .unwrap_or_else(|| asset_id.clone());
 
-    // Sanitize timestamp for filename (replace colons and other invalid chars)
-    let safe_timestamp: String = timestamp
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
+    // Create pipeline context
+    let mut ctx = PipelineContext::new(
+        asset_id.clone(),
+        timestamp.clone(),
+        face_data.clone(),
+    );
 
-    let filename = format!("{}_{}.jpg", safe_timestamp, asset_id);
-
-    // Check after download, before CPU-intensive processing
+    // Check before download (potentially slow)
     if cancel_token.is_cancelled() {
-        return AssetResult::Skipped {
+        return AssetProcessResult::Cancelled {
             asset_id: asset_id.clone(),
-            reason: SkipReason::Cancelled,
-            detail: None,
         };
     }
 
-    // Decode image and apply EXIF orientation correction.
-    // This ensures bounding box coordinates from Immich align with the image pixels.
-    let img = match load_image_with_orientation(&image_bytes) {
-        Ok(img) => img,
+    // Download image
+    let image_bytes: Bytes = match client.download_asset(asset_id).await {
+        Ok(bytes) => bytes,
         Err(e) => {
-            return AssetResult::Error {
+            skip_stats.increment("download_failed");
+            return AssetProcessResult::Error {
                 asset_id: asset_id.clone(),
-                error: format!("Failed to decode image: {}", e),
+                error: format!("Download failed: {}", e),
             };
         }
     };
 
-    // Crop face
-    let (_cropped_full, final_image) =
-        match crop_face_with_intermediate(&img, face_data, config.processing.resize_size) {
-            Ok(result) => result,
-            Err(e) => {
-                return AssetResult::Error {
-                    asset_id: asset_id.clone(),
-                    error: format!("Failed to crop face: {}", e),
+    // Set raw bytes on context
+    ctx = ctx.with_bytes(image_bytes);
+
+    // Determine debug directory
+    let debug_dir = if config.processing.keep_intermediates {
+        output_dirs.debug.as_ref().and_then(|d| d.crop.as_ref().map(|p| p.parent().unwrap().to_path_buf()))
+    } else {
+        None
+    };
+
+    // Execute the pipeline
+    let result = pipeline.execute(
+        ctx,
+        config,
+        cancel_token,
+        skip_stats,
+        debug_dir.as_ref(),
+    ).await;
+
+    match result {
+        PipelineResult::Success { image, asset_id, timestamp, .. } => {
+            // Sanitize timestamp for filename
+            let safe_timestamp: String = timestamp
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() || c == '-' || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+
+            let filename = format!("{}_{}.jpg", safe_timestamp, asset_id);
+            let output_path = output_dirs.images.join(&filename);
+
+            // Encode and save final image
+            let mut buffer = Cursor::new(Vec::new());
+            if let Err(e) = image.write_to(&mut buffer, ImageFormat::Jpeg) {
+                return AssetProcessResult::Error {
+                    asset_id,
+                    error: format!("Failed to encode image: {}", e),
                 };
             }
-        };
 
-    // Save debug visualization if enabled
-    if let Some(ref debug) = output_dirs.debug {
-        if let Some(ref crop_dir) = debug.crop {
-            let debug_img = draw_crop_debug(&img, face_data);
-            let debug_path = crop_dir.join(&filename);
-            let mut buffer = Cursor::new(Vec::new());
-            if let Err(e) = debug_img.write_to(&mut buffer, ImageFormat::Jpeg) {
-                tracing::warn!("Failed to encode debug image: {}", e);
-            } else if let Err(e) = tokio::fs::write(&debug_path, buffer.into_inner()).await {
-                tracing::warn!("Failed to save debug image: {}", e);
+            if let Err(e) = tokio::fs::write(&output_path, buffer.into_inner()).await {
+                return AssetProcessResult::Error {
+                    asset_id,
+                    error: format!("Failed to save image: {}", e),
+                };
             }
+
+            AssetProcessResult::Success { asset_id }
+        }
+        PipelineResult::Skipped { asset_id, reason, .. } => {
+            AssetProcessResult::Skipped { asset_id, reason }
+        }
+        PipelineResult::Error { asset_id, error } => {
+            AssetProcessResult::Error { asset_id, error }
+        }
+        PipelineResult::Cancelled { asset_id } => {
+            AssetProcessResult::Cancelled { asset_id }
         }
     }
-
-    // Check before file I/O
-    if cancel_token.is_cancelled() {
-        return AssetResult::Skipped {
-            asset_id: asset_id.clone(),
-            reason: SkipReason::Cancelled,
-            detail: None,
-        };
-    }
-
-    let output_path = output_dirs.images.join(&filename);
-
-    // Encode and save final image
-    let mut buffer = Cursor::new(Vec::new());
-    if let Err(e) = final_image.write_to(&mut buffer, ImageFormat::Jpeg) {
-        return AssetResult::Error {
-            asset_id: asset_id.clone(),
-            error: format!("Failed to encode image: {}", e),
-        };
-    }
-
-    if let Err(e) = tokio::fs::write(&output_path, buffer.into_inner()).await {
-        return AssetResult::Error {
-            asset_id: asset_id.clone(),
-            error: format!("Failed to save image: {}", e),
-        };
-    }
-
-    AssetResult::Success(ProcessedFace {
-        image_data: Vec::new(), // We saved to file, so don't keep in memory
-        asset_id: asset_id.clone(),
-        timestamp,
-    })
 }
 
 #[cfg(test)]

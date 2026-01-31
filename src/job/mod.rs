@@ -15,7 +15,7 @@ use crate::face_processing::{AssetResult, ProcessedFace, SkipReason};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::utils::sanitize_folder_name;
 use crate::video::compile_timelapse;
-use crate::web::{AppState, JobStatus, Progress, SkipStats};
+use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress, SkipStats};
 
 use image::ImageFormat;
 use std::io::Cursor;
@@ -241,16 +241,8 @@ async fn run_job_inner(
     let config = Arc::new(config);
     let output_dirs = Arc::new(output_dirs);
 
-    // Atomic counters for real-time skip statistics
-    let skip_face_too_small = Arc::new(AtomicU32::new(0));
-    let skip_eyes_closed = Arc::new(AtomicU32::new(0));
-    let skip_head_turned = Arc::new(AtomicU32::new(0));
-    let skip_too_dark = Arc::new(AtomicU32::new(0));
-    let skip_too_bright = Arc::new(AtomicU32::new(0));
-    let skip_no_face = Arc::new(AtomicU32::new(0));
-    let skip_download_failed = Arc::new(AtomicU32::new(0));
-    let skip_decode_failed = Arc::new(AtomicU32::new(0));
-    let skip_crop_failed = Arc::new(AtomicU32::new(0));
+    // Atomic counters for real-time skip statistics (consolidated into single struct)
+    let skip_stats = Arc::new(AtomicSkipStats::new());
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
 
@@ -275,16 +267,8 @@ async fn run_job_inner(
         let state = state.clone();
         let task_cancel_token = cancel_token.clone();
 
-        // Clone skip counters for this task
-        let skip_face_too_small = skip_face_too_small.clone();
-        let skip_eyes_closed = skip_eyes_closed.clone();
-        let skip_head_turned = skip_head_turned.clone();
-        let skip_too_dark = skip_too_dark.clone();
-        let skip_too_bright = skip_too_bright.clone();
-        let skip_no_face = skip_no_face.clone();
-        let skip_download_failed = skip_download_failed.clone();
-        let skip_decode_failed = skip_decode_failed.clone();
-        let skip_crop_failed = skip_crop_failed.clone();
+        // Clone skip stats for this task
+        let skip_stats = skip_stats.clone();
 
         // Clone person info for this task
         let person_id = task_person_id.clone();
@@ -313,34 +297,13 @@ async fn run_job_inner(
 
             // Update skip counters based on result
             if let AssetResult::Skipped { reason, .. } = &result {
-                match reason {
-                    SkipReason::FaceTooSmall => skip_face_too_small.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::EyesClosed => skip_eyes_closed.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::HeadTurned => skip_head_turned.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::TooDark => skip_too_dark.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::TooBright => skip_too_bright.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::NoFaceDetected => skip_no_face.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::DownloadFailed => skip_download_failed.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::DecodeFailed => skip_decode_failed.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::CropFailed => skip_crop_failed.fetch_add(1, Ordering::SeqCst),
-                    SkipReason::Cancelled => 0, // Don't count cancellation
-                };
+                skip_stats.increment(reason);
             }
 
             // Update progress with current skip stats (only if not cancelled)
             if !task_cancel_token.is_cancelled() {
                 let done = completed.fetch_add(1, Ordering::SeqCst) + 1;
-                let current_skip_stats = SkipStats {
-                    face_too_small: skip_face_too_small.load(Ordering::SeqCst),
-                    eyes_closed: skip_eyes_closed.load(Ordering::SeqCst),
-                    head_turned: skip_head_turned.load(Ordering::SeqCst),
-                    too_dark: skip_too_dark.load(Ordering::SeqCst),
-                    too_bright: skip_too_bright.load(Ordering::SeqCst),
-                    no_face_detected: skip_no_face.load(Ordering::SeqCst),
-                    download_failed: skip_download_failed.load(Ordering::SeqCst),
-                    decode_failed: skip_decode_failed.load(Ordering::SeqCst),
-                    crop_failed: skip_crop_failed.load(Ordering::SeqCst),
-                };
+                let current_skip_stats = skip_stats.snapshot();
                 state
                     .update_progress(Progress {
                         status: JobStatus::Running,
@@ -378,17 +341,7 @@ async fn run_job_inner(
     }
 
     // Get final skip statistics from atomic counters
-    let skip_stats = SkipStats {
-        face_too_small: skip_face_too_small.load(Ordering::SeqCst),
-        eyes_closed: skip_eyes_closed.load(Ordering::SeqCst),
-        head_turned: skip_head_turned.load(Ordering::SeqCst),
-        too_dark: skip_too_dark.load(Ordering::SeqCst),
-        too_bright: skip_too_bright.load(Ordering::SeqCst),
-        no_face_detected: skip_no_face.load(Ordering::SeqCst),
-        download_failed: skip_download_failed.load(Ordering::SeqCst),
-        decode_failed: skip_decode_failed.load(Ordering::SeqCst),
-        crop_failed: skip_crop_failed.load(Ordering::SeqCst),
-    };
+    let final_skip_stats = skip_stats.snapshot();
 
     // Count results
     let successful = results
@@ -399,7 +352,7 @@ async fn run_job_inner(
         .iter()
         .filter(|r| matches!(r, AssetResult::Error { .. }))
         .count();
-    let skipped = skip_stats.total();
+    let skipped = final_skip_stats.total();
 
     tracing::info!(
         "Processing complete: {} successful, {} skipped, {} errors",
@@ -415,7 +368,7 @@ async fn run_job_inner(
             completed: total,
             total,
             message: Some("Processing complete, preparing video...".to_string()),
-            skip_stats: skip_stats.clone(),
+            skip_stats: final_skip_stats.clone(),
             person_id: Some(params.person_id.clone()),
             person_name: params.person_name.clone(),
         })
@@ -440,7 +393,7 @@ async fn run_job_inner(
                 completed: 0,
                 total: successful as u32,
                 message: Some("Compiling video...".to_string()),
-                skip_stats: skip_stats.clone(),
+                skip_stats: final_skip_stats.clone(),
                 person_id: Some(params.person_id.clone()),
                 person_name: params.person_name.clone(),
             })

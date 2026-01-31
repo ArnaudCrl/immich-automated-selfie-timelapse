@@ -1,13 +1,13 @@
 <script>
   import { onMount } from 'svelte';
 
-  let { disabled = false, onselect } = $props();
+  let { disabled = false, onselect, initialSelectedId = null } = $props();
 
   let people = $state([]);
   let loading = $state(true);
   let error = $state(null);
   let searchQuery = $state('');
-  let selectedId = $state(null);
+  let selectedId = $state(initialSelectedId);
 
   let filteredPeople = $derived(
     people.filter(p => {
@@ -24,6 +24,20 @@
       const res = await fetch('/api/people');
       if (!res.ok) throw new Error('Failed to load people');
       people = await res.json();
+
+      // If we have an initial selection, find and notify parent about the full person object
+      if (initialSelectedId && !selectedId) {
+        selectedId = initialSelectedId;
+      }
+      if (selectedId) {
+        const person = people.find(p => p.id === selectedId);
+        if (person) {
+          onselect?.(person);
+        } else {
+          // Person no longer exists, clear selection
+          selectedId = null;
+        }
+      }
     } catch (e) {
       error = e.message;
     } finally {

@@ -1,6 +1,7 @@
 //! Application state for the web server.
 
 use crate::config::Config;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -51,6 +52,64 @@ impl SkipStats {
             + self.download_failed
             + self.decode_failed
             + self.crop_failed
+    }
+}
+
+/// Atomic version of SkipStats for thread-safe concurrent updates.
+///
+/// This consolidates all skip counters into a single struct that can be
+/// shared across async tasks with Arc, avoiding the need to clone multiple
+/// individual atomic counters.
+#[derive(Debug, Default)]
+pub struct AtomicSkipStats {
+    pub face_too_small: AtomicU32,
+    pub eyes_closed: AtomicU32,
+    pub head_turned: AtomicU32,
+    pub too_dark: AtomicU32,
+    pub too_bright: AtomicU32,
+    pub no_face_detected: AtomicU32,
+    pub download_failed: AtomicU32,
+    pub decode_failed: AtomicU32,
+    pub crop_failed: AtomicU32,
+}
+
+impl AtomicSkipStats {
+    /// Create a new AtomicSkipStats with all counters at zero.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Increment a specific counter and return the new value.
+    pub fn increment(&self, reason: &crate::face_processing::SkipReason) -> u32 {
+        use crate::face_processing::SkipReason;
+        let counter = match reason {
+            SkipReason::FaceTooSmall => &self.face_too_small,
+            SkipReason::EyesClosed => &self.eyes_closed,
+            SkipReason::HeadTurned => &self.head_turned,
+            SkipReason::TooDark => &self.too_dark,
+            SkipReason::TooBright => &self.too_bright,
+            SkipReason::NoFaceDetected => &self.no_face_detected,
+            SkipReason::DownloadFailed => &self.download_failed,
+            SkipReason::DecodeFailed => &self.decode_failed,
+            SkipReason::CropFailed => &self.crop_failed,
+            SkipReason::Cancelled => return 0, // Don't count cancellation
+        };
+        counter.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// Get a snapshot of the current stats as a non-atomic SkipStats.
+    pub fn snapshot(&self) -> SkipStats {
+        SkipStats {
+            face_too_small: self.face_too_small.load(Ordering::SeqCst),
+            eyes_closed: self.eyes_closed.load(Ordering::SeqCst),
+            head_turned: self.head_turned.load(Ordering::SeqCst),
+            too_dark: self.too_dark.load(Ordering::SeqCst),
+            too_bright: self.too_bright.load(Ordering::SeqCst),
+            no_face_detected: self.no_face_detected.load(Ordering::SeqCst),
+            download_failed: self.download_failed.load(Ordering::SeqCst),
+            decode_failed: self.decode_failed.load(Ordering::SeqCst),
+            crop_failed: self.crop_failed.load(Ordering::SeqCst),
+        }
     }
 }
 

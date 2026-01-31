@@ -145,6 +145,25 @@ impl Default for VideoConfig {
     }
 }
 
+/// Persistable configuration (excludes sensitive API credentials).
+///
+/// This struct contains only the settings that can safely be written to disk.
+/// API credentials should always come from environment variables.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistableConfig {
+    pub processing: ProcessingConfig,
+    pub video: VideoConfig,
+}
+
+impl From<&Config> for PersistableConfig {
+    fn from(config: &Config) -> Self {
+        Self {
+            processing: config.processing.clone(),
+            video: config.video.clone(),
+        }
+    }
+}
+
 impl Config {
     /// Load configuration from a TOML file.
     pub fn from_file(path: impl AsRef<std::path::Path>) -> crate::error::Result<Self> {
@@ -242,6 +261,18 @@ impl Config {
         }
         Ok(())
     }
+
+    /// Save processing and video configuration to a TOML file.
+    ///
+    /// Only saves `processing` and `video` sections - API credentials are
+    /// intentionally excluded as they should come from environment variables.
+    pub fn save_to_file(&self, path: impl AsRef<std::path::Path>) -> crate::error::Result<()> {
+        let persistable = PersistableConfig::from(self);
+        let content = toml::to_string_pretty(&persistable)
+            .map_err(|e| crate::error::Error::Config(format!("Failed to serialize config: {}", e)))?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -261,5 +292,35 @@ mod tests {
         let config = Config::default();
         let result = config.validate();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_and_load_config() {
+        // Create a config with custom values
+        let mut config = Config::default();
+        config.processing.resize_size = 256;
+        config.processing.face_resolution_threshold = 100;
+        config.video.framerate = 30;
+        config.video.crf = 18;
+
+        // Save to a temp file
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join("test_config.toml");
+
+        config.save_to_file(&temp_path).expect("Failed to save config");
+
+        // Verify file was created and contains expected content
+        let content = std::fs::read_to_string(&temp_path).expect("Failed to read config");
+        assert!(content.contains("resize_size = 256"));
+        assert!(content.contains("face_resolution_threshold = 100"));
+        assert!(content.contains("framerate = 30"));
+        assert!(content.contains("crf = 18"));
+
+        // Verify API credentials are NOT in the file
+        assert!(!content.contains("api_key"));
+        assert!(!content.contains("base_url"));
+
+        // Clean up
+        let _ = std::fs::remove_file(&temp_path);
     }
 }

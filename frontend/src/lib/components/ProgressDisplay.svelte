@@ -30,36 +30,32 @@
   // Person being processed
   let personDisplay = $derived(progress.person_name || progress.person_id || null);
 
-  // Skip statistics from the backend
-  let skipStats = $derived(progress.skip_stats || {
-    face_too_small: 0,
-    eyes_closed: 0,
-    head_turned: 0,
-    too_dark: 0,
-    too_bright: 0,
-    no_face_detected: 0,
-    download_failed: 0,
-    decode_failed: 0,
-    crop_failed: 0,
-    total: 0,
-  });
+  // Convert snake_case to readable label (e.g., "face_too_small" -> "Face too small")
+  function formatLabel(key) {
+    return key
+      .split('_')
+      .map((word, i) => i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)
+      .join(' ');
+  }
+
+  // Skip statistics from the backend - dynamically handle any keys
+  let skipStats = $derived(progress.skip_stats || {});
+
+  // Calculate total from all numeric values in skip_stats
+  let skipTotal = $derived(
+    Object.values(skipStats).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0)
+  );
 
   // Calculate kept (successful) count: completed - skipped
-  let keptCount = $derived(Math.max(0, progress.completed - skipStats.total));
+  let keptCount = $derived(Math.max(0, progress.completed - skipTotal));
 
-  // Filter to only show non-zero skip reasons
+  // Dynamically build skip reasons from whatever the backend sends
+  // Filter to only show non-zero counts
   let skipReasons = $derived(
-    [
-      { label: 'Face too small', count: skipStats.face_too_small },
-      { label: 'Eyes closed', count: skipStats.eyes_closed },
-      { label: 'Head turned', count: skipStats.head_turned },
-      { label: 'Too dark', count: skipStats.too_dark },
-      { label: 'Too bright', count: skipStats.too_bright },
-      { label: 'No face detected', count: skipStats.no_face_detected },
-      { label: 'Download failed', count: skipStats.download_failed },
-      { label: 'Decode failed', count: skipStats.decode_failed },
-      { label: 'Crop failed', count: skipStats.crop_failed },
-    ].filter(r => r.count > 0)
+    Object.entries(skipStats)
+      .filter(([_, count]) => typeof count === 'number' && count > 0)
+      .map(([key, count]) => ({ label: formatLabel(key), count }))
+      .sort((a, b) => b.count - a.count) // Sort by count descending
   );
 
   async function cancelProcessing() {
@@ -104,7 +100,7 @@
       <div class="skip-header">
         <span class="skip-label">Discarded:Kept</span>
         <span class="skip-totals">
-          <span class="skipped-count">{skipStats.total}</span>
+          <span class="skipped-count">{skipTotal}</span>
           <span class="separator">:</span>
           <span class="kept-count">{keptCount}</span>
         </span>

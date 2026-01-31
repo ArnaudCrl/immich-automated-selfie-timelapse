@@ -9,8 +9,38 @@
   import ResultsView from './lib/components/ResultsView.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
 
+  // LocalStorage keys
+  const STORAGE_KEY_PERSON = 'immich-timelapse-selected-person';
+
+  // Load persisted state from localStorage
+  function loadPersistedPersonId() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_PERSON);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.id || null;
+      }
+    } catch (e) {
+      console.warn('Failed to load persisted person:', e);
+    }
+    return null;
+  }
+
+  function persistSelectedPerson(person) {
+    try {
+      if (person) {
+        localStorage.setItem(STORAGE_KEY_PERSON, JSON.stringify({ id: person.id, name: person.name }));
+      } else {
+        localStorage.removeItem(STORAGE_KEY_PERSON);
+      }
+    } catch (e) {
+      console.warn('Failed to persist person:', e);
+    }
+  }
+
   let connectionOk = $state(false);
   let selectedPerson = $state(null);
+  let initialSelectedPersonId = $state(loadPersistedPersonId());
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
   let pollInterval = $state(null);
@@ -93,6 +123,7 @@
 
   function handlePersonSelect(person) {
     selectedPerson = person;
+    persistSelectedPerson(person);
   }
 
   function handleJobUpdate(data) {
@@ -194,6 +225,7 @@
         <PeopleSelector
           onselect={handlePersonSelect}
           disabled={isJobRunning}
+          initialSelectedId={initialSelectedPersonId}
         />
 
         {#if selectedPerson && !isJobRunning}

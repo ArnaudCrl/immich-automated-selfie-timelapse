@@ -13,6 +13,7 @@ use crate::face_processing::debug::draw_crop_debug;
 use crate::face_processing::load_image_with_orientation;
 use crate::face_processing::{AssetResult, ProcessedFace, SkipReason};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
+use crate::utils::sanitize_folder_name;
 use crate::video::compile_timelapse;
 use crate::web::{AppState, JobStatus, Progress, SkipStats};
 
@@ -60,31 +61,6 @@ struct DebugDirs {
     /// Before/after alignment visualization (future: face alignment)
     #[allow(dead_code)]
     alignment: Option<PathBuf>,
-}
-
-/// Create a safe folder name from person name or ID.
-fn sanitize_folder_name(name: Option<&str>, id: &str) -> String {
-    let base = name.filter(|n| !n.is_empty()).unwrap_or(id);
-
-    // Replace unsafe characters with underscores
-    let sanitized: String = base
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-
-    // Trim whitespace and limit length
-    let trimmed = sanitized.trim();
-    if trimmed.len() > 50 {
-        trimmed[..50].to_string()
-    } else {
-        trimmed.to_string()
-    }
 }
 
 /// Run the complete processing pipeline.

@@ -32,6 +32,12 @@ pub enum Error {
     #[error("FFmpeg error: {0}")]
     FFmpeg(String),
 
+    #[error("ML model error: {0}")]
+    Model(String),
+
+    #[error("Landmark detection error: {0}")]
+    LandmarkDetection(String),
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 

@@ -23,14 +23,24 @@
         min_brightness: 0.1,
         max_brightness: 0.95,
       },
+      head_pose: {
+        enabled: true,
+        max_yaw: 35.0,
+        max_pitch: 35.0,
+        max_roll: 25.0,
+      },
+      eye_filter: {
+        enabled: false,
+        min_ear: 0.2,
+      },
       output: {
         size: 512,
         keep_intermediates: false,
       },
       alignment: {
-        enabled: false,
-        left_eye_pos: [0.35, 0.4],
-        right_eye_pos: [0.65, 0.4],
+        enabled: true,
+        eye_y_position: 0.35,
+        inter_eye_distance: 0.30,
       },
     },
     video: {
@@ -92,14 +102,24 @@
         min_brightness: 0.1,
         max_brightness: 0.95,
       },
+      head_pose: {
+        enabled: true,
+        max_yaw: 35.0,
+        max_pitch: 35.0,
+        max_roll: 25.0,
+      },
+      eye_filter: {
+        enabled: false,
+        min_ear: 0.2,
+      },
       output: {
         size: 512,
         keep_intermediates: false,
       },
       alignment: {
-        enabled: false,
-        left_eye_pos: [0.35, 0.4],
-        right_eye_pos: [0.65, 0.4],
+        enabled: true,
+        eye_y_position: 0.35,
+        inter_eye_distance: 0.30,
       },
     },
     video: {
@@ -244,6 +264,147 @@
                         step="0.05"
                       />
                       <span class="value">{config.processing.brightness.max_brightness.toFixed(2)}</span>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Head Pose Filter Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Head Pose Filter</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.head_pose.enabled}
+                  />
+                </div>
+
+                {#if config.processing.head_pose.enabled}
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Max Yaw</span>
+                      <span class="setting-hint">Maximum left/right turn angle</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.head_pose.max_yaw}
+                        min="5"
+                        max="90"
+                        step="5"
+                      />
+                      <span class="value">{config.processing.head_pose.max_yaw.toFixed(0)}°</span>
+                    </div>
+                  </div>
+
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Max Pitch</span>
+                      <span class="setting-hint">Maximum up/down tilt angle</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.head_pose.max_pitch}
+                        min="5"
+                        max="90"
+                        step="5"
+                      />
+                      <span class="value">{config.processing.head_pose.max_pitch.toFixed(0)}°</span>
+                    </div>
+                  </div>
+
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Max Roll</span>
+                      <span class="setting-hint">Maximum head tilt angle</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.head_pose.max_roll}
+                        min="5"
+                        max="90"
+                        step="5"
+                      />
+                      <span class="value">{config.processing.head_pose.max_roll.toFixed(0)}°</span>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Eye Filter Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Eye Filter (Blink Detection)</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.eye_filter.enabled}
+                  />
+                </div>
+
+                {#if config.processing.eye_filter.enabled}
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Min EAR</span>
+                      <span class="setting-hint">Eye Aspect Ratio threshold (lower = more closed)</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.eye_filter.min_ear}
+                        min="0.1"
+                        max="0.4"
+                        step="0.02"
+                      />
+                      <span class="value">{config.processing.eye_filter.min_ear.toFixed(2)}</span>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Alignment Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Face Alignment</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.alignment.enabled}
+                  />
+                </div>
+
+                {#if config.processing.alignment.enabled}
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Eye Y Position</span>
+                      <span class="setting-hint">Vertical position of eyes (% from top)</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.alignment.eye_y_position}
+                        min="0.2"
+                        max="0.5"
+                        step="0.01"
+                      />
+                      <span class="value">{(config.processing.alignment.eye_y_position * 100).toFixed(0)}%</span>
+                    </div>
+                  </div>
+
+                  <div class="setting-row sub-setting">
+                    <label>
+                      <span class="setting-label">Inter-eye Distance</span>
+                      <span class="setting-hint">Distance between eyes (% of width)</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        type="range"
+                        bind:value={config.processing.alignment.inter_eye_distance}
+                        min="0.2"
+                        max="0.5"
+                        step="0.01"
+                      />
+                      <span class="value">{(config.processing.alignment.inter_eye_distance * 100).toFixed(0)}%</span>
                     </div>
                   </div>
                 {/if}

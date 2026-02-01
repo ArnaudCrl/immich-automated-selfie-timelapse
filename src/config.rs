@@ -205,26 +205,141 @@ impl OutputConfig {
     }
 }
 
-/// Face alignment configuration (for future landmark-based alignment).
+/// Head pose estimation configuration.
+///
+/// Uses DMHead ONNX model to estimate head pose angles and filter
+/// non-front-facing faces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeadPoseConfig {
+    /// Whether head pose filtering is enabled.
+    pub enabled: bool,
+
+    /// Maximum allowed yaw angle (left/right turn) in degrees.
+    pub max_yaw: f32,
+
+    /// Maximum allowed pitch angle (up/down tilt) in degrees.
+    pub max_pitch: f32,
+
+    /// Maximum allowed roll angle (head tilt) in degrees.
+    pub max_roll: f32,
+}
+
+impl Default for HeadPoseConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_yaw: 35.0,
+            max_pitch: 35.0,
+            max_roll: 25.0,
+        }
+    }
+}
+
+impl HeadPoseConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled {
+            if self.max_yaw < 0.0 || self.max_yaw > 90.0 {
+                return Err(Error::Config(
+                    "Head pose max_yaw must be between 0 and 90 degrees".to_string(),
+                ));
+            }
+            if self.max_pitch < 0.0 || self.max_pitch > 90.0 {
+                return Err(Error::Config(
+                    "Head pose max_pitch must be between 0 and 90 degrees".to_string(),
+                ));
+            }
+            if self.max_roll < 0.0 || self.max_roll > 90.0 {
+                return Err(Error::Config(
+                    "Head pose max_roll must be between 0 and 90 degrees".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Eye filter configuration for blink detection.
+///
+/// Uses Eye Aspect Ratio (EAR) computed from facial landmarks to detect
+/// closed eyes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EyeFilterConfig {
+    /// Whether eye filtering is enabled.
+    pub enabled: bool,
+
+    /// Minimum Eye Aspect Ratio (EAR) threshold.
+    /// Eyes with EAR below this are considered closed.
+    pub min_ear: f32,
+}
+
+impl Default for EyeFilterConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            min_ear: 0.2,
+        }
+    }
+}
+
+impl EyeFilterConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled {
+            if self.min_ear < 0.0 || self.min_ear > 0.5 {
+                return Err(Error::Config(
+                    "Eye filter min_ear must be between 0.0 and 0.5".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Face alignment configuration for landmark-based alignment.
+///
+/// Aligns faces based on eye positions detected from facial landmarks,
+/// ensuring consistent eye placement across all images for smoother timelapses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlignmentConfig {
     /// Whether face alignment is enabled.
     pub enabled: bool,
 
-    /// Target position for left eye as (x%, y%) of output image.
-    pub left_eye_pos: (f32, f32),
+    /// Target Y position for eyes as percentage from top (0.0-1.0).
+    /// Default 0.35 places eyes at 35% from the top.
+    pub eye_y_position: f32,
 
-    /// Target position for right eye as (x%, y%) of output image.
-    pub right_eye_pos: (f32, f32),
+    /// Target inter-eye distance as percentage of output width (0.0-1.0).
+    /// Default 0.3 makes the distance between eye centers 30% of image width.
+    pub inter_eye_distance: f32,
 }
 
 impl Default for AlignmentConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            left_eye_pos: (0.35, 0.4),
-            right_eye_pos: (0.65, 0.4),
+            enabled: true,
+            eye_y_position: 0.35,
+            inter_eye_distance: 0.30,
         }
+    }
+}
+
+impl AlignmentConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled {
+            if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
+                return Err(Error::Config(
+                    "Alignment eye_y_position must be between 0.2 and 0.5".to_string(),
+                ));
+            }
+            if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
+                return Err(Error::Config(
+                    "Alignment inter_eye_distance must be between 0.2 and 0.5".to_string(),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -250,11 +365,19 @@ pub struct ProcessingConfig {
     #[serde(default)]
     pub brightness: BrightnessConfig,
 
+    /// Head pose estimation settings.
+    #[serde(default)]
+    pub head_pose: HeadPoseConfig,
+
+    /// Eye filter settings (blink detection).
+    #[serde(default)]
+    pub eye_filter: EyeFilterConfig,
+
     /// Output image settings.
     #[serde(default)]
     pub output: OutputConfig,
 
-    /// Face alignment settings (requires landmarks - future feature).
+    /// Face alignment settings (landmark-based).
     #[serde(default)]
     pub alignment: AlignmentConfig,
 }
@@ -265,6 +388,8 @@ impl Default for ProcessingConfig {
             max_workers: num_cpus(),
             face_resolution: FaceResolutionConfig::default(),
             brightness: BrightnessConfig::default(),
+            head_pose: HeadPoseConfig::default(),
+            eye_filter: EyeFilterConfig::default(),
             output: OutputConfig::default(),
             alignment: AlignmentConfig::default(),
         }
@@ -276,7 +401,10 @@ impl ProcessingConfig {
     pub fn validate(&self) -> Result<()> {
         self.face_resolution.validate()?;
         self.brightness.validate()?;
+        self.head_pose.validate()?;
+        self.eye_filter.validate()?;
         self.output.validate()?;
+        self.alignment.validate()?;
         Ok(())
     }
 }

@@ -6,7 +6,7 @@
 mod crop;
 pub mod debug;
 mod orientation;
-mod types;
+pub mod types;
 
 pub use crop::*;
 pub use orientation::load_image_with_orientation;

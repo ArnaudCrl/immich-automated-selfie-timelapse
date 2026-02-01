@@ -101,6 +101,64 @@ impl Landmarks {
     pub fn right_mouth(&self) -> Point {
         self.points[54]
     }
+
+    /// Calculate Eye Aspect Ratio (EAR) for blink detection.
+    ///
+    /// EAR is computed as:
+    /// EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||)
+    ///
+    /// Where p1-p6 are the 6 eye landmark points.
+    /// For left eye: points 36-41
+    /// For right eye: points 42-47
+    pub fn eye_aspect_ratio(&self) -> EyeAspectRatio {
+        let left_ear = Self::compute_ear(&self.points[36..42]);
+        let right_ear = Self::compute_ear(&self.points[42..48]);
+        EyeAspectRatio {
+            left: left_ear,
+            right: right_ear,
+        }
+    }
+
+    /// Compute EAR for a single eye given 6 landmark points.
+    fn compute_ear(eye: &[Point]) -> f32 {
+        if eye.len() != 6 {
+            return 0.0;
+        }
+
+        // Vertical distances
+        let v1 = Self::distance(&eye[1], &eye[5]); // p2-p6
+        let v2 = Self::distance(&eye[2], &eye[4]); // p3-p5
+
+        // Horizontal distance
+        let h = Self::distance(&eye[0], &eye[3]); // p1-p4
+
+        if h == 0.0 {
+            return 0.0;
+        }
+
+        (v1 + v2) / (2.0 * h)
+    }
+
+    /// Euclidean distance between two points.
+    fn distance(p1: &Point, p2: &Point) -> f32 {
+        let dx = p2.x - p1.x;
+        let dy = p2.y - p1.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    /// Get the angle (in radians) to rotate the face so eyes are horizontal.
+    pub fn eye_rotation_angle(&self) -> f32 {
+        let left_eye = self.left_eye_center();
+        let right_eye = self.right_eye_center();
+        let dy = right_eye.y - left_eye.y;
+        let dx = right_eye.x - left_eye.x;
+        dy.atan2(dx)
+    }
+
+    /// Get the distance between eye centers.
+    pub fn inter_eye_distance(&self) -> f32 {
+        Self::distance(&self.left_eye_center(), &self.right_eye_center())
+    }
 }
 
 /// Head pose angles.

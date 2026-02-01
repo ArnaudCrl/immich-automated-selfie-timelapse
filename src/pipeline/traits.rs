@@ -4,6 +4,7 @@
 //! extensible image processing pipelines.
 
 use crate::config::Config;
+use crate::face_processing::types::{HeadPose, Landmarks};
 use crate::immich_api::FaceData;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -33,6 +34,10 @@ pub enum ComputedValue {
     Bool(bool),
     /// A string value.
     String(String),
+    /// Head pose estimation result (yaw, pitch, roll).
+    HeadPose(HeadPose),
+    /// Facial landmarks (68 points).
+    Landmarks(Box<Landmarks>),
 }
 
 impl ComputedValue {
@@ -64,6 +69,22 @@ impl ComputedValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             ComputedValue::String(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Get as HeadPose if this is a HeadPose variant.
+    pub fn as_head_pose(&self) -> Option<&HeadPose> {
+        match self {
+            ComputedValue::HeadPose(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Get as Landmarks if this is a Landmarks variant.
+    pub fn as_landmarks(&self) -> Option<&Landmarks> {
+        match self {
+            ComputedValue::Landmarks(v) => Some(v),
             _ => None,
         }
     }

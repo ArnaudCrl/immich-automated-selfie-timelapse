@@ -83,6 +83,16 @@ impl Pipeline {
     }
 
     /// Create the default processing pipeline with standard steps.
+    ///
+    /// Pipeline order:
+    /// 1. FaceResolutionStep - Validate face size from Immich metadata
+    /// 2. DecodeImageStep - Load and orient the image
+    /// 3. BrightnessStep - Filter by luminance
+    /// 4. CropFaceStep - Extract face region with padding
+    /// 5. HeadPoseStep - Filter non-frontal faces (DMHead)
+    /// 6. LandmarksStep - Detect 68 facial landmarks (dlib)
+    /// 7. AlignmentStep - Align face based on eye positions
+    /// 8. ResizeStep - Final resize to output size
     pub fn with_default_steps() -> Self {
         use steps::*;
 
@@ -91,6 +101,9 @@ impl Pipeline {
         pipeline.add_step(Box::new(DecodeImageStep));
         pipeline.add_step(Box::new(BrightnessStep));
         pipeline.add_step(Box::new(CropFaceStep));
+        pipeline.add_step(Box::new(HeadPoseStep));
+        pipeline.add_step(Box::new(LandmarksStep));
+        pipeline.add_step(Box::new(AlignmentStep));
         pipeline.add_step(Box::new(ResizeStep));
         pipeline
     }
@@ -233,6 +246,9 @@ mod tests {
         assert!(ids.contains(&"decode"));
         assert!(ids.contains(&"brightness"));
         assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"head_pose"));
+        assert!(ids.contains(&"landmarks"));
+        assert!(ids.contains(&"alignment"));
         assert!(ids.contains(&"resize"));
     }
 }

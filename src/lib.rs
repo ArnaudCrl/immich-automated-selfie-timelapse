@@ -10,6 +10,7 @@ pub mod error;
 pub mod face_processing;
 pub mod immich_api;
 pub mod job;
+pub mod models;
 pub mod pipeline;
 pub mod utils;
 pub mod video;

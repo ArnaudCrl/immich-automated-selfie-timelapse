@@ -10,8 +10,8 @@
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
 
   // Configuration constants
-  const POLL_INTERVAL_MS = 500; // Progress polling interval during job execution
   const STORAGE_KEY_PERSON = 'immich-timelapse-selected-person';
+  const WS_RECONNECT_DELAY_MS = 1000; // WebSocket reconnection delay
 
   // Load persisted state from localStorage
   function loadPersistedPersonId() {
@@ -44,7 +44,8 @@
   let initialSelectedPersonId = $state(loadPersistedPersonId());
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
-  let pollInterval = $state(null);
+  let ws = $state(null);
+  let wsReconnectTimeout = $state(null);
 
   // View state management for gallery
   let currentView = $state('main'); // 'main' | 'gallery'
@@ -130,66 +131,82 @@
   function handleJobUpdate(data) {
     jobStatus = data.status;
     progress = data;
-
-    // Start polling if job just started
-    if (data.status === 'running' || data.status === 'compiling_video') {
-      startPolling();
-    }
   }
 
   async function checkAndPollProgress() {
-    try {
-      const res = await fetch('/api/progress');
-      const data = await res.json();
-
-      // Only restore status if a job is actively running, or if we're not in idle state.
-      // This prevents restoring 'completed' status after we've manually dismissed it.
-      const isActiveJob = data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling';
-      if (isActiveJob || jobStatus !== 'idle') {
-        jobStatus = data.status;
-        progress = data;
-      }
-
-      // If a job is running, start polling
-      if (isActiveJob) {
-        startPolling();
-      }
-    } catch (e) {
-      console.error('Failed to check progress:', e);
-    }
+    // Connect WebSocket if not already connected
+    connectWebSocket();
   }
 
-  async function pollProgress() {
-    try {
-      const res = await fetch('/api/progress');
-      const data = await res.json();
+  function connectWebSocket() {
+    if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+      return; // Already connected or connecting
+    }
 
-      const previousStatus = jobStatus;
-      jobStatus = data.status;
-      progress = data;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
 
-      // Stop polling when job completes
-      if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error' || data.status === 'idle') {
-        stopPolling();
-        // Refresh output folders when job finishes (was running before)
-        if (previousStatus === 'running' || previousStatus === 'compiling_video' || previousStatus === 'cancelling') {
-          outputFolderRefreshKey++;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const previousStatus = jobStatus;
+
+        // Only restore status if a job is actively running, or if we're not in idle state
+        const isActiveJob = data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling';
+        if (isActiveJob || jobStatus !== 'idle') {
+          jobStatus = data.status;
+          progress = data;
         }
+
+        // Refresh output folders when job finishes (was running before)
+        if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error') {
+          if (previousStatus === 'running' || previousStatus === 'compiling_video' || previousStatus === 'cancelling') {
+            outputFolderRefreshKey++;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
       }
-    } catch (e) {
-      console.error('Poll failed:', e);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      ws = null;
+      // Reconnect if connection was established (connectionOk is true)
+      if (connectionOk) {
+        scheduleReconnect();
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  }
+
+  function scheduleReconnect() {
+    if (wsReconnectTimeout) return; // Already scheduled
+    wsReconnectTimeout = setTimeout(() => {
+      wsReconnectTimeout = null;
+      if (connectionOk) {
+        connectWebSocket();
+      }
+    }, WS_RECONNECT_DELAY_MS);
+  }
+
+  function disconnectWebSocket() {
+    if (wsReconnectTimeout) {
+      clearTimeout(wsReconnectTimeout);
+      wsReconnectTimeout = null;
     }
-  }
-
-  function startPolling() {
-    if (pollInterval) return; // Already polling
-    pollInterval = setInterval(pollProgress, POLL_INTERVAL_MS);
-  }
-
-  function stopPolling() {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
+    if (ws) {
+      ws.close();
+      ws = null;
     }
   }
 
@@ -198,7 +215,7 @@
   });
 
   onDestroy(() => {
-    stopPolling();
+    disconnectWebSocket();
   });
 </script>
 

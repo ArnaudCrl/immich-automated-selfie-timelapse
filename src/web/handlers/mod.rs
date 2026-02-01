@@ -12,6 +12,7 @@ mod health;
 mod output;
 mod people;
 mod processing;
+mod ws;
 
 use crate::web::state::AppState;
 use axum::{
@@ -34,6 +35,7 @@ use output::{
 };
 use people::{get_people, get_person_asset_count, get_person_thumbnail};
 use processing::{cancel_processing, get_progress, start_processing};
+use ws::ws_handler;
 
 // Re-export types that may be needed by other modules
 pub use config::ConfigResponse;
@@ -72,6 +74,7 @@ pub fn create_router(state: AppState) -> Router {
             get(get_person_asset_count),
         )
         .route("/api/progress", get(get_progress))
+        .route("/api/ws", get(ws_handler))
         .route("/api/start", post(start_processing))
         .route("/api/cancel", post(cancel_processing))
         .route("/api/output", get(list_output_folders))

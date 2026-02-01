@@ -71,7 +71,7 @@
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Notify parent to start polling
+        // Notify parent of job start
         onupdate?.({
           status: 'running',
           completed: 0,

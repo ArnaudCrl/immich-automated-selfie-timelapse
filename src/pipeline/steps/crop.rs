@@ -5,7 +5,7 @@
 use crate::config::Config;
 use crate::face_processing::crop_face_with_intermediate;
 use crate::face_processing::debug::draw_crop_debug;
-use crate::pipeline::{PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use image::DynamicImage;
 
@@ -33,15 +33,18 @@ impl ProcessingStep for CropFaceStep {
             }
         };
 
-        // Crop returns (full_res_crop, resized). We want the full_res_crop here
-        // and let the resize step handle the final sizing.
+        // Crop returns CropResult with cropped images and face rectangle in crop coordinates.
+        // We use the full_res_crop here and let the resize step handle the final sizing.
         match crop_face_with_intermediate(image, &ctx.face_data, config.processing.output.size) {
-            Ok((cropped_full, _resized)) => {
+            Ok(crop_result) => {
                 // Use the full-resolution cropped image; resize step will handle final size
-                ctx.image = Some(cropped_full);
+                ctx.image = Some(crop_result.cropped);
+                // Store the face rectangle in crop coordinates for later steps
+                ctx.set_computed("face_rect", ComputedValue::FaceRect(crop_result.face_rect));
                 StepOutcome::Continue(ctx)
             }
             Err(e) => StepOutcome::Skip {
+                ctx,
                 reason: "crop_failed".to_string(),
                 detail: Some(e.to_string()),
             },

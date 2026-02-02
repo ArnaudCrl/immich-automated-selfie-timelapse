@@ -2,7 +2,7 @@
 //!
 //! Web server for creating selfie timelapses from Immich.
 
-use immich_timelapse::{config::Config, web};
+use immich_timelapse::{config::Config, models::DlibLandmarks, web};
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -33,6 +33,12 @@ async fn main() -> anyhow::Result<()> {
     match immich_timelapse::video::check_ffmpeg().await {
         Ok(version) => tracing::info!("FFmpeg available: {}", version),
         Err(e) => tracing::warn!("FFmpeg not available: {} - video compilation will fail", e),
+    }
+
+    // Pre-load ML models to avoid loading during processing
+    match DlibLandmarks::init() {
+        Ok(_) => tracing::info!("Dlib landmarks model loaded"),
+        Err(e) => tracing::warn!("Dlib landmarks model not available: {} - landmark detection will be skipped", e),
     }
 
     // Create application state

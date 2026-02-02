@@ -38,13 +38,15 @@ pub enum PipelineResult {
         /// Timestamp for file naming.
         timestamp: String,
         /// Debug images if keep_intermediates was enabled.
-        debug_images: Vec<(String, DynamicImage)>,
+        debug_images: Vec<(String, DebugImage)>,
     },
     /// Image was skipped.
     Skipped {
         asset_id: String,
         reason: String,
         detail: Option<String>,
+        /// Debug images generated up to (and including) the failing step.
+        debug_images: Vec<(String, DebugImage)>,
     },
     /// Processing error.
     Error {
@@ -145,16 +147,23 @@ impl Pipeline {
                 StepOutcome::Continue(new_ctx) => {
                     ctx = new_ctx;
 
-                    // Generate debug visualization if enabled
+                    // Generate debug visualization if enabled (step passed)
                     if config.processing.output.keep_intermediates {
                         if let Some(debug_img) = step.debug_visualize(&ctx) {
-                            ctx.add_debug_image(step.id(), debug_img);
+                            ctx.add_debug_image(step.id(), debug_img, true);
                         }
                     }
                 }
-                StepOutcome::Skip { reason, detail } => {
+                StepOutcome::Skip { mut ctx, reason, detail } => {
                     // Update skip stats with the step ID as reason
                     skip_stats.increment(&reason);
+
+                    // Generate debug visualization for the failing step if enabled
+                    if config.processing.output.keep_intermediates {
+                        if let Some(debug_img) = step.debug_visualize(&ctx) {
+                            ctx.add_debug_image(step.id(), debug_img, false);
+                        }
+                    }
 
                     tracing::debug!(
                         "Asset {} skipped at step '{}': {} ({})",
@@ -164,10 +173,18 @@ impl Pipeline {
                         detail.as_deref().unwrap_or("no detail")
                     );
 
+                    // Collect and save debug images before returning
+                    let debug_images: Vec<(String, DebugImage)> = ctx.debug_images.into_iter().collect();
+
+                    if let Some(debug_base) = debug_dir {
+                        save_debug_images(debug_base, &debug_images, &timestamp, &asset_id).await;
+                    }
+
                     return PipelineResult::Skipped {
                         asset_id,
                         reason,
                         detail,
+                        debug_images,
                     };
                 }
                 StepOutcome::Error(error) => {
@@ -194,34 +211,12 @@ impl Pipeline {
             }
         };
 
+        // Collect debug images
+        let debug_images: Vec<(String, DebugImage)> = ctx.debug_images.into_iter().collect();
+
         // Save debug images if enabled
-        let debug_images: Vec<(String, DynamicImage)> = ctx.debug_images.into_iter().collect();
-
         if let Some(debug_base) = debug_dir {
-            for (step_id, debug_img) in &debug_images {
-                let step_dir = debug_base.join(step_id);
-                if let Err(e) = tokio::fs::create_dir_all(&step_dir).await {
-                    tracing::warn!("Failed to create debug dir {}: {}", step_dir.display(), e);
-                    continue;
-                }
-
-                let filename = format!("{}_{}.jpg", timestamp, asset_id)
-                    .chars()
-                    .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
-                    .collect::<String>();
-
-                let debug_path = step_dir.join(&filename);
-                let mut buffer = Cursor::new(Vec::new());
-
-                if let Err(e) = debug_img.write_to(&mut buffer, ImageFormat::Jpeg) {
-                    tracing::warn!("Failed to encode debug image: {}", e);
-                    continue;
-                }
-
-                if let Err(e) = tokio::fs::write(&debug_path, buffer.into_inner()).await {
-                    tracing::warn!("Failed to save debug image: {}", e);
-                }
-            }
+            save_debug_images(debug_base, &debug_images, &timestamp, &asset_id).await;
         }
 
         PipelineResult::Success {
@@ -229,6 +224,48 @@ impl Pipeline {
             asset_id,
             timestamp,
             debug_images,
+        }
+    }
+}
+
+/// Save debug images to disk with passed/failed subdirectories.
+///
+/// Creates directory structure:
+/// ```text
+/// debug/{step_id}/passed/{filename}.jpg
+/// debug/{step_id}/failed/{filename}.jpg
+/// ```
+async fn save_debug_images(
+    debug_base: &PathBuf,
+    debug_images: &[(String, DebugImage)],
+    timestamp: &str,
+    asset_id: &str,
+) {
+    for (step_id, debug_img) in debug_images {
+        // Determine subdirectory based on pass/fail status
+        let status_dir = if debug_img.passed { "passed" } else { "failed" };
+        let step_dir = debug_base.join(step_id).join(status_dir);
+
+        if let Err(e) = tokio::fs::create_dir_all(&step_dir).await {
+            tracing::warn!("Failed to create debug dir {}: {}", step_dir.display(), e);
+            continue;
+        }
+
+        let filename = format!("{}_{}.jpg", timestamp, asset_id)
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
+            .collect::<String>();
+
+        let debug_path = step_dir.join(&filename);
+        let mut buffer = Cursor::new(Vec::new());
+
+        if let Err(e) = debug_img.image.write_to(&mut buffer, ImageFormat::Jpeg) {
+            tracing::warn!("Failed to encode debug image: {}", e);
+            continue;
+        }
+
+        if let Err(e) = tokio::fs::write(&debug_path, buffer.into_inner()).await {
+            tracing::warn!("Failed to save debug image: {}", e);
         }
     }
 }

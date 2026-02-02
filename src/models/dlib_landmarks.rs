@@ -51,12 +51,25 @@ impl DlibLandmarks {
             .map_err(|e| Error::Model(e.to_string()))
     }
 
+    /// Eagerly initialize the model at startup.
+    ///
+    /// Call this during server startup to load the model before processing begins.
+    /// This ensures any model loading messages appear during startup rather than
+    /// during image processing.
+    pub fn init() -> Result<()> {
+        Self::global()?;
+        Ok(())
+    }
+
     /// Detect 68 facial landmarks from a cropped face image.
     ///
     /// # Arguments
     /// * `width` - Image width
     /// * `height` - Image height
     /// * `pixels` - Raw RGB pixel data (width * height * 3 bytes)
+    /// * `face_rect` - Optional face bounding box (x1, y1, x2, y2) in image coordinates.
+    ///                 If provided, uses this rectangle for landmark detection.
+    ///                 If None, attempts to detect the face or uses the whole image.
     ///
     /// # Returns
     /// Landmarks struct containing the 68 facial landmark points, or an error
@@ -66,6 +79,7 @@ impl DlibLandmarks {
         width: usize,
         height: usize,
         pixels: &[u8],
+        face_rect: Option<(i64, i64, i64, i64)>,
     ) -> Result<Landmarks> {
         // Create image matrix for dlib
         let matrix = unsafe { ImageMatrix::new(width, height, pixels.as_ptr()) };
@@ -80,23 +94,30 @@ impl DlibLandmarks {
             .lock()
             .map_err(|e| Error::Model(format!("Failed to lock predictor: {}", e)))?;
 
-        // Since we have a cropped face, create a rectangle covering the whole image
-        let margin = 5;
-        let face_rect = Rectangle {
-            left: margin,
-            top: margin,
-            right: (width as i64) - margin,
-            bottom: (height as i64) - margin,
-        };
-
-        // Try to detect face in the cropped image first
-        let faces = detector.face_locations(&matrix);
-
-        // Use detected face if found, otherwise use the whole-image rectangle
-        let rect = if !faces.is_empty() {
-            faces[0].clone()
+        // Determine the face rectangle to use
+        let rect = if let Some((x1, y1, x2, y2)) = face_rect {
+            // Use the provided face rectangle
+            Rectangle {
+                left: x1.max(0),
+                top: y1.max(0),
+                right: x2.min(width as i64),
+                bottom: y2.min(height as i64),
+            }
         } else {
-            face_rect
+            // No face rect provided - try to detect or use whole image
+            let faces = detector.face_locations(&matrix);
+            if !faces.is_empty() {
+                faces[0].clone()
+            } else {
+                // Fallback: use whole image with small margin
+                let margin = 5;
+                Rectangle {
+                    left: margin,
+                    top: margin,
+                    right: (width as i64) - margin,
+                    bottom: (height as i64) - margin,
+                }
+            }
         };
 
         // Detect landmarks

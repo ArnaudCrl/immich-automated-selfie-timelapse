@@ -44,6 +44,7 @@ impl ProcessingStep for FaceResolutionStep {
 
         if face_size < threshold {
             return StepOutcome::Skip {
+                ctx,
                 reason: "face_too_small".to_string(),
                 detail: Some(format!("{}px (threshold: {}px)", face_size, threshold)),
             };
@@ -77,7 +78,7 @@ mod tests {
         let config = Config::default(); // threshold is 80px
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Skip { reason, detail } => {
+            StepOutcome::Skip { reason, detail, .. } => {
                 assert_eq!(reason, "face_too_small");
                 assert!(detail.unwrap().contains("50px"));
             }

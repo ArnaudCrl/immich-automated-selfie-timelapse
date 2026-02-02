@@ -40,6 +40,7 @@ impl ProcessingStep for DecodeImageStep {
                 StepOutcome::Continue(ctx)
             }
             Err(e) => StepOutcome::Skip {
+                ctx,
                 reason: "decode_failed".to_string(),
                 detail: Some(e.to_string()),
             },

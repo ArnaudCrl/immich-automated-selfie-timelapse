@@ -54,6 +54,7 @@ impl ProcessingStep for LandmarksStep {
                 // If model isn't available, skip this step with a warning
                 tracing::warn!("Dlib landmarks model not available: {}", e);
                 return StepOutcome::Skip {
+                    ctx,
                     reason: "landmarks_failed".to_string(),
                     detail: Some(e.to_string()),
                 };
@@ -65,9 +66,15 @@ impl ProcessingStep for LandmarksStep {
         let (width, height) = (rgb.width() as usize, rgb.height() as usize);
         let pixels = rgb.into_raw();
 
+        // Get the face rectangle if available
+        let face_rect: Option<(i64, i64, i64, i64)> = ctx
+            .get_computed("face_rect")
+            .and_then(|v| v.as_face_rect())
+            .map(|r| (r.x1 as i64, r.y1 as i64, r.x2 as i64, r.y2 as i64));
+
         // Run dlib operations in a blocking thread to avoid dropping in async context
         let landmarks_result = task::spawn_blocking(move || -> Result<Landmarks, String> {
-            dlib.detect_landmarks(width, height, &pixels)
+            dlib.detect_landmarks(width, height, &pixels, face_rect)
                 .map_err(|e| e.to_string())
         })
         .await;
@@ -76,6 +83,7 @@ impl ProcessingStep for LandmarksStep {
             Ok(Ok(l)) => l,
             Ok(Err(e)) => {
                 return StepOutcome::Skip {
+                    ctx,
                     reason: "landmarks_failed".to_string(),
                     detail: Some(e),
                 };
@@ -98,6 +106,7 @@ impl ProcessingStep for LandmarksStep {
             let min_ear = config.processing.eye_filter.min_ear;
             if avg_ear < min_ear {
                 return StepOutcome::Skip {
+                    ctx,
                     reason: "eyes_closed".to_string(),
                     detail: Some(format!("EAR {:.3} below threshold {:.3}", avg_ear, min_ear)),
                 };
@@ -171,15 +180,20 @@ fn draw_cross(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     let (width, height) = (img.width(), img.height());
     let size = 2;
 
+    // Check base coordinates are in bounds
+    if x >= width || y >= height {
+        return;
+    }
+
     for dx in 0..=size * 2 {
         let px = (x as i32 + dx as i32 - size as i32) as u32;
-        if px < width {
+        if px < width && y < height {
             img.put_pixel(px, y, color);
         }
     }
     for dy in 0..=size * 2 {
         let py = (y as i32 + dy as i32 - size as i32) as u32;
-        if py < height {
+        if x < width && py < height {
             img.put_pixel(x, py, color);
         }
     }

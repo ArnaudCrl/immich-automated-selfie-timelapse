@@ -95,10 +95,11 @@ impl DMHeadModel {
         for y in 0..height {
             for x in 0..width {
                 let pixel = rgb.get_pixel(x, y);
-                // Normalize from [0, 255] to [0, 1]
-                input_data[[0, 0, y as usize, x as usize]] = pixel[0] as f32 / 255.0; // R
-                input_data[[0, 1, y as usize, x as usize]] = pixel[1] as f32 / 255.0; // G
-                input_data[[0, 2, y as usize, x as usize]] = pixel[2] as f32 / 255.0; // B
+                // No normalization - DMHead expects raw [0, 255] pixel values as floats
+                // See: https://github.com/PINTO0309/DMHead/blob/main/demo_video.py
+                input_data[[0, 0, y as usize, x as usize]] = pixel[0] as f32; // R
+                input_data[[0, 1, y as usize, x as usize]] = pixel[1] as f32; // G
+                input_data[[0, 2, y as usize, x as usize]] = pixel[2] as f32; // B
             }
         }
 
@@ -157,10 +158,11 @@ impl DMHeadModel {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_input_normalization() {
-        // Test that normalization is correct
-        assert_eq!((0.0_f32 / 127.5) - 1.0, -1.0); // Black -> -1
-        assert_eq!((255.0_f32 / 127.5) - 1.0, 1.0); // White -> 1 (approx)
-        assert!((127.0_f32 / 127.5 - 1.0).abs() < 0.01); // Mid-gray -> ~0
+    fn test_input_format() {
+        // DMHead expects raw [0, 255] pixel values as floats, no normalization
+        // See: https://github.com/PINTO0309/DMHead/blob/main/demo_video.py
+        assert_eq!(0_u8 as f32, 0.0);
+        assert_eq!(255_u8 as f32, 255.0);
+        assert_eq!(128_u8 as f32, 128.0);
     }
 }

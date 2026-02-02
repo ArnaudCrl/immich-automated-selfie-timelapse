@@ -3,12 +3,23 @@
 //! Extracts and resizes face regions from images using bounding box data.
 
 use crate::error::{Error, Result};
+use crate::face_processing::types::BoundingBox;
 use crate::immich_api::FaceData;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 
+/// Result of cropping a face from an image.
+pub struct CropResult {
+    /// The cropped image at full resolution.
+    pub cropped: DynamicImage,
+    /// The cropped image resized to output size.
+    pub resized: DynamicImage,
+    /// The face bounding box in crop coordinates.
+    pub face_rect: BoundingBox,
+}
+
 /// Crop and resize the face from an image using bounding box.
-/// Returns (cropped_full_res, resized_final) for intermediate saving.
+/// Returns CropResult containing cropped images and face rectangle in crop coordinates.
 ///
 /// This is a simplified version that just uses the bounding box.
 /// A full implementation would use facial landmarks for alignment.
@@ -16,7 +27,7 @@ pub fn crop_face_with_intermediate(
     img: &DynamicImage,
     face_data: &FaceData,
     output_size: u32,
-) -> Result<(DynamicImage, DynamicImage)> {
+) -> Result<CropResult> {
     let (img_width, img_height) = img.dimensions();
 
     // Scale bounding box from metadata dimensions to actual image dimensions.
@@ -70,5 +81,18 @@ pub fn crop_face_with_intermediate(
     // Resize to output size
     let resized = cropped.resize_exact(output_size, output_size, FilterType::Lanczos3);
 
-    Ok((cropped, resized))
+    // Calculate the face bounding box in crop coordinates
+    // These are the original face coordinates relative to the crop origin
+    let face_rect = BoundingBox {
+        x1: x1.saturating_sub(crop_x1) as f32,
+        y1: y1.saturating_sub(crop_y1) as f32,
+        x2: x2.saturating_sub(crop_x1).min(actual_crop_size) as f32,
+        y2: y2.saturating_sub(crop_y1).min(actual_crop_size) as f32,
+    };
+
+    Ok(CropResult {
+        cropped,
+        resized,
+        face_rect,
+    })
 }

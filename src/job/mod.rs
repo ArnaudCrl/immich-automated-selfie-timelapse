@@ -43,22 +43,14 @@ struct OutputDirs {
     debug: Option<DebugDirs>,
 }
 
-/// Debug output directories for visualizing each processing stage.
-/// Each folder contains images with debug overlays showing what happened at that step.
-///
-/// Note: `landmarks` and `alignment` fields are placeholders for future features
-/// (facial landmark detection and face alignment). They are intentionally unused
-/// until those features are implemented.
-#[derive(Debug, Clone, Default)]
+/// Debug output base directory for visualizing processing stages.
+/// Subdirectories are created on-demand by the pipeline for each step:
+/// - `{step_id}/passed/` - Images that passed the step
+/// - `{step_id}/failed/` - Images that failed/skipped at the step
+#[derive(Debug, Clone)]
 struct DebugDirs {
-    /// Original image with bounding box and crop region overlayed
-    crop: Option<PathBuf>,
-    /// Face with landmark points drawn (future: facial landmark detection)
-    #[allow(dead_code)]
-    landmarks: Option<PathBuf>,
-    /// Before/after alignment visualization (future: face alignment)
-    #[allow(dead_code)]
-    alignment: Option<PathBuf>,
+    /// Base directory for debug output (e.g., `output/PersonName/debug`)
+    base: PathBuf,
 }
 
 /// Run the complete processing pipeline.
@@ -137,19 +129,8 @@ async fn run_job_inner(
     // Create debug directories if enabled
     let debug = if config.processing.output.keep_intermediates {
         let debug_base = person_dir.join("debug");
-
-        let crop_dir = debug_base.join("crop");
-        tokio::fs::create_dir_all(&crop_dir).await?;
-
-        // Future directories (created on-demand when those features are implemented):
-        // - debug_base.join("landmarks") - face with landmark points
-        // - debug_base.join("alignment") - before/after alignment
-
-        Some(DebugDirs {
-            crop: Some(crop_dir),
-            landmarks: None,
-            alignment: None,
-        })
+        tokio::fs::create_dir_all(&debug_base).await?;
+        Some(DebugDirs { base: debug_base })
     } else {
         None
     };
@@ -499,11 +480,7 @@ async fn process_single_asset(
     ctx = ctx.with_bytes(image_bytes);
 
     // Determine debug directory
-    let debug_dir = if config.processing.output.keep_intermediates {
-        output_dirs.debug.as_ref().and_then(|d| d.crop.as_ref().map(|p| p.parent().unwrap().to_path_buf()))
-    } else {
-        None
-    };
+    let debug_dir = output_dirs.debug.as_ref().map(|d| d.base.clone());
 
     // Execute the pipeline
     let result = pipeline.execute(

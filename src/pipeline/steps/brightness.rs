@@ -5,7 +5,7 @@
 use crate::config::Config;
 use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::DynamicImage;
+use image::{DynamicImage, Rgb, RgbImage};
 
 /// Validates image brightness and skips images outside acceptable range.
 ///
@@ -76,6 +76,7 @@ impl ProcessingStep for BrightnessStep {
 
         if brightness < step_config.min_brightness {
             return StepOutcome::Skip {
+                ctx,
                 reason: "too_dark".to_string(),
                 detail: Some(format!(
                     "{:.2} (min: {:.2})",
@@ -86,6 +87,7 @@ impl ProcessingStep for BrightnessStep {
 
         if brightness > step_config.max_brightness {
             return StepOutcome::Skip {
+                ctx,
                 reason: "too_bright".to_string(),
                 detail: Some(format!(
                     "{:.2} (max: {:.2})",
@@ -95,6 +97,118 @@ impl ProcessingStep for BrightnessStep {
         }
 
         StepOutcome::Continue(ctx)
+    }
+
+    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
+        // Get brightness from computed values
+        let brightness = ctx
+            .get_computed("brightness")
+            .and_then(|v| v.as_float())?;
+
+        // Get the current image to draw on
+        let image = ctx.image.as_ref()?;
+        let rgb = image.to_rgb8();
+        let (width, height) = (rgb.width(), rgb.height());
+
+        // Create a copy for visualization
+        let mut debug_img = rgb.clone();
+
+        // Draw a horizontal brightness bar at the bottom
+        let bar_height = 20u32;
+        let bar_y = height.saturating_sub(bar_height);
+        let bar_width = (width as f32 * 0.8) as u32;
+        let bar_x = (width - bar_width) / 2;
+
+        // Draw background (dark gray)
+        for y in bar_y..height {
+            for x in 0..width {
+                debug_img.put_pixel(x, y, Rgb([40, 40, 40]));
+            }
+        }
+
+        // Draw bar outline (white)
+        let outline_y = bar_y + 4;
+        let outline_height = bar_height - 8;
+        for x in bar_x..bar_x + bar_width {
+            debug_img.put_pixel(x, outline_y, Rgb([200, 200, 200]));
+            debug_img.put_pixel(x, outline_y + outline_height - 1, Rgb([200, 200, 200]));
+        }
+        for y in outline_y..outline_y + outline_height {
+            debug_img.put_pixel(bar_x, y, Rgb([200, 200, 200]));
+            debug_img.put_pixel(bar_x + bar_width - 1, y, Rgb([200, 200, 200]));
+        }
+
+        // Fill the bar based on brightness value
+        let fill_width = ((bar_width - 4) as f32 * brightness.clamp(0.0, 1.0)) as u32;
+        let fill_color = brightness_to_color(brightness);
+        for y in (outline_y + 2)..(outline_y + outline_height - 2) {
+            for x in (bar_x + 2)..(bar_x + 2 + fill_width) {
+                if x < width {
+                    debug_img.put_pixel(x, y, fill_color);
+                }
+            }
+        }
+
+        // Draw brightness text value
+        let text = format!("B:{:.2}", brightness);
+        draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
+
+        Some(DynamicImage::ImageRgb8(debug_img))
+    }
+}
+
+/// Convert brightness value to a color (red for dark/bright, green for good)
+fn brightness_to_color(brightness: f32) -> Rgb<u8> {
+    // Very dark or very bright = red, middle range = green
+    if brightness < 0.15 || brightness > 0.85 {
+        Rgb([255, 80, 80]) // Red
+    } else if brightness < 0.25 || brightness > 0.75 {
+        Rgb([255, 200, 80]) // Yellow/orange
+    } else {
+        Rgb([80, 255, 80]) // Green
+    }
+}
+
+/// Draw simple text using a basic 5x7 pixel font.
+fn draw_simple_text(img: &mut RgbImage, x: u32, y: u32, text: &str, color: Rgb<u8>) {
+    let (width, height) = (img.width(), img.height());
+    let mut cursor_x = x;
+
+    for ch in text.chars() {
+        let pattern = get_char_pattern(ch);
+        for (row_idx, row) in pattern.iter().enumerate() {
+            for col in 0..5 {
+                if (row >> (4 - col)) & 1 == 1 {
+                    let px = cursor_x + col;
+                    let py = y + row_idx as u32;
+                    if px < width && py < height {
+                        img.put_pixel(px, py, color);
+                    }
+                }
+            }
+        }
+        cursor_x += 6; // 5 pixels wide + 1 pixel spacing
+    }
+}
+
+/// Get a 5x7 pixel pattern for a character.
+fn get_char_pattern(ch: char) -> [u8; 7] {
+    match ch {
+        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
+        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
+        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
+        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
+        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
+        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
+        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
+        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
+        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
+        'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
+        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
+        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
+        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
     }
 }
 

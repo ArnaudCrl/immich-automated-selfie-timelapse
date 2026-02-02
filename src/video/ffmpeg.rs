@@ -128,7 +128,9 @@ where
         if line.starts_with("frame=") {
             if let Some(frame_str) = line.strip_prefix("frame=") {
                 if let Ok(frame) = frame_str.trim().parse::<u32>() {
-                    progress_callback(frame, image_count);
+                    // Clamp to image_count - ffmpeg can report higher values internally
+                    let clamped_frame = frame.min(image_count);
+                    progress_callback(clamped_frame, image_count);
                 }
             }
         }

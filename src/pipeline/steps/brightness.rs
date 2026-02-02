@@ -55,13 +55,9 @@ impl ProcessingStep for BrightnessStep {
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
         let step_config = &config.processing.brightness;
 
-        let image = match &ctx.image {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error(
-                    "No image available for brightness check".to_string(),
-                );
-            }
+        let image = match ctx.require_image("brightness check") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         let brightness = Self::calculate_brightness(image);
@@ -160,9 +156,9 @@ impl ProcessingStep for BrightnessStep {
 /// Convert brightness value to a color (red for dark/bright, green for good)
 fn brightness_to_color(brightness: f32) -> Rgb<u8> {
     // Very dark or very bright = red, middle range = green
-    if brightness < 0.15 || brightness > 0.85 {
+    if !(0.15..=0.85).contains(&brightness) {
         Rgb([255, 80, 80]) // Red
-    } else if brightness < 0.25 || brightness > 0.75 {
+    } else if !(0.25..=0.75).contains(&brightness) {
         Rgb([255, 200, 80]) // Yellow/orange
     } else {
         Rgb([80, 255, 80]) // Green

@@ -285,12 +285,10 @@ impl Default for EyeFilterConfig {
 impl EyeFilterConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
-        if self.enabled {
-            if self.min_ear < 0.0 || self.min_ear > 0.5 {
-                return Err(Error::Config(
-                    "Eye filter min_ear must be between 0.0 and 0.5".to_string(),
-                ));
-            }
+        if self.enabled && !(0.0..=0.5).contains(&self.min_ear) {
+            return Err(Error::Config(
+                "Eye filter min_ear must be between 0.0 and 0.5".to_string(),
+            ));
         }
         Ok(())
     }

@@ -244,4 +244,55 @@ impl AppState {
     pub async fn clear_cancel_token(&self) {
         *self.cancel_token.write().await = None;
     }
+
+    /// Check if a job is currently running and return an error if so.
+    ///
+    /// Use this at the start of handlers that cannot run while a job is in progress.
+    pub async fn ensure_no_job_running(&self) -> Result<(), JobRunningError> {
+        let progress = self.progress.read().await;
+        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
+            Err(JobRunningError)
+        } else {
+            Ok(())
+        }
+    }
 }
+
+/// Error returned when an operation cannot proceed because a job is running.
+#[derive(Debug, Clone, Copy)]
+pub struct JobRunningError;
+
+impl std::fmt::Display for JobRunningError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cannot perform this operation while a job is running")
+    }
+}
+
+impl std::error::Error for JobRunningError {}
+
+/// Validate that a path component (folder name or filename) is safe.
+///
+/// Returns an error if the path contains traversal sequences or separators.
+pub fn validate_path_component(name: &str, component_type: &str) -> Result<(), PathValidationError> {
+    if name.contains("..") || name.contains('/') || name.contains('\\') {
+        Err(PathValidationError {
+            component_type: component_type.to_string(),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+/// Error returned when a path component fails validation.
+#[derive(Debug, Clone)]
+pub struct PathValidationError {
+    pub component_type: String,
+}
+
+impl std::fmt::Display for PathValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Invalid {}", self.component_type)
+    }
+}
+
+impl std::error::Error for PathValidationError {}

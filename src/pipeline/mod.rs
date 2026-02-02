@@ -22,7 +22,7 @@ use crate::config::Config;
 use crate::web::AtomicSkipStats;
 use image::{DynamicImage, ImageFormat};
 use std::io::Cursor;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -236,7 +236,7 @@ impl Pipeline {
 /// debug/{step_id}/failed/{filename}.jpg
 /// ```
 async fn save_debug_images(
-    debug_base: &PathBuf,
+    debug_base: &Path,
     debug_images: &[(String, DebugImage)],
     timestamp: &str,
     asset_id: &str,

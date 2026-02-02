@@ -26,11 +26,9 @@ impl ProcessingStep for CropFaceStep {
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        let image = match &ctx.image {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error("No image available for cropping".to_string());
-            }
+        let image = match ctx.require_image("cropping") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         // Crop returns CropResult with cropped images and face rectangle in crop coordinates.

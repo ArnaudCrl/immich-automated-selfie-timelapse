@@ -68,8 +68,8 @@ impl DlibLandmarks {
     /// * `height` - Image height
     /// * `pixels` - Raw RGB pixel data (width * height * 3 bytes)
     /// * `face_rect` - Optional face bounding box (x1, y1, x2, y2) in image coordinates.
-    ///                 If provided, uses this rectangle for landmark detection.
-    ///                 If None, attempts to detect the face or uses the whole image.
+    ///   If provided, uses this rectangle for landmark detection.
+    ///   If None, attempts to detect the face or uses the whole image.
     ///
     /// # Returns
     /// Landmarks struct containing the 68 facial landmark points, or an error
@@ -107,7 +107,7 @@ impl DlibLandmarks {
             // No face rect provided - try to detect or use whole image
             let faces = detector.face_locations(&matrix);
             if !faces.is_empty() {
-                faces[0].clone()
+                faces[0]
             } else {
                 // Fallback: use whole image with small margin
                 let margin = 5;

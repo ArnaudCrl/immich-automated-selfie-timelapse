@@ -4,7 +4,7 @@ use crate::config::{
     AlignmentConfig, BrightnessConfig, FaceResolutionConfig, OutputConfig, ProcessingConfig,
     VideoConfig,
 };
-use crate::web::state::{AppState, JobStatus};
+use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 
@@ -174,16 +174,10 @@ pub async fn update_config(
     State(state): State<AppState>,
     Json(update): Json<ConfigUpdateRequest>,
 ) -> Result<Json<ConfigResponse>, (StatusCode, String)> {
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "Cannot update config while a job is running".to_string(),
-            ));
-        }
-    }
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
 
     // Validate input before updating
     if let Some(ref proc) = update.processing {

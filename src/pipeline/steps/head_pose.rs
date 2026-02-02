@@ -33,11 +33,9 @@ impl ProcessingStep for HeadPoseStep {
             return StepOutcome::Continue(ctx);
         }
 
-        let image = match &ctx.image {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error("No image available for head pose estimation".to_string());
-            }
+        let image = match ctx.require_image("head pose estimation") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         // Load the DMHead model

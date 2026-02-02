@@ -1,6 +1,6 @@
 //! Output folder and image management endpoints.
 
-use crate::web::state::{AppState, JobStatus, Progress, SkipStats};
+use crate::web::state::{validate_path_component, AppState, JobStatus, Progress, SkipStats};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -120,19 +120,13 @@ pub async fn list_output_folders(
 pub async fn cleanup_all_output(
     State(state): State<AppState>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
+
     let config = state.config.read().await;
     let output_dir = &config.output_dir;
-
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "Cannot cleanup while a job is running".to_string(),
-            ));
-        }
-    }
 
     // Remove all contents of output directory
     if output_dir.exists() {
@@ -181,23 +175,15 @@ pub async fn cleanup_output_folder(
     State(state): State<AppState>,
     Path(folder_name): Path<String>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
+
+    validate_path_component(&folder_name, "folder name")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
     let config = state.config.read().await;
-
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "Cannot cleanup while a job is running".to_string(),
-            ));
-        }
-    }
-
-    // Sanitize folder name to prevent path traversal
-    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
-    }
 
     let folder_path = config.output_dir.join(&folder_name);
 
@@ -235,12 +221,10 @@ pub async fn list_folder_images(
     State(state): State<AppState>,
     Path(folder_name): Path<String>,
 ) -> Result<Json<FolderImagesResponse>, (StatusCode, String)> {
-    let config = state.config.read().await;
+    validate_path_component(&folder_name, "folder name")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    // Sanitize folder name to prevent path traversal
-    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
-    }
+    let config = state.config.read().await;
 
     let images_dir = config.output_dir.join(&folder_name).join("images");
 
@@ -311,26 +295,17 @@ pub async fn delete_single_image(
     State(state): State<AppState>,
     Path((folder_name, filename)): Path<(String, String)>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "Cannot delete images while a job is running".to_string(),
-            ));
-        }
-    }
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
+
+    validate_path_component(&folder_name, "folder name")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    validate_path_component(&filename, "filename")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let config = state.config.read().await;
-
-    // Sanitize folder name and filename to prevent path traversal
-    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
-    }
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid filename".to_string()));
-    }
     if !filename.ends_with(".jpg") {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -372,23 +347,15 @@ pub async fn delete_images_bulk(
     Path(folder_name): Path<String>,
     Json(request): Json<BulkDeleteRequest>,
 ) -> Result<Json<BulkDeleteResponse>, (StatusCode, String)> {
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((
-                StatusCode::CONFLICT,
-                "Cannot delete images while a job is running".to_string(),
-            ));
-        }
-    }
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
+
+    validate_path_component(&folder_name, "folder name")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let config = state.config.read().await;
-
-    // Sanitize folder name
-    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
-    }
 
     let images_dir = config.output_dir.join(&folder_name).join("images");
 
@@ -403,8 +370,8 @@ pub async fn delete_images_bulk(
     let mut failed_count = 0u32;
 
     for filename in &request.filenames {
-        // Sanitize each filename
-        if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+        // Validate each filename
+        if validate_path_component(filename, "filename").is_err() {
             failed_count += 1;
             continue;
         }
@@ -457,20 +424,15 @@ pub async fn compile_folder_video(
     State(state): State<AppState>,
     Path(folder_name): Path<String>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
-    // Check if a job is running
-    {
-        let progress = state.progress.read().await;
-        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
-            return Err((StatusCode::CONFLICT, "A job is already running".to_string()));
-        }
-    }
+    state
+        .ensure_no_job_running()
+        .await
+        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
+
+    validate_path_component(&folder_name, "folder name")
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let config = state.config.read().await;
-
-    // Sanitize folder name
-    if folder_name.contains("..") || folder_name.contains('/') || folder_name.contains('\\') {
-        return Err((StatusCode::BAD_REQUEST, "Invalid folder name".to_string()));
-    }
 
     let folder_path = config.output_dir.join(&folder_name);
     let images_dir = folder_path.join("images");

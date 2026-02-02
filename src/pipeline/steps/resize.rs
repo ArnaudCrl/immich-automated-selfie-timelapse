@@ -24,11 +24,9 @@ impl ProcessingStep for ResizeStep {
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        let image = match ctx.image.take() {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error("No image available for resizing".to_string());
-            }
+        let image = match ctx.take_image("resizing") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         let output_size = config.processing.output.size;

@@ -48,11 +48,9 @@ impl ProcessingStep for AlignmentStep {
             }
         };
 
-        let image = match ctx.image.take() {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error("No image available for alignment".to_string());
-            }
+        let image = match ctx.take_image("alignment") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         let (width, height) = image.dimensions();
@@ -207,12 +205,12 @@ impl ProcessingStep for AlignmentStep {
 /// Draw a marker (small filled square) at the given position.
 fn draw_marker(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     let (width, height) = (img.width(), img.height());
-    let size = 3;
+    let size: i32 = 3;
 
     for dy in 0..=size * 2 {
         for dx in 0..=size * 2 {
-            let px = (x as i32 + dx as i32 - size as i32) as u32;
-            let py = (y as i32 + dy as i32 - size as i32) as u32;
+            let px = (x as i32 + dx - size) as u32;
+            let py = (y as i32 + dy - size) as u32;
             if px < width && py < height {
                 img.put_pixel(px, py, color);
             }

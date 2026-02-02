@@ -175,6 +175,37 @@ impl PipelineContext {
         self.computed.get(key)
     }
 
+    /// Get a reference to the image, returning an error message if not available.
+    ///
+    /// Use this in pipeline steps that need to read the image without modifying it.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let image = ctx.require_image("brightness check")?;
+    /// ```
+    pub fn require_image(&self, step_name: &str) -> Result<&DynamicImage, String> {
+        self.image
+            .as_ref()
+            .ok_or_else(|| format!("No image available for {}", step_name))
+    }
+
+    /// Take ownership of the image, returning an error message if not available.
+    ///
+    /// Use this in pipeline steps that need to transform the image (alignment, resize).
+    /// The step should set `ctx.image` to the transformed result before returning.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let image = ctx.take_image("alignment")?;
+    /// // ... transform image ...
+    /// ctx.image = Some(transformed);
+    /// ```
+    pub fn take_image(&mut self, step_name: &str) -> Result<DynamicImage, String> {
+        self.image
+            .take()
+            .ok_or_else(|| format!("No image available for {}", step_name))
+    }
+
     /// Add a debug image for a step.
     ///
     /// # Arguments

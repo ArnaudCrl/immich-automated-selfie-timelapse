@@ -38,13 +38,9 @@ impl ProcessingStep for LandmarksStep {
             return StepOutcome::Continue(ctx);
         }
 
-        let image = match &ctx.image {
-            Some(img) => img,
-            None => {
-                return StepOutcome::Error(
-                    "No image available for landmark detection".to_string(),
-                );
-            }
+        let image = match ctx.require_image("landmark detection") {
+            Ok(img) => img,
+            Err(e) => return StepOutcome::Error(e),
         };
 
         // Get the global landmark predictor (loaded once, reused for all images)
@@ -178,7 +174,7 @@ impl ProcessingStep for LandmarksStep {
 /// Draw a small cross at the given position.
 fn draw_cross(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     let (width, height) = (img.width(), img.height());
-    let size = 2;
+    let size: i32 = 2;
 
     // Check base coordinates are in bounds
     if x >= width || y >= height {
@@ -186,13 +182,13 @@ fn draw_cross(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     }
 
     for dx in 0..=size * 2 {
-        let px = (x as i32 + dx as i32 - size as i32) as u32;
+        let px = (x as i32 + dx - size) as u32;
         if px < width && y < height {
             img.put_pixel(px, y, color);
         }
     }
     for dy in 0..=size * 2 {
-        let py = (y as i32 + dy as i32 - size as i32) as u32;
+        let py = (y as i32 + dy - size) as u32;
         if x < width && py < height {
             img.put_pixel(x, py, color);
         }

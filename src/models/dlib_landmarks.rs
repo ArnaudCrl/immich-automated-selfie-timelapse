@@ -4,7 +4,7 @@
 //! in a thread-safe singleton to avoid reloading the model for every image.
 
 use crate::error::{Error, Result};
-use crate::face_processing::types::{Landmarks, Point};
+use crate::pipeline::{Landmarks, Point};
 use dlib_face_recognition::{
     FaceDetector, FaceDetectorTrait, ImageMatrix, LandmarkPredictor, LandmarkPredictorTrait,
     Rectangle,

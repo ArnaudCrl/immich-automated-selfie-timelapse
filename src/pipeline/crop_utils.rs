@@ -3,8 +3,8 @@
 //! Extracts and resizes face regions from images using bounding box data.
 
 use crate::error::{Error, Result};
-use crate::face_processing::types::BoundingBox;
 use crate::immich_api::FaceData;
+use crate::pipeline::BoundingBox;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 

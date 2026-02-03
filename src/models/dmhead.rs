@@ -8,7 +8,7 @@
 //! Output: [yaw, pitch, roll] in degrees
 
 use crate::error::{Error, Result};
-use crate::face_processing::types::HeadPose;
+use crate::pipeline::HeadPose;
 use image::DynamicImage;
 use ndarray::Array4;
 use ort::session::{builder::GraphOptimizationLevel, Session};

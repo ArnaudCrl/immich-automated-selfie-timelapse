@@ -136,7 +136,7 @@ impl ProcessingStep for HeadPoseStep {
         StepOutcome::Continue(ctx)
     }
 
-    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
+    fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         // Get head pose from computed values
         let pose = ctx
             .get_computed("head_pose")

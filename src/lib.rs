@@ -7,7 +7,6 @@
 
 pub mod config;
 pub mod error;
-pub mod face_processing;
 pub mod immich_api;
 pub mod job;
 pub mod models;

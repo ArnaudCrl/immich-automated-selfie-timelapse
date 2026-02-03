@@ -1,8 +1,8 @@
 //! Configuration endpoints.
 
 use crate::config::{
-    AlignmentConfig, BrightnessConfig, FaceResolutionConfig, OutputConfig, ProcessingConfig,
-    VideoConfig,
+    AlignmentConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig, HeadPoseConfig,
+    OutputConfig, ProcessingConfig, VideoConfig,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -40,6 +40,8 @@ pub struct ProcessingConfigUpdate {
     pub max_workers: Option<usize>,
     pub face_resolution: Option<FaceResolutionConfig>,
     pub brightness: Option<BrightnessConfig>,
+    pub head_pose: Option<HeadPoseConfig>,
+    pub eye_filter: Option<EyeFilterConfig>,
     pub output: Option<OutputConfig>,
     pub alignment: Option<AlignmentConfig>,
 }
@@ -114,6 +116,38 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
                     "min_brightness must be less than max_brightness",
                 ));
             }
+        }
+    }
+
+    if let Some(ref hp) = proc.head_pose {
+        if hp.enabled {
+            if hp.max_yaw < 0.0 || hp.max_yaw > 90.0 {
+                return Err(ValidationError::new(
+                    "processing.head_pose.max_yaw",
+                    format!("must be between 0 and 90, got {}", hp.max_yaw),
+                ));
+            }
+            if hp.max_pitch < 0.0 || hp.max_pitch > 90.0 {
+                return Err(ValidationError::new(
+                    "processing.head_pose.max_pitch",
+                    format!("must be between 0 and 90, got {}", hp.max_pitch),
+                ));
+            }
+            if hp.max_roll < 0.0 || hp.max_roll > 90.0 {
+                return Err(ValidationError::new(
+                    "processing.head_pose.max_roll",
+                    format!("must be between 0 and 90, got {}", hp.max_roll),
+                ));
+            }
+        }
+    }
+
+    if let Some(ref ef) = proc.eye_filter {
+        if ef.enabled && !(0.0..=0.5).contains(&ef.min_ear) {
+            return Err(ValidationError::new(
+                "processing.eye_filter.min_ear",
+                format!("must be between 0.0 and 0.5, got {}", ef.min_ear),
+            ));
         }
     }
 
@@ -210,6 +244,12 @@ pub async fn update_config(
             }
             if let Some(v) = proc.brightness {
                 config.processing.brightness = v;
+            }
+            if let Some(v) = proc.head_pose {
+                config.processing.head_pose = v;
+            }
+            if let Some(v) = proc.eye_filter {
+                config.processing.eye_filter = v;
             }
             if let Some(v) = proc.output {
                 config.processing.output = v;

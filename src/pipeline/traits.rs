@@ -4,7 +4,7 @@
 //! extensible image processing pipelines.
 
 use crate::config::Config;
-use crate::face_processing::types::{BoundingBox, HeadPose, Landmarks};
+use crate::pipeline::types::{BoundingBox, HeadPose, Landmarks};
 use crate::immich_api::FaceData;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -243,7 +243,9 @@ pub trait ProcessingStep: Send + Sync {
     ///
     /// Called after `execute()` if debug mode is enabled and the step
     /// returned `Continue`. The returned image is saved to the debug folder.
-    fn debug_visualize(&self, _ctx: &PipelineContext) -> Option<DynamicImage> {
+    ///
+    /// Steps should return `None` if they are disabled (check config.processing.X.enabled).
+    fn debug_visualize(&self, _ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         None
     }
 }

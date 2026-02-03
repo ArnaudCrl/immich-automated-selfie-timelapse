@@ -3,20 +3,19 @@
 //! Uses dlib to detect 68 facial landmarks for alignment and eye filtering.
 
 use crate::config::Config;
-use crate::face_processing::types::Landmarks;
 use crate::models::DlibLandmarks;
-use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{ComputedValue, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::{DynamicImage, Rgb, RgbImage};
 use tokio::task;
 
-/// Detects facial landmarks and optionally filters based on eye aspect ratio.
+/// Detects facial landmarks using dlib.
 ///
 /// This step:
 /// 1. Uses dlib to detect faces and 68 landmarks
 /// 2. Stores Landmarks in ctx.computed["landmarks"]
 /// 3. Computes EAR and stores in ctx.computed["ear"]
-/// 4. Optionally skips if EAR is below threshold (eyes closed)
+///
+/// Eye filtering (skipping closed eyes) is handled by EyeFilterStep.
 pub struct LandmarksStep;
 
 #[async_trait]
@@ -97,18 +96,6 @@ impl ProcessingStep for LandmarksStep {
         // Store landmarks
         ctx.set_computed("landmarks", ComputedValue::Landmarks(Box::new(landmarks)));
 
-        // Check eye filter if enabled
-        if config.processing.eye_filter.enabled {
-            let min_ear = config.processing.eye_filter.min_ear;
-            if avg_ear < min_ear {
-                return StepOutcome::Skip {
-                    ctx,
-                    reason: "eyes_closed".to_string(),
-                    detail: Some(format!("EAR {:.3} below threshold {:.3}", avg_ear, min_ear)),
-                };
-            }
-        }
-
         tracing::trace!(
             "Landmarks detected: EAR left={:.3}, right={:.3}, avg={:.3}",
             ear.left,
@@ -118,87 +105,13 @@ impl ProcessingStep for LandmarksStep {
 
         StepOutcome::Continue(ctx)
     }
-
-    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
-        // Get landmarks from computed values
-        let landmarks: &Landmarks = ctx
-            .get_computed("landmarks")
-            .and_then(|v| v.as_landmarks())?;
-
-        // Get the current image to draw on
-        let image = ctx.image.as_ref()?;
-        let mut debug_img = image.to_rgb8();
-
-        // Draw all 68 landmark points
-        let points = landmarks.points();
-        for (i, point) in points.iter().enumerate() {
-            let x = point.x as u32;
-            let y = point.y as u32;
-
-            // Color-code different facial regions
-            let color = match i {
-                0..=16 => Rgb([255, 0, 0]),    // Jaw (red)
-                17..=21 => Rgb([0, 255, 0]),   // Left eyebrow (green)
-                22..=26 => Rgb([0, 255, 0]),   // Right eyebrow (green)
-                27..=35 => Rgb([0, 0, 255]),   // Nose (blue)
-                36..=41 => Rgb([255, 255, 0]), // Left eye (yellow)
-                42..=47 => Rgb([255, 255, 0]), // Right eye (yellow)
-                48..=67 => Rgb([255, 0, 255]), // Mouth (magenta)
-                _ => Rgb([255, 255, 255]),     // Other (white)
-            };
-
-            // Draw a small cross at each point
-            draw_cross(&mut debug_img, x, y, color);
-        }
-
-        // Draw eye centers
-        let left_eye = landmarks.left_eye_center();
-        let right_eye = landmarks.right_eye_center();
-        draw_cross(
-            &mut debug_img,
-            left_eye.x as u32,
-            left_eye.y as u32,
-            Rgb([0, 255, 255]),
-        );
-        draw_cross(
-            &mut debug_img,
-            right_eye.x as u32,
-            right_eye.y as u32,
-            Rgb([0, 255, 255]),
-        );
-
-        Some(DynamicImage::ImageRgb8(debug_img))
-    }
-}
-
-/// Draw a small cross at the given position.
-fn draw_cross(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
-    let (width, height) = (img.width(), img.height());
-    let size: i32 = 2;
-
-    // Check base coordinates are in bounds
-    if x >= width || y >= height {
-        return;
-    }
-
-    for dx in 0..=size * 2 {
-        let px = (x as i32 + dx - size) as u32;
-        if px < width && y < height {
-            img.put_pixel(px, y, color);
-        }
-    }
-    for dy in 0..=size * 2 {
-        let py = (y as i32 + dy - size) as u32;
-        if x < width && py < height {
-            img.put_pixel(x, py, color);
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
+    use image::{DynamicImage, RgbImage};
 
     fn make_test_ctx() -> PipelineContext {
         let face_data = FaceData {

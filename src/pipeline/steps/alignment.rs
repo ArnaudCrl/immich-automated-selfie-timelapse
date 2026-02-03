@@ -4,10 +4,9 @@
 //! across all images in the timelapse.
 
 use crate::config::Config;
-use crate::face_processing::types::Point;
-use crate::pipeline::{PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{Point, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
+use image::{DynamicImage, GenericImageView, Rgb};
 use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
 
 /// Aligns faces based on eye positions.
@@ -36,7 +35,7 @@ impl ProcessingStep for AlignmentStep {
         }
 
         // Get landmarks from previous step
-        let landmarks: crate::face_processing::types::Landmarks = match ctx
+        let landmarks: crate::pipeline::Landmarks = match ctx
             .get_computed("landmarks")
             .and_then(|v| v.as_landmarks())
         {
@@ -156,72 +155,13 @@ impl ProcessingStep for AlignmentStep {
 
         StepOutcome::Continue(ctx)
     }
-
-    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
-        // Get landmarks for visualization
-        let landmarks: &crate::face_processing::types::Landmarks =
-            ctx.get_computed("landmarks").and_then(|v| v.as_landmarks())?;
-        let image = ctx.image.as_ref()?;
-
-        let mut debug_img = image.to_rgb8();
-        let (width, height) = (debug_img.width(), debug_img.height());
-
-        // Draw target eye positions
-        let output_size = width; // Assuming square output
-        let eye_y = (output_size as f32 * 0.35) as u32; // Default eye_y_position
-
-        // Draw horizontal line at target eye Y position
-        for x in 0..width {
-            if eye_y < height {
-                debug_img.put_pixel(x, eye_y, Rgb([0, 255, 0]));
-            }
-        }
-
-        // Draw vertical lines at target eye X positions (assuming 0.3 inter_eye_distance)
-        let inter_eye = (output_size as f32 * 0.3) as u32;
-        let left_x = (width - inter_eye) / 2;
-        let right_x = left_x + inter_eye;
-
-        for y in 0..height {
-            if left_x < width {
-                debug_img.put_pixel(left_x, y, Rgb([0, 255, 0]));
-            }
-            if right_x < width {
-                debug_img.put_pixel(right_x, y, Rgb([0, 255, 0]));
-            }
-        }
-
-        // Draw actual eye positions
-        let left_eye = landmarks.left_eye_center();
-        let right_eye = landmarks.right_eye_center();
-
-        draw_marker(&mut debug_img, left_eye.x as u32, left_eye.y as u32, Rgb([255, 0, 0]));
-        draw_marker(&mut debug_img, right_eye.x as u32, right_eye.y as u32, Rgb([255, 0, 0]));
-
-        Some(DynamicImage::ImageRgb8(debug_img))
-    }
-}
-
-/// Draw a marker (small filled square) at the given position.
-fn draw_marker(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
-    let (width, height) = (img.width(), img.height());
-    let size: i32 = 3;
-
-    for dy in 0..=size * 2 {
-        for dx in 0..=size * 2 {
-            let px = (x as i32 + dx - size) as u32;
-            let py = (y as i32 + dy - size) as u32;
-            if px < width && py < height {
-                img.put_pixel(px, py, color);
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
+    use image::RgbImage;
 
     fn make_test_ctx() -> PipelineContext {
         let face_data = FaceData {

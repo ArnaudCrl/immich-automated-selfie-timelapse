@@ -95,7 +95,7 @@ impl ProcessingStep for BrightnessStep {
         StepOutcome::Continue(ctx)
     }
 
-    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
+    fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         // Get brightness from computed values
         let brightness = ctx
             .get_computed("brightness")

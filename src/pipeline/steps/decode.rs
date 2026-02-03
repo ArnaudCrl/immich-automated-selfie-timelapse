@@ -3,7 +3,7 @@
 //! Decodes raw image bytes and applies EXIF orientation correction.
 
 use crate::config::Config;
-use crate::face_processing::load_image_with_orientation;
+use crate::pipeline::load_image_with_orientation;
 use crate::pipeline::{PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 

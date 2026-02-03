@@ -3,11 +3,9 @@
 //! Crops the face region from the full image using the bounding box data.
 
 use crate::config::Config;
-use crate::face_processing::crop_face_with_intermediate;
-use crate::face_processing::debug::draw_crop_debug;
+use crate::pipeline::crop_face_with_intermediate;
 use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::DynamicImage;
 
 /// Crops the face region from the full image.
 ///
@@ -49,30 +47,6 @@ impl ProcessingStep for CropFaceStep {
         }
     }
 
-    fn debug_visualize(&self, ctx: &PipelineContext) -> Option<DynamicImage> {
-        // Draw the crop region on the original image
-        // Note: This requires access to the original image before cropping,
-        // which we don't have here. For now, we'll create the debug image
-        // during execution if needed. This is a limitation of the current
-        // design that could be addressed by storing the original image.
-
-        // For now, return None and handle debug visualization in the pipeline
-        // execution or via a separate mechanism
-        ctx.raw_bytes.as_ref()?;
-
-        // If we had the original image, we could do:
-        // Some(draw_crop_debug(&original, &ctx.face_data))
-        None
-    }
-}
-
-/// Generates a debug visualization of the crop region.
-///
-/// This can be called separately before the crop step to visualize
-/// what will be cropped.
-#[allow(dead_code)]
-pub fn generate_crop_debug(image: &DynamicImage, ctx: &PipelineContext) -> DynamicImage {
-    draw_crop_debug(image, &ctx.face_data)
 }
 
 #[cfg(test)]

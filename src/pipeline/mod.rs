@@ -13,10 +13,16 @@
 //! let result = pipeline.execute(ctx, &config, &cancel_token, &skip_stats).await;
 //! ```
 
+mod crop_utils;
+mod orientation;
 mod traits;
+mod types;
 pub mod steps;
 
+pub use crop_utils::{crop_face_with_intermediate, CropResult};
+pub use orientation::load_image_with_orientation;
 pub use traits::*;
+pub use types::*;
 
 use crate::config::Config;
 use crate::web::AtomicSkipStats;
@@ -87,14 +93,18 @@ impl Pipeline {
     /// Create the default processing pipeline with standard steps.
     ///
     /// Pipeline order:
-    /// 1. FaceResolutionStep - Validate face size from Immich metadata
-    /// 2. DecodeImageStep - Load and orient the image
-    /// 3. BrightnessStep - Filter by luminance
-    /// 4. CropFaceStep - Extract face region with padding
-    /// 5. HeadPoseStep - Filter non-frontal faces (DMHead)
-    /// 6. LandmarksStep - Detect 68 facial landmarks (dlib)
-    /// 7. AlignmentStep - Align face based on eye positions
-    /// 8. ResizeStep - Final resize to output size
+    /// 1. FaceResolutionStep - Validate face size from Immich metadata (Validator)
+    /// 2. DecodeImageStep - Load and orient the image (Transform)
+    /// 3. BrightnessStep - Filter by luminance (Validator)
+    /// 4. CropFaceStep - Extract face region with padding (Transform)
+    /// 5. HeadPoseStep - Filter non-frontal faces (Validator)
+    /// 6. LandmarksStep - Detect 68 facial landmarks (Detector)
+    /// 7. EyeFilterStep - Filter closed eyes by EAR (Validator)
+    /// 8. AlignmentStep - Align face based on eye positions (Transform)
+    /// 9. ResizeStep - Final resize to output size (Transform)
+    ///
+    /// Debug visualizations are only generated for validator steps:
+    /// BrightnessStep, HeadPoseStep, EyeFilterStep
     pub fn with_default_steps() -> Self {
         use steps::*;
 
@@ -105,6 +115,7 @@ impl Pipeline {
         pipeline.add_step(Box::new(CropFaceStep));
         pipeline.add_step(Box::new(HeadPoseStep));
         pipeline.add_step(Box::new(LandmarksStep));
+        pipeline.add_step(Box::new(EyeFilterStep));
         pipeline.add_step(Box::new(AlignmentStep));
         pipeline.add_step(Box::new(ResizeStep));
         pipeline
@@ -149,7 +160,7 @@ impl Pipeline {
 
                     // Generate debug visualization if enabled (step passed)
                     if config.processing.output.keep_intermediates {
-                        if let Some(debug_img) = step.debug_visualize(&ctx) {
+                        if let Some(debug_img) = step.debug_visualize(&ctx, config) {
                             ctx.add_debug_image(step.id(), debug_img, true);
                         }
                     }
@@ -160,7 +171,7 @@ impl Pipeline {
 
                     // Generate debug visualization for the failing step if enabled
                     if config.processing.output.keep_intermediates {
-                        if let Some(debug_img) = step.debug_visualize(&ctx) {
+                        if let Some(debug_img) = step.debug_visualize(&ctx, config) {
                             ctx.add_debug_image(step.id(), debug_img, false);
                         }
                     }
@@ -285,6 +296,7 @@ mod tests {
         assert!(ids.contains(&"crop"));
         assert!(ids.contains(&"head_pose"));
         assert!(ids.contains(&"landmarks"));
+        assert!(ids.contains(&"eye_filter"));
         assert!(ids.contains(&"alignment"));
         assert!(ids.contains(&"resize"));
     }

@@ -326,14 +326,29 @@ impl AlignmentConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
         if self.enabled {
+            if self.eye_y_position <= 0.0 || self.eye_y_position >= 1.0 {
+                return Err(Error::Config(
+                    "Alignment eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
+                ));
+            }
             if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
                 return Err(Error::Config(
-                    "Alignment eye_y_position must be between 0.2 and 0.5".to_string(),
+                    "Alignment eye_y_position should be between 0.2 and 0.5 for best results".to_string(),
+                ));
+            }
+            if self.inter_eye_distance <= 0.0 {
+                return Err(Error::Config(
+                    "Alignment inter_eye_distance must be greater than 0 to prevent division by zero".to_string(),
+                ));
+            }
+            if self.inter_eye_distance >= 1.0 {
+                return Err(Error::Config(
+                    "Alignment inter_eye_distance must be less than 1.0".to_string(),
                 ));
             }
             if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
                 return Err(Error::Config(
-                    "Alignment inter_eye_distance must be between 0.2 and 0.5".to_string(),
+                    "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results".to_string(),
                 ));
             }
         }

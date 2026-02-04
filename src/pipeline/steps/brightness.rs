@@ -3,9 +3,9 @@
 //! Calculates average image brightness and skips images that are too dark or too bright.
 
 use crate::config::Config;
-use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::{DynamicImage, Rgb, RgbImage};
+use image::{DynamicImage, Rgb};
 
 /// Validates image brightness and skips images outside acceptable range.
 ///
@@ -52,18 +52,22 @@ impl ProcessingStep for BrightnessStep {
         "Brightness Check"
     }
 
+    fn provides(&self) -> Vec<&'static str> {
+        vec![computed_keys::BRIGHTNESS]
+    }
+
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
         let step_config = &config.processing.brightness;
 
         let image = match ctx.require_image("brightness check") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         let brightness = Self::calculate_brightness(image);
 
         // Store computed brightness for potential use by other steps
-        ctx.set_computed("brightness", ComputedValue::Float(brightness));
+        ctx.set_computed(computed_keys::BRIGHTNESS, ComputedValue::Float(brightness));
 
         // Skip validation if disabled
         if !step_config.enabled {
@@ -98,7 +102,7 @@ impl ProcessingStep for BrightnessStep {
     fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         // Get brightness from computed values
         let brightness = ctx
-            .get_computed("brightness")
+            .get_computed(computed_keys::BRIGHTNESS)
             .and_then(|v| v.as_float())?;
 
         // Get the current image to draw on
@@ -165,49 +169,6 @@ fn brightness_to_color(brightness: f32) -> Rgb<u8> {
     }
 }
 
-/// Draw simple text using a basic 5x7 pixel font.
-fn draw_simple_text(img: &mut RgbImage, x: u32, y: u32, text: &str, color: Rgb<u8>) {
-    let (width, height) = (img.width(), img.height());
-    let mut cursor_x = x;
-
-    for ch in text.chars() {
-        let pattern = get_char_pattern(ch);
-        for (row_idx, row) in pattern.iter().enumerate() {
-            for col in 0..5 {
-                if (row >> (4 - col)) & 1 == 1 {
-                    let px = cursor_x + col;
-                    let py = y + row_idx as u32;
-                    if px < width && py < height {
-                        img.put_pixel(px, py, color);
-                    }
-                }
-            }
-        }
-        cursor_x += 6; // 5 pixels wide + 1 pixel spacing
-    }
-}
-
-/// Get a 5x7 pixel pattern for a character.
-fn get_char_pattern(ch: char) -> [u8; 7] {
-    match ch {
-        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
-        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
-        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
-        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
-        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
-        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,7 +225,7 @@ mod tests {
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {
                 // Should still compute brightness even when disabled
-                let brightness = new_ctx.get_computed("brightness")
+                let brightness = new_ctx.get_computed(computed_keys::BRIGHTNESS)
                     .and_then(|v| v.as_float())
                     .unwrap();
                 assert!(brightness > 0.45 && brightness < 0.55);

@@ -4,7 +4,7 @@
 //! from facial landmarks.
 
 use crate::config::Config;
-use crate::pipeline::{Landmarks, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, draw_simple_text, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use image::{DynamicImage, Rgb, RgbImage};
 
@@ -33,7 +33,7 @@ impl ProcessingStep for EyeFilterStep {
         }
 
         // Get EAR from computed values (set by LandmarksStep)
-        let avg_ear = match ctx.get_computed("ear").and_then(|v| v.as_float()) {
+        let avg_ear = match ctx.get_computed(computed_keys::EAR).and_then(|v| v.as_float()) {
             Some(ear) => ear,
             None => {
                 // No EAR available - landmarks step must have been skipped
@@ -60,7 +60,7 @@ impl ProcessingStep for EyeFilterStep {
     fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         // Get landmarks for eye visualization
         let landmarks: &Landmarks = ctx
-            .get_computed("landmarks")
+            .get_computed(computed_keys::LANDMARKS)
             .and_then(|v| v.as_landmarks())?;
 
         // Get EAR values
@@ -170,53 +170,6 @@ fn draw_marker(img: &mut RgbImage, x: u32, y: u32, color: Rgb<u8>) {
     }
 }
 
-/// Draw simple text using a basic 5x7 pixel font.
-fn draw_simple_text(img: &mut RgbImage, x: u32, y: u32, text: &str, color: Rgb<u8>) {
-    let (width, height) = (img.width(), img.height());
-    let mut cursor_x = x;
-
-    for ch in text.chars() {
-        let pattern = get_char_pattern(ch);
-        for (row_idx, row) in pattern.iter().enumerate() {
-            for col in 0..5 {
-                if (row >> (4 - col)) & 1 == 1 {
-                    let px = cursor_x + col;
-                    let py = y + row_idx as u32;
-                    if px < width && py < height {
-                        img.put_pixel(px, py, color);
-                    }
-                }
-            }
-        }
-        cursor_x += 6; // 5 pixels wide + 1 pixel spacing
-    }
-}
-
-/// Get a 5x7 pixel pattern for a character.
-fn get_char_pattern(ch: char) -> [u8; 7] {
-    match ch {
-        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
-        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
-        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
-        'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
-        'A' => [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
-        'v' => [0b00000, 0b00000, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
-        'g' => [0b00000, 0b00000, 0b01111, 0b10001, 0b01111, 0b00001, 0b01110],
-        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
-        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
-        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,7 +192,7 @@ mod tests {
     async fn test_disabled_skips_check() {
         let step = EyeFilterStep;
         let mut ctx = make_test_ctx();
-        ctx.set_computed("ear", ComputedValue::Float(0.1)); // Below threshold
+        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(0.1)); // Below threshold
         let mut config = Config::default();
         config.processing.eye_filter.enabled = false;
 
@@ -253,7 +206,7 @@ mod tests {
     async fn test_below_threshold_skips() {
         let step = EyeFilterStep;
         let mut ctx = make_test_ctx();
-        ctx.set_computed("ear", ComputedValue::Float(0.1)); // Below default 0.2 threshold
+        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(0.1)); // Below default 0.2 threshold
         let mut config = Config::default();
         config.processing.eye_filter.enabled = true;
         config.processing.eye_filter.min_ear = 0.2;
@@ -270,7 +223,7 @@ mod tests {
     async fn test_above_threshold_continues() {
         let step = EyeFilterStep;
         let mut ctx = make_test_ctx();
-        ctx.set_computed("ear", ComputedValue::Float(0.3)); // Above threshold
+        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(0.3)); // Above threshold
         let mut config = Config::default();
         config.processing.eye_filter.enabled = true;
         config.processing.eye_filter.min_ear = 0.2;

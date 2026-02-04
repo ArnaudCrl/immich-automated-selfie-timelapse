@@ -12,6 +12,23 @@ use image::DynamicImage;
 use std::collections::HashMap;
 use std::fmt;
 
+/// Keys for computed values stored in `PipelineContext`.
+/// Use these constants to avoid typos and make dependencies explicit.
+pub mod computed_keys {
+    /// Brightness value (0.0 - 1.0) computed by BrightnessStep.
+    pub const BRIGHTNESS: &str = "brightness";
+    /// Face size in pixels computed by FaceResolutionStep.
+    pub const FACE_SIZE: &str = "face_size";
+    /// Eye Aspect Ratio computed by LandmarksStep.
+    pub const EAR: &str = "ear";
+    /// Facial landmarks (68 points) computed by LandmarksStep.
+    pub const LANDMARKS: &str = "landmarks";
+    /// Head pose (yaw, pitch, roll) computed by HeadPoseStep.
+    pub const HEAD_POSE: &str = "head_pose";
+    /// Face bounding box in current image coordinates computed by CropFaceStep.
+    pub const FACE_RECT: &str = "face_rect";
+}
+
 /// Outcome of a pipeline step execution.
 #[derive(Debug)]
 pub enum StepOutcome {
@@ -23,8 +40,11 @@ pub enum StepOutcome {
         reason: String,
         detail: Option<String>,
     },
-    /// An error occurred during processing.
-    Error(String),
+    /// An error occurred during processing. Context is preserved for debug visualization.
+    Error {
+        ctx: PipelineContext,
+        error: String,
+    },
 }
 
 /// Values computed by pipeline steps that can be shared with subsequent steps.
@@ -231,6 +251,22 @@ pub trait ProcessingStep: Send + Sync {
     /// Human-readable name for display.
     fn name(&self) -> &'static str;
 
+    /// Computed value keys that this step depends on (must be present in `ctx.computed`).
+    ///
+    /// Return a list of keys from `computed_keys` that must be available for this step.
+    /// The pipeline will verify these dependencies are satisfied before execution.
+    fn dependencies(&self) -> Vec<&'static str> {
+        vec![]
+    }
+
+    /// Computed value keys that this step provides (sets in `ctx.computed`).
+    ///
+    /// Return a list of keys from `computed_keys` that this step will set.
+    /// This is used for documentation and dependency verification.
+    fn provides(&self) -> Vec<&'static str> {
+        vec![]
+    }
+
     /// Execute this step on the given context.
     ///
     /// Returns:
@@ -241,10 +277,11 @@ pub trait ProcessingStep: Send + Sync {
 
     /// Generate a debug visualization for this step (optional).
     ///
-    /// Called after `execute()` if debug mode is enabled and the step
-    /// returned `Continue`. The returned image is saved to the debug folder.
+    /// Called after `execute()` if `keep_intermediates` is enabled and the step
+    /// returned `Continue` or `Skip`. The returned image is saved to the debug folder.
     ///
-    /// Steps should return `None` if they are disabled (check config.processing.X.enabled).
+    /// Only steps included in the pipeline (via `Pipeline::with_steps_from_config`)
+    /// will have their debug images generated - disabled steps are not in the pipeline.
     fn debug_visualize(&self, _ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         None
     }
@@ -297,15 +334,15 @@ mod tests {
             face_data,
         );
 
-        ctx.set_computed("brightness", ComputedValue::Float(0.65));
-        ctx.set_computed("face_size", ComputedValue::Int(150));
+        ctx.set_computed(computed_keys::BRIGHTNESS, ComputedValue::Float(0.65));
+        ctx.set_computed(computed_keys::FACE_SIZE, ComputedValue::Int(150));
 
         assert_eq!(
-            ctx.get_computed("brightness").and_then(|v| v.as_float()),
+            ctx.get_computed(computed_keys::BRIGHTNESS).and_then(|v| v.as_float()),
             Some(0.65)
         );
         assert_eq!(
-            ctx.get_computed("face_size").and_then(|v| v.as_int()),
+            ctx.get_computed(computed_keys::FACE_SIZE).and_then(|v| v.as_int()),
             Some(150)
         );
         assert!(ctx.get_computed("nonexistent").is_none());

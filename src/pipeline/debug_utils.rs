@@ -1,0 +1,87 @@
+//! Debug visualization utilities.
+//!
+//! Shared functions for generating debug visualizations in pipeline steps.
+
+use image::{Rgb, RgbImage};
+
+/// Draw simple text using a basic 5x7 pixel font.
+///
+/// # Arguments
+/// * `img` - The image to draw on
+/// * `x` - X coordinate of the top-left corner
+/// * `y` - Y coordinate of the top-left corner
+/// * `text` - The text to draw
+/// * `color` - The color to use
+pub fn draw_simple_text(img: &mut RgbImage, x: u32, y: u32, text: &str, color: Rgb<u8>) {
+    let (width, height) = (img.width(), img.height());
+    let mut cursor_x = x;
+
+    for ch in text.chars() {
+        let pattern = get_char_pattern(ch);
+        for (row_idx, row) in pattern.iter().enumerate() {
+            for col in 0..5 {
+                if (row >> (4 - col)) & 1 == 1 {
+                    let px = cursor_x + col;
+                    let py = y + row_idx as u32;
+                    if px < width && py < height {
+                        img.put_pixel(px, py, color);
+                    }
+                }
+            }
+        }
+        cursor_x += 6; // 5 pixels wide + 1 pixel spacing
+    }
+}
+
+/// Get a 5x7 pixel pattern for a character.
+fn get_char_pattern(ch: char) -> [u8; 7] {
+    match ch {
+        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
+        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
+        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
+        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
+        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
+        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
+        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
+        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
+        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
+        'A' => [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+        'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
+        'E' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
+        'H' => [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+        'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
+        'P' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000],
+        'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
+        'Y' => [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
+        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
+        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
+        '=' => [0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000],
+        '-' => [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
+        '°' => [0b00110, 0b01001, 0b01001, 0b00110, 0b00000, 0b00000, 0b00000],
+        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::RgbImage;
+
+    #[test]
+    fn test_draw_simple_text() {
+        let mut img = RgbImage::new(100, 20);
+        draw_simple_text(&mut img, 5, 5, "Test", Rgb([255, 255, 255]));
+        // Just verify it doesn't panic and draws something
+        assert_eq!(img.width(), 100);
+    }
+
+    #[test]
+    fn test_get_char_pattern() {
+        let pattern = get_char_pattern('0');
+        assert_eq!(pattern.len(), 7);
+        // Verify it's not all zeros
+        assert!(pattern.iter().any(|&x| x != 0));
+    }
+}

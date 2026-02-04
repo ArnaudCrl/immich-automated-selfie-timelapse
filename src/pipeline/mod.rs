@@ -14,12 +14,14 @@
 //! ```
 
 mod crop_utils;
+mod debug_utils;
 mod orientation;
 mod traits;
 mod types;
 pub mod steps;
 
 pub use crop_utils::{crop_face_with_intermediate, CropResult};
+pub use debug_utils::draw_simple_text;
 pub use orientation::load_image_with_orientation;
 pub use traits::*;
 pub use types::*;
@@ -90,22 +92,74 @@ impl Pipeline {
         Self { steps: Vec::new() }
     }
 
-    /// Create the default processing pipeline with standard steps.
+    /// Create the processing pipeline based on configuration.
+    ///
+    /// Only enabled steps are added to the pipeline. Core steps (decode, crop, resize)
+    /// are always included.
     ///
     /// Pipeline order:
-    /// 1. FaceResolutionStep - Validate face size from Immich metadata (Validator)
-    /// 2. DecodeImageStep - Load and orient the image (Transform)
-    /// 3. BrightnessStep - Filter by luminance (Validator)
-    /// 4. CropFaceStep - Extract face region with padding (Transform)
-    /// 5. HeadPoseStep - Filter non-frontal faces (Validator)
-    /// 6. LandmarksStep - Detect 68 facial landmarks (Detector)
-    /// 7. EyeFilterStep - Filter closed eyes by EAR (Validator)
-    /// 8. AlignmentStep - Align face based on eye positions (Transform)
-    /// 9. ResizeStep - Final resize to output size (Transform)
-    ///
-    /// Debug visualizations are only generated for validator steps:
-    /// BrightnessStep, HeadPoseStep, EyeFilterStep
-    pub fn with_default_steps() -> Self {
+    /// 1. FaceResolutionStep - Validate face size from Immich metadata (if enabled)
+    /// 2. DecodeImageStep - Load and orient the image (always)
+    /// 3. BrightnessStep - Filter by luminance (if enabled)
+    /// 4. CropFaceStep - Extract face region with padding (always)
+    /// 5. HeadPoseStep - Filter non-frontal faces (if enabled)
+    /// 6. LandmarksStep - Detect 68 facial landmarks (if eye_filter or alignment enabled)
+    /// 7. EyeFilterStep - Filter closed eyes by EAR (if enabled)
+    /// 8. AlignmentStep - Align face based on eye positions (if enabled)
+    /// 9. ResizeStep - Final resize to output size (always)
+    pub fn with_steps_from_config(config: &Config) -> Self {
+        use steps::*;
+
+        let mut pipeline = Self::new();
+
+        // Optional: Face resolution validation
+        if config.processing.face_resolution.enabled {
+            pipeline.add_step(Box::new(FaceResolutionStep));
+        }
+
+        // Core: Always decode the image
+        pipeline.add_step(Box::new(DecodeImageStep));
+
+        // Optional: Brightness validation
+        if config.processing.brightness.enabled {
+            pipeline.add_step(Box::new(BrightnessStep));
+        }
+
+        // Core: Always crop the face
+        pipeline.add_step(Box::new(CropFaceStep));
+
+        // Optional: Head pose validation
+        if config.processing.head_pose.enabled {
+            pipeline.add_step(Box::new(HeadPoseStep));
+        }
+
+        // Landmarks are needed if eye_filter or alignment is enabled
+        let needs_landmarks = config.processing.eye_filter.enabled
+            || config.processing.alignment.enabled;
+
+        if needs_landmarks {
+            pipeline.add_step(Box::new(LandmarksStep));
+        }
+
+        // Optional: Eye filter (requires landmarks)
+        if config.processing.eye_filter.enabled {
+            pipeline.add_step(Box::new(EyeFilterStep));
+        }
+
+        // Optional: Alignment (requires landmarks)
+        if config.processing.alignment.enabled {
+            pipeline.add_step(Box::new(AlignmentStep));
+        }
+
+        // Core: Always resize to output size
+        pipeline.add_step(Box::new(ResizeStep));
+
+        pipeline
+    }
+
+    /// Create pipeline with all steps (for testing).
+    #[cfg(test)]
+    pub fn with_all_steps() -> Self {
         use steps::*;
 
         let mut pipeline = Self::new();
@@ -198,13 +252,21 @@ impl Pipeline {
                         debug_images,
                     };
                 }
-                StepOutcome::Error(error) => {
+                StepOutcome::Error { ctx, error } => {
                     tracing::warn!(
                         "Asset {} error at step '{}': {}",
                         asset_id,
                         step.id(),
                         error
                     );
+
+                    // Collect debug images from error context
+                    let debug_images: Vec<(String, DebugImage)> = ctx.debug_images.into_iter().collect();
+
+                    // Save debug images if enabled
+                    if let Some(debug_base) = debug_dir {
+                        save_debug_images(debug_base, &debug_images, &timestamp, &asset_id).await;
+                    }
 
                     return PipelineResult::Error { asset_id, error };
                 }
@@ -284,10 +346,11 @@ async fn save_debug_images(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
 
     #[test]
-    fn test_pipeline_step_ids() {
-        let pipeline = Pipeline::with_default_steps();
+    fn test_pipeline_with_all_steps() {
+        let pipeline = Pipeline::with_all_steps();
         let ids = pipeline.step_ids();
 
         assert!(ids.contains(&"face_resolution"));
@@ -299,5 +362,46 @@ mod tests {
         assert!(ids.contains(&"eye_filter"));
         assert!(ids.contains(&"alignment"));
         assert!(ids.contains(&"resize"));
+    }
+
+    #[test]
+    fn test_pipeline_from_config_minimal() {
+        // Config with all optional steps disabled
+        let mut config = Config::default();
+        config.processing.face_resolution.enabled = false;
+        config.processing.brightness.enabled = false;
+        config.processing.head_pose.enabled = false;
+        config.processing.eye_filter.enabled = false;
+        config.processing.alignment.enabled = false;
+
+        let pipeline = Pipeline::with_steps_from_config(&config);
+        let ids = pipeline.step_ids();
+
+        // Only core steps should be present
+        assert!(ids.contains(&"decode"));
+        assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"resize"));
+        assert_eq!(ids.len(), 3);
+    }
+
+    #[test]
+    fn test_pipeline_from_config_with_eye_filter() {
+        let mut config = Config::default();
+        config.processing.face_resolution.enabled = false;
+        config.processing.brightness.enabled = false;
+        config.processing.head_pose.enabled = false;
+        config.processing.eye_filter.enabled = true;
+        config.processing.alignment.enabled = false;
+
+        let pipeline = Pipeline::with_steps_from_config(&config);
+        let ids = pipeline.step_ids();
+
+        // Should include landmarks (dependency) and eye_filter
+        assert!(ids.contains(&"decode"));
+        assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"landmarks"));
+        assert!(ids.contains(&"eye_filter"));
+        assert!(ids.contains(&"resize"));
+        assert!(!ids.contains(&"alignment"));
     }
 }

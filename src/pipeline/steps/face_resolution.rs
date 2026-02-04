@@ -3,7 +3,7 @@
 //! Skips images where the detected face is too small.
 
 use crate::config::Config;
-use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 
 /// Validates that the face bounding box meets minimum size requirements.
@@ -38,7 +38,7 @@ impl ProcessingStep for FaceResolutionStep {
         let face_size = face_width.min(face_height) as i32;
 
         // Store computed value for later steps or debugging
-        ctx.set_computed("face_size", ComputedValue::Int(face_size));
+        ctx.set_computed(computed_keys::FACE_SIZE, ComputedValue::Int(face_size));
 
         let threshold = step_config.min_size as i32;
 
@@ -96,7 +96,7 @@ mod tests {
             StepOutcome::Continue(new_ctx) => {
                 // Should have stored face_size
                 assert_eq!(
-                    new_ctx.get_computed("face_size").and_then(|v| v.as_int()),
+                    new_ctx.get_computed(computed_keys::FACE_SIZE).and_then(|v| v.as_int()),
                     Some(100)
                 );
             }

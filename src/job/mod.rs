@@ -192,8 +192,8 @@ async fn run_job_inner(
         })
         .await;
 
-    // Create the processing pipeline
-    let pipeline = Arc::new(Pipeline::with_default_steps());
+    // Create the processing pipeline based on config
+    let pipeline = Arc::new(Pipeline::with_steps_from_config(&config));
     tracing::debug!("Pipeline steps: {:?}", pipeline.step_ids());
 
     // Process images in parallel with concurrency limit

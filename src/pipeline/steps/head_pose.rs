@@ -5,7 +5,7 @@
 
 use crate::config::Config;
 use crate::models::DMHeadModel;
-use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
 
@@ -35,7 +35,7 @@ impl ProcessingStep for HeadPoseStep {
 
         let image = match ctx.require_image("head pose estimation") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         // Load the DMHead model
@@ -51,7 +51,7 @@ impl ProcessingStep for HeadPoseStep {
         // Extract a tighter face crop if we have the face rectangle
         // DMHead works better with tight face crops centered on the face
         let face_image: DynamicImage = if let Some(face_rect) = ctx
-            .get_computed("face_rect")
+            .get_computed(computed_keys::FACE_RECT)
             .and_then(|v| v.as_face_rect())
         {
             // Use the face rectangle to extract a tighter crop
@@ -83,12 +83,15 @@ impl ProcessingStep for HeadPoseStep {
         let pose = match model.estimate(&face_image) {
             Ok(p) => p,
             Err(e) => {
-                return StepOutcome::Error(format!("Head pose estimation failed: {}", e));
+                return StepOutcome::Error {
+                    ctx,
+                    error: format!("Head pose estimation failed: {}", e),
+                };
             }
         };
 
         // Store pose in computed values
-        ctx.set_computed("head_pose", ComputedValue::HeadPose(pose));
+        ctx.set_computed(computed_keys::HEAD_POSE, ComputedValue::HeadPose(pose));
 
         // Check against thresholds
         let head_pose_config = &config.processing.head_pose;
@@ -139,7 +142,7 @@ impl ProcessingStep for HeadPoseStep {
     fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
         // Get head pose from computed values
         let pose = ctx
-            .get_computed("head_pose")
+            .get_computed(computed_keys::HEAD_POSE)
             .and_then(|v| v.as_head_pose())?;
 
         // Get the current image to draw on
@@ -243,54 +246,6 @@ fn draw_line(img: &mut RgbImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgb<
     }
 }
 
-/// Draw simple text using a basic 5x7 pixel font.
-/// Only supports basic ASCII characters needed for pose display.
-fn draw_simple_text(img: &mut RgbImage, x: u32, y: u32, text: &str, color: Rgb<u8>) {
-    let (width, height) = (img.width(), img.height());
-    let mut cursor_x = x;
-
-    for ch in text.chars() {
-        let pattern = get_char_pattern(ch);
-        for (row_idx, row) in pattern.iter().enumerate() {
-            for col in 0..5 {
-                if (row >> (4 - col)) & 1 == 1 {
-                    let px = cursor_x + col;
-                    let py = y + row_idx as u32;
-                    if px < width && py < height {
-                        img.put_pixel(px, py, color);
-                    }
-                }
-            }
-        }
-        cursor_x += 6; // 5 pixels wide + 1 pixel spacing
-    }
-}
-
-/// Get a 5x7 pixel pattern for a character.
-fn get_char_pattern(ch: char) -> [u8; 7] {
-    match ch {
-        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
-        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
-        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        'Y' => [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
-        'P' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000],
-        'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
-        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00100, 0b00000, 0b00000],
-        '+' => [0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000],
-        '-' => [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
-        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
-        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,8 +289,8 @@ mod tests {
         config.processing.head_pose.enabled = true;
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Error(msg) => {
-                assert!(msg.contains("No image"));
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("No image"));
             }
             other => panic!("Expected Error, got {:?}", other),
         }

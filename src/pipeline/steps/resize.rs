@@ -26,7 +26,7 @@ impl ProcessingStep for ResizeStep {
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
         let image = match ctx.take_image("resizing") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         let output_size = config.processing.output.size;
@@ -97,8 +97,8 @@ mod tests {
         let config = Config::default();
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Error(msg) => {
-                assert!(msg.contains("No image"));
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("No image"));
             }
             _ => panic!("Expected Error"),
         }

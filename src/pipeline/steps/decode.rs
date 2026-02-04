@@ -27,9 +27,10 @@ impl ProcessingStep for DecodeImageStep {
         let raw_bytes = match &ctx.raw_bytes {
             Some(bytes) => bytes,
             None => {
-                return StepOutcome::Error(
-                    "No raw bytes available for decoding".to_string(),
-                );
+                return StepOutcome::Error {
+                    ctx,
+                    error: "No raw bytes available for decoding".to_string(),
+                };
             }
         };
 
@@ -125,8 +126,8 @@ mod tests {
         let config = Config::default();
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Error(msg) => {
-                assert!(msg.contains("No raw bytes"));
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("No raw bytes"));
             }
             _ => panic!("Expected Error"),
         }

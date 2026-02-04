@@ -4,7 +4,7 @@
 
 use crate::config::Config;
 use crate::pipeline::crop_face_with_intermediate;
-use crate::pipeline::{ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 
 /// Crops the face region from the full image.
@@ -26,7 +26,7 @@ impl ProcessingStep for CropFaceStep {
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
         let image = match ctx.require_image("cropping") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         // Crop returns CropResult with cropped images and face rectangle in crop coordinates.
@@ -36,7 +36,7 @@ impl ProcessingStep for CropFaceStep {
                 // Use the full-resolution cropped image; resize step will handle final size
                 ctx.image = Some(crop_result.cropped);
                 // Store the face rectangle in crop coordinates for later steps
-                ctx.set_computed("face_rect", ComputedValue::FaceRect(crop_result.face_rect));
+                ctx.set_computed(computed_keys::FACE_RECT, ComputedValue::FaceRect(crop_result.face_rect));
                 StepOutcome::Continue(ctx)
             }
             Err(e) => StepOutcome::Skip {
@@ -110,8 +110,8 @@ mod tests {
         let config = Config::default();
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Error(msg) => {
-                assert!(msg.contains("No image"));
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("No image"));
             }
             _ => panic!("Expected Error"),
         }

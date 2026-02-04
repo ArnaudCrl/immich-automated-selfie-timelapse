@@ -4,7 +4,7 @@
 
 use crate::config::Config;
 use crate::models::DlibLandmarks;
-use crate::pipeline::{ComputedValue, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, ComputedValue, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use tokio::task;
 
@@ -39,7 +39,7 @@ impl ProcessingStep for LandmarksStep {
 
         let image = match ctx.require_image("landmark detection") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         // Get the global landmark predictor (loaded once, reused for all images)
@@ -63,7 +63,7 @@ impl ProcessingStep for LandmarksStep {
 
         // Get the face rectangle if available
         let face_rect: Option<(i64, i64, i64, i64)> = ctx
-            .get_computed("face_rect")
+            .get_computed(computed_keys::FACE_RECT)
             .and_then(|v| v.as_face_rect())
             .map(|r| (r.x1 as i64, r.y1 as i64, r.x2 as i64, r.y2 as i64));
 
@@ -84,17 +84,20 @@ impl ProcessingStep for LandmarksStep {
                 };
             }
             Err(e) => {
-                return StepOutcome::Error(format!("Landmark detection task failed: {}", e));
+                return StepOutcome::Error {
+                    ctx,
+                    error: format!("Landmark detection task failed: {}", e),
+                };
             }
         };
 
         // Compute and store EAR
         let ear = landmarks.eye_aspect_ratio();
         let avg_ear = (ear.left + ear.right) / 2.0;
-        ctx.set_computed("ear", ComputedValue::Float(avg_ear));
+        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(avg_ear));
 
         // Store landmarks
-        ctx.set_computed("landmarks", ComputedValue::Landmarks(Box::new(landmarks)));
+        ctx.set_computed(computed_keys::LANDMARKS, ComputedValue::Landmarks(Box::new(landmarks)));
 
         tracing::trace!(
             "Landmarks detected: EAR left={:.3}, right={:.3}, avg={:.3}",
@@ -151,8 +154,8 @@ mod tests {
         config.processing.alignment.enabled = true;
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Error(msg) => {
-                assert!(msg.contains("No image"));
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("No image"));
             }
             other => panic!("Expected Error, got {:?}", other),
         }

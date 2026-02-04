@@ -4,7 +4,7 @@
 //! across all images in the timelapse.
 
 use crate::config::Config;
-use crate::pipeline::{Point, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, Point, PipelineContext, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use image::{DynamicImage, GenericImageView, Rgb};
 use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
@@ -36,7 +36,7 @@ impl ProcessingStep for AlignmentStep {
 
         // Get landmarks from previous step
         let landmarks: crate::pipeline::Landmarks = match ctx
-            .get_computed("landmarks")
+            .get_computed(computed_keys::LANDMARKS)
             .and_then(|v| v.as_landmarks())
         {
             Some(l) => l.clone(),
@@ -49,7 +49,7 @@ impl ProcessingStep for AlignmentStep {
 
         let image = match ctx.take_image("alignment") {
             Ok(img) => img,
-            Err(e) => return StepOutcome::Error(e),
+            Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
         let (width, height) = image.dimensions();

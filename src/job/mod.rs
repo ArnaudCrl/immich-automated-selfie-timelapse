@@ -101,6 +101,12 @@ async fn run_job_inner(
     let folder_name = sanitize_folder_name(params.person_name.as_deref(), &params.person_id);
     let person_dir = config.output_dir.join(&folder_name);
 
+    // If the folder exists, delete all its contents to start fresh
+    if person_dir.exists() {
+        tracing::info!("Removing existing folder: {}", person_dir.display());
+        tokio::fs::remove_dir_all(&person_dir).await?;
+    }
+
     // Create output directories
     let images_dir = person_dir.join("images");
     tokio::fs::create_dir_all(&images_dir).await?;

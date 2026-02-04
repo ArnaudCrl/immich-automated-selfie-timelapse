@@ -113,7 +113,7 @@
   function handleStartClick() {
     if (existingFolder) {
       const folder = existingFolder;
-      const message = `"${folder.name}" already has ${folder.image_count} images (${formatSize(folder.size_bytes)})${folder.has_video ? ' and a compiled video' : ''}.\n\nClick OK to overwrite.`;
+      const message = `"${folder.name}" already has ${folder.image_count} images (${formatSize(folder.size_bytes)})${folder.has_video ? ' and a compiled video' : ''}.\n\nAll existing content in ${folder.name} will be permanently deleted.\n\nClick OK to continue.`;
 
       if (confirm(message)) {
         startProcessing();

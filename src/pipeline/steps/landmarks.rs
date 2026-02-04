@@ -28,15 +28,8 @@ impl ProcessingStep for LandmarksStep {
         "Landmarks"
     }
 
-    async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        // We always need landmarks if alignment is enabled, even if eye filter is disabled
-        let need_landmarks =
-            config.processing.alignment.enabled || config.processing.eye_filter.enabled;
-
-        if !need_landmarks {
-            return StepOutcome::Continue(ctx);
-        }
-
+    async fn execute(&self, mut ctx: PipelineContext, _config: &Config) -> StepOutcome {
+        // Landmarks are always needed for face alignment
         let image = match ctx.require_image("landmark detection") {
             Ok(img) => img,
             Err(e) => return StepOutcome::Error { ctx, error: e },
@@ -114,7 +107,6 @@ impl ProcessingStep for LandmarksStep {
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
-    use image::{DynamicImage, RgbImage};
 
     fn make_test_ctx() -> PipelineContext {
         let face_data = FaceData {
@@ -129,29 +121,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_disabled_skips_check() {
-        let step = LandmarksStep;
-        let ctx = make_test_ctx();
-        let mut config = Config::default();
-        config.processing.alignment.enabled = false;
-        config.processing.eye_filter.enabled = false;
-
-        // Create a dummy image
-        let img = DynamicImage::ImageRgb8(RgbImage::new(100, 100));
-        let ctx = ctx.with_image(img);
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Expected
-            other => panic!("Expected Continue when disabled, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
     async fn test_no_image_error() {
         let step = LandmarksStep;
         let ctx = make_test_ctx();
-        let mut config = Config::default();
-        config.processing.alignment.enabled = true;
+        let config = Config::default();
 
         match step.execute(ctx, &config).await {
             StepOutcome::Error { error, .. } => {

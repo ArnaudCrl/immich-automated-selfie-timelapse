@@ -16,9 +16,9 @@
 mod crop_utils;
 mod debug_utils;
 mod orientation;
+pub mod steps;
 mod traits;
 mod types;
-pub mod steps;
 
 pub use crop_utils::{crop_face_with_intermediate, CropResult};
 pub use debug_utils::draw_simple_text;
@@ -57,14 +57,9 @@ pub enum PipelineResult {
         debug_images: Vec<(String, DebugImage)>,
     },
     /// Processing error.
-    Error {
-        asset_id: String,
-        error: String,
-    },
+    Error { asset_id: String, error: String },
     /// Cancelled by user.
-    Cancelled {
-        asset_id: String,
-    },
+    Cancelled { asset_id: String },
 }
 
 /// Processing pipeline that executes steps sequentially.
@@ -75,7 +70,10 @@ pub struct Pipeline {
 impl std::fmt::Debug for Pipeline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Pipeline")
-            .field("steps", &self.steps.iter().map(|s| s.id()).collect::<Vec<_>>())
+            .field(
+                "steps",
+                &self.steps.iter().map(|s| s.id()).collect::<Vec<_>>(),
+            )
             .finish()
     }
 }
@@ -100,12 +98,12 @@ impl Pipeline {
     /// Pipeline order:
     /// 1. FaceResolutionStep - Validate face size from Immich metadata (if enabled)
     /// 2. DecodeImageStep - Load and orient the image (always)
-    /// 3. BrightnessStep - Filter by luminance (if enabled)
-    /// 4. CropFaceStep - Extract face region with padding (always)
+    /// 3. CropFaceStep - Extract face region with padding (always)
+    /// 4. BrightnessStep - Filter by luminance on cropped face (if enabled)
     /// 5. HeadPoseStep - Filter non-frontal faces (if enabled)
-    /// 6. LandmarksStep - Detect 68 facial landmarks (if eye_filter or alignment enabled)
+    /// 6. LandmarksStep - Detect 68 facial landmarks (always)
     /// 7. EyeFilterStep - Filter closed eyes by EAR (if enabled)
-    /// 8. AlignmentStep - Align face based on eye positions (if enabled)
+    /// 8. AlignmentStep - Align face based on eye positions (always)
     /// 9. ResizeStep - Final resize to output size (always)
     pub fn with_steps_from_config(config: &Config) -> Self {
         use steps::*;
@@ -120,36 +118,29 @@ impl Pipeline {
         // Core: Always decode the image
         pipeline.add_step(Box::new(DecodeImageStep));
 
-        // Optional: Brightness validation
+        // Core: Always crop the face
+        pipeline.add_step(Box::new(CropFaceStep));
+
+        // Optional: Brightness validation (on cropped face region)
         if config.processing.brightness.enabled {
             pipeline.add_step(Box::new(BrightnessStep));
         }
-
-        // Core: Always crop the face
-        pipeline.add_step(Box::new(CropFaceStep));
 
         // Optional: Head pose validation
         if config.processing.head_pose.enabled {
             pipeline.add_step(Box::new(HeadPoseStep));
         }
 
-        // Landmarks are needed if eye_filter or alignment is enabled
-        let needs_landmarks = config.processing.eye_filter.enabled
-            || config.processing.alignment.enabled;
-
-        if needs_landmarks {
-            pipeline.add_step(Box::new(LandmarksStep));
-        }
+        // Core: Always detect landmarks (required for alignment)
+        pipeline.add_step(Box::new(LandmarksStep));
 
         // Optional: Eye filter (requires landmarks)
         if config.processing.eye_filter.enabled {
             pipeline.add_step(Box::new(EyeFilterStep));
         }
 
-        // Optional: Alignment (requires landmarks)
-        if config.processing.alignment.enabled {
-            pipeline.add_step(Box::new(AlignmentStep));
-        }
+        // Core: Always align face based on eye positions
+        pipeline.add_step(Box::new(AlignmentStep));
 
         // Core: Always resize to output size
         pipeline.add_step(Box::new(ResizeStep));
@@ -165,8 +156,8 @@ impl Pipeline {
         let mut pipeline = Self::new();
         pipeline.add_step(Box::new(FaceResolutionStep));
         pipeline.add_step(Box::new(DecodeImageStep));
-        pipeline.add_step(Box::new(BrightnessStep));
         pipeline.add_step(Box::new(CropFaceStep));
+        pipeline.add_step(Box::new(BrightnessStep));
         pipeline.add_step(Box::new(HeadPoseStep));
         pipeline.add_step(Box::new(LandmarksStep));
         pipeline.add_step(Box::new(EyeFilterStep));
@@ -219,7 +210,11 @@ impl Pipeline {
                         }
                     }
                 }
-                StepOutcome::Skip { mut ctx, reason, detail } => {
+                StepOutcome::Skip {
+                    mut ctx,
+                    reason,
+                    detail,
+                } => {
                     // Update skip stats with the step ID as reason
                     skip_stats.increment(&reason);
 
@@ -239,7 +234,8 @@ impl Pipeline {
                     );
 
                     // Collect and save debug images before returning
-                    let debug_images: Vec<(String, DebugImage)> = ctx.debug_images.into_iter().collect();
+                    let debug_images: Vec<(String, DebugImage)> =
+                        ctx.debug_images.into_iter().collect();
 
                     if let Some(debug_base) = debug_dir {
                         save_debug_images(debug_base, &debug_images, &timestamp, &asset_id).await;
@@ -261,7 +257,8 @@ impl Pipeline {
                     );
 
                     // Collect debug images from error context
-                    let debug_images: Vec<(String, DebugImage)> = ctx.debug_images.into_iter().collect();
+                    let debug_images: Vec<(String, DebugImage)> =
+                        ctx.debug_images.into_iter().collect();
 
                     // Save debug images if enabled
                     if let Some(debug_base) = debug_dir {
@@ -326,7 +323,13 @@ async fn save_debug_images(
 
         let filename = format!("{}_{}.jpg", timestamp, asset_id)
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>();
 
         let debug_path = step_dir.join(&filename);
@@ -372,16 +375,17 @@ mod tests {
         config.processing.brightness.enabled = false;
         config.processing.head_pose.enabled = false;
         config.processing.eye_filter.enabled = false;
-        config.processing.alignment.enabled = false;
 
         let pipeline = Pipeline::with_steps_from_config(&config);
         let ids = pipeline.step_ids();
 
-        // Only core steps should be present
+        // Core steps: decode, crop, landmarks, alignment, resize
         assert!(ids.contains(&"decode"));
         assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"landmarks"));
+        assert!(ids.contains(&"alignment"));
         assert!(ids.contains(&"resize"));
-        assert_eq!(ids.len(), 3);
+        assert_eq!(ids.len(), 5);
     }
 
     #[test]
@@ -391,17 +395,16 @@ mod tests {
         config.processing.brightness.enabled = false;
         config.processing.head_pose.enabled = false;
         config.processing.eye_filter.enabled = true;
-        config.processing.alignment.enabled = false;
 
         let pipeline = Pipeline::with_steps_from_config(&config);
         let ids = pipeline.step_ids();
 
-        // Should include landmarks (dependency) and eye_filter
+        // Core steps (decode, crop, landmarks, alignment, resize) plus eye_filter
         assert!(ids.contains(&"decode"));
         assert!(ids.contains(&"crop"));
         assert!(ids.contains(&"landmarks"));
         assert!(ids.contains(&"eye_filter"));
+        assert!(ids.contains(&"alignment")); // Alignment is now always enabled
         assert!(ids.contains(&"resize"));
-        assert!(!ids.contains(&"alignment"));
     }
 }

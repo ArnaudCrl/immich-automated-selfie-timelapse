@@ -38,7 +38,6 @@
         keep_intermediates: false,
       },
       alignment: {
-        enabled: true,
         eye_y_position: 0.35,
         inter_eye_distance: 0.30,
       },
@@ -117,7 +116,6 @@
         keep_intermediates: false,
       },
       alignment: {
-        enabled: true,
         eye_y_position: 0.35,
         inter_eye_distance: 0.30,
       },
@@ -367,47 +365,42 @@
               <div class="setting-section">
                 <div class="section-header">
                   <span class="section-title">Face Alignment</span>
-                  <input
-                    type="checkbox"
-                    bind:checked={config.processing.alignment.enabled}
-                  />
+                  <span class="setting-hint" style="font-style: italic; color: var(--text-secondary);">Always enabled</span>
                 </div>
 
-                {#if config.processing.alignment.enabled}
-                  <div class="setting-row sub-setting">
-                    <label>
-                      <span class="setting-label">Eye Y Position</span>
-                      <span class="setting-hint">Vertical position of eyes (% from top)</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        type="range"
-                        bind:value={config.processing.alignment.eye_y_position}
-                        min="0.2"
-                        max="0.5"
-                        step="0.01"
-                      />
-                      <span class="value">{(config.processing.alignment.eye_y_position * 100).toFixed(0)}%</span>
-                    </div>
+                <div class="setting-row sub-setting">
+                  <label>
+                    <span class="setting-label">Eye Y Position</span>
+                    <span class="setting-hint">Vertical position of eyes (% from top)</span>
+                  </label>
+                  <div class="setting-control">
+                    <input
+                      type="range"
+                      bind:value={config.processing.alignment.eye_y_position}
+                      min="0.2"
+                      max="0.5"
+                      step="0.01"
+                    />
+                    <span class="value">{(config.processing.alignment.eye_y_position * 100).toFixed(0)}%</span>
                   </div>
+                </div>
 
-                  <div class="setting-row sub-setting">
-                    <label>
-                      <span class="setting-label">Inter-eye Distance</span>
-                      <span class="setting-hint">Distance between eyes (% of width)</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        type="range"
-                        bind:value={config.processing.alignment.inter_eye_distance}
-                        min="0.2"
-                        max="0.5"
-                        step="0.01"
-                      />
-                      <span class="value">{(config.processing.alignment.inter_eye_distance * 100).toFixed(0)}%</span>
-                    </div>
+                <div class="setting-row sub-setting">
+                  <label>
+                    <span class="setting-label">Inter-eye Distance</span>
+                    <span class="setting-hint">Distance between eyes (% of width)</span>
+                  </label>
+                  <div class="setting-control">
+                    <input
+                      type="range"
+                      bind:value={config.processing.alignment.inter_eye_distance}
+                      min="0.2"
+                      max="0.5"
+                      step="0.01"
+                    />
+                    <span class="value">{(config.processing.alignment.inter_eye_distance * 100).toFixed(0)}%</span>
                   </div>
-                {/if}
+                </div>
               </div>
             </fieldset>
           {:else if activeTab === 'output'}

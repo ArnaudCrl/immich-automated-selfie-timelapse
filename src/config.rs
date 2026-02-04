@@ -298,11 +298,10 @@ impl EyeFilterConfig {
 ///
 /// Aligns faces based on eye positions detected from facial landmarks,
 /// ensuring consistent eye placement across all images for smoother timelapses.
+///
+/// Note: Face alignment is always enabled and is a core part of the pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlignmentConfig {
-    /// Whether face alignment is enabled.
-    pub enabled: bool,
-
     /// Target Y position for eyes as percentage from top (0.0-1.0).
     /// Default 0.35 places eyes at 35% from the top.
     pub eye_y_position: f32,
@@ -315,7 +314,6 @@ pub struct AlignmentConfig {
 impl Default for AlignmentConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
             eye_y_position: 0.35,
             inter_eye_distance: 0.30,
         }
@@ -325,32 +323,30 @@ impl Default for AlignmentConfig {
 impl AlignmentConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
-        if self.enabled {
-            if self.eye_y_position <= 0.0 || self.eye_y_position >= 1.0 {
-                return Err(Error::Config(
-                    "Alignment eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
-                ));
-            }
-            if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
-                return Err(Error::Config(
-                    "Alignment eye_y_position should be between 0.2 and 0.5 for best results".to_string(),
-                ));
-            }
-            if self.inter_eye_distance <= 0.0 {
-                return Err(Error::Config(
-                    "Alignment inter_eye_distance must be greater than 0 to prevent division by zero".to_string(),
-                ));
-            }
-            if self.inter_eye_distance >= 1.0 {
-                return Err(Error::Config(
-                    "Alignment inter_eye_distance must be less than 1.0".to_string(),
-                ));
-            }
-            if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
-                return Err(Error::Config(
-                    "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results".to_string(),
-                ));
-            }
+        if self.eye_y_position <= 0.0 || self.eye_y_position >= 1.0 {
+            return Err(Error::Config(
+                "Alignment eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
+            ));
+        }
+        if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
+            return Err(Error::Config(
+                "Alignment eye_y_position should be between 0.2 and 0.5 for best results".to_string(),
+            ));
+        }
+        if self.inter_eye_distance <= 0.0 {
+            return Err(Error::Config(
+                "Alignment inter_eye_distance must be greater than 0 to prevent division by zero".to_string(),
+            ));
+        }
+        if self.inter_eye_distance >= 1.0 {
+            return Err(Error::Config(
+                "Alignment inter_eye_distance must be less than 1.0".to_string(),
+            ));
+        }
+        if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
+            return Err(Error::Config(
+                "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results".to_string(),
+            ));
         }
         Ok(())
     }

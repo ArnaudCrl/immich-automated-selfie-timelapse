@@ -29,21 +29,18 @@ impl ProcessingStep for AlignmentStep {
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        // Skip if alignment is disabled
-        if !config.processing.alignment.enabled {
-            return StepOutcome::Continue(ctx);
-        }
-
-        // Get landmarks from previous step
+        // Get landmarks from previous step (required)
         let landmarks: crate::pipeline::Landmarks = match ctx
             .get_computed(computed_keys::LANDMARKS)
             .and_then(|v| v.as_landmarks())
         {
             Some(l) => l.clone(),
             None => {
-                // If landmarks aren't available, skip alignment but continue
-                tracing::warn!("Landmarks not available, skipping alignment");
-                return StepOutcome::Continue(ctx);
+                // Landmarks should always be available since LandmarksStep is mandatory
+                return StepOutcome::Error {
+                    ctx,
+                    error: "Landmarks not available for alignment - pipeline misconfigured".to_string(),
+                };
             }
         };
 
@@ -176,38 +173,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_disabled_skips_alignment() {
+    async fn test_no_landmarks_errors() {
         let step = AlignmentStep;
         let ctx = make_test_ctx();
-        let mut config = Config::default();
-        config.processing.alignment.enabled = false;
-
-        // Create a dummy image
-        let img = DynamicImage::ImageRgb8(RgbImage::new(100, 100));
-        let ctx = ctx.with_image(img);
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Continue(new_ctx) => {
-                assert!(new_ctx.image.is_some());
-            }
-            other => panic!("Expected Continue when disabled, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_no_landmarks_continues() {
-        let step = AlignmentStep;
-        let ctx = make_test_ctx();
-        let mut config = Config::default();
-        config.processing.alignment.enabled = true;
+        let config = Config::default();
 
         // Create a dummy image but no landmarks
         let img = DynamicImage::ImageRgb8(RgbImage::new(100, 100));
         let ctx = ctx.with_image(img);
 
         match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Expected - continues without alignment
-            other => panic!("Expected Continue without landmarks, got {:?}", other),
+            StepOutcome::Error { error, .. } => {
+                assert!(error.contains("Landmarks not available"));
+            }
+            other => panic!("Expected Error without landmarks, got {:?}", other),
         }
     }
 }

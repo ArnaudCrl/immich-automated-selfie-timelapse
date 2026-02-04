@@ -6,6 +6,7 @@ use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 ///
 /// This sanitizes user input to create safe filesystem paths by:
 /// - Using the person name if provided and non-empty, otherwise falling back to ID
+/// - Removing accents and diacritical marks
 /// - Converting to lowercase
 /// - Replacing spaces with underscores
 /// - Replacing unsafe characters with underscores
@@ -81,5 +82,23 @@ mod tests {
         let long_name = "A".repeat(100);
         let result = sanitize_folder_name(Some(&long_name), "id");
         assert_eq!(result.len(), 50);
+    }
+
+    #[test]
+    fn test_sanitize_folder_name_removes_accents() {
+        // French accents
+        assert_eq!(sanitize_folder_name(Some("José"), "id"), "jose");
+        assert_eq!(sanitize_folder_name(Some("René"), "id"), "rene");
+        assert_eq!(sanitize_folder_name(Some("François"), "id"), "francois");
+
+        // German umlauts
+        assert_eq!(sanitize_folder_name(Some("Müller"), "id"), "muller");
+        assert_eq!(sanitize_folder_name(Some("Björk"), "id"), "bjork");
+
+        // Spanish
+        assert_eq!(sanitize_folder_name(Some("Peña"), "id"), "pena");
+
+        // Mixed accents
+        assert_eq!(sanitize_folder_name(Some("Élève Français"), "id"), "eleve_francais");
     }
 }

@@ -1,5 +1,7 @@
 //! Shared utility functions.
 
+use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
+
 /// Create a safe snake_case folder name from person name or ID.
 ///
 /// This sanitizes user input to create safe filesystem paths by:
@@ -15,8 +17,14 @@
 pub fn sanitize_folder_name(name: Option<&str>, id: &str) -> String {
     let base = name.filter(|n| !n.is_empty()).unwrap_or(id);
 
+    // Remove accents by decomposing to NFD and filtering combining marks
+    let without_accents: String = base
+        .nfd()
+        .filter(|c| !is_combining_mark(*c))
+        .collect();
+
     // Convert to lowercase and replace unsafe characters with underscores
-    let sanitized: String = base
+    let sanitized: String = without_accents
         .to_lowercase()
         .chars()
         .map(|c| {

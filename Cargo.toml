@@ -50,6 +50,7 @@ tokio-util = "0.7"
 futures-util = "0.3"
 async-trait = "0.1"
 dotenvy = "0.15"
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"

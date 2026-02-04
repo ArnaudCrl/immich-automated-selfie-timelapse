@@ -4,7 +4,7 @@
 //! and roll angles from a cropped face image.
 //!
 //! Model source: https://github.com/PINTO0309/DMHead
-//! Input: 224x224 RGB image, normalized to [-1, 1]
+//! Input: 224x224 RGB image
 //! Output: [yaw, pitch, roll] in degrees
 
 use crate::error::{Error, Result};
@@ -85,7 +85,7 @@ impl DMHeadModel {
             image::imageops::FilterType::Triangle,
         );
 
-        // Convert to RGB and normalize to [-1, 1]
+        // Convert to RGB
         let rgb = resized.to_rgb8();
         let (width, height) = rgb.dimensions();
 

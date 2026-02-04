@@ -5,9 +5,186 @@
 
 use crate::config::Config;
 use crate::models::DMHeadModel;
-use crate::pipeline::{computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{
+    computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome,
+};
 use async_trait::async_trait;
 use image::{DynamicImage, GenericImageView, Rgb, RgbImage};
+
+/// 3D point for cube vertices
+#[derive(Clone, Copy)]
+struct Point3D {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+impl Point3D {
+    fn new(x: f32, y: f32, z: f32) -> Self {
+        Self { x, y, z }
+    }
+
+    /// Rotate around Y axis (yaw)
+    fn rotate_y(self, angle_deg: f32) -> Self {
+        let rad = angle_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        Self {
+            x: self.x * cos + self.z * sin,
+            y: self.y,
+            z: -self.x * sin + self.z * cos,
+        }
+    }
+
+    /// Rotate around X axis (pitch)
+    fn rotate_x(self, angle_deg: f32) -> Self {
+        let rad = angle_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        Self {
+            x: self.x,
+            y: self.y * cos - self.z * sin,
+            z: self.y * sin + self.z * cos,
+        }
+    }
+
+    /// Rotate around Z axis (roll)
+    fn rotate_z(self, angle_deg: f32) -> Self {
+        let rad = angle_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        Self {
+            x: self.x * cos - self.y * sin,
+            y: self.x * sin + self.y * cos,
+            z: self.z,
+        }
+    }
+
+    /// Project 3D point to 2D using perspective projection
+    fn project(self, cx: f32, cy: f32, focal_length: f32) -> (i32, i32) {
+        let scale = focal_length / (focal_length + self.z);
+        let x2d = cx + self.x * scale;
+        let y2d = cy + self.y * scale;
+        (x2d as i32, y2d as i32)
+    }
+}
+
+/// Draw a 3D cube where the back face is the face bounding box
+/// and the cube projects forward based on head pose
+fn draw_3d_cube(
+    img: &mut RgbImage,
+    x1: i32,
+    y1: i32,
+    x2: i32,
+    y2: i32,
+    yaw: f32,
+    pitch: f32,
+    roll: f32,
+) {
+    // Calculate face center and size
+    let cx = ((x1 + x2) / 2) as f32;
+    let cy = ((y1 + y2) / 2) as f32;
+    let width = (x2 - x1) as f32;
+    let height = (y2 - y1) as f32;
+    let half_w = width / 2.0;
+    let half_h = height / 2.0;
+
+    // Depth of the cube (how far it projects forward)
+    let depth = width.max(height) * 0.8;
+
+    // Define 8 vertices of the cube
+    // Back face = face bounding box (at z=0)
+    // Front face = projected forward (at z=-depth, negative means towards camera)
+    let vertices = [
+        // Front face (closer to camera)
+        Point3D::new(-half_w, -half_h, -depth),  // 0: top-left-front
+        Point3D::new(half_w, -half_h, -depth),   // 1: top-right-front
+        Point3D::new(half_w, half_h, -depth),    // 2: bottom-right-front
+        Point3D::new(-half_w, half_h, -depth),   // 3: bottom-left-front
+        // Back face (face bounding box)
+        Point3D::new(-half_w, -half_h, 0.0),     // 4: top-left-back
+        Point3D::new(half_w, -half_h, 0.0),      // 5: top-right-back
+        Point3D::new(half_w, half_h, 0.0),       // 6: bottom-right-back
+        Point3D::new(-half_w, half_h, 0.0),      // 7: bottom-left-back
+    ];
+
+    // Apply rotations (order: yaw -> pitch -> roll) and project to 2D
+    let focal_length = width.max(height) * 2.0;
+    let rotated: Vec<(i32, i32)> = vertices
+        .iter()
+        .map(|&v| {
+            v.rotate_y(yaw)
+                .rotate_x(pitch)
+                .rotate_z(roll)
+                .project(cx, cy, focal_length)
+        })
+        .collect();
+
+    // Define edges (pairs of vertex indices)
+    let edges = [
+        // Front face (cyan - closer to camera)
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        // Back face (green - face bounding box)
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        // Connecting edges (yellow)
+        (0, 4), (1, 5), (2, 6), (3, 7),
+    ];
+
+    // Draw front face in cyan (brighter)
+    for &(i, j) in &edges[0..4] {
+        let (x0, y0) = rotated[i];
+        let (x1, y1) = rotated[j];
+        draw_line(img, x0, y0, x1, y1, Rgb([0, 255, 255]));
+    }
+
+    // Draw back face in green (face bounding box)
+    for &(i, j) in &edges[4..8] {
+        let (x0, y0) = rotated[i];
+        let (x1, y1) = rotated[j];
+        draw_line(img, x0, y0, x1, y1, Rgb([0, 255, 0]));
+    }
+
+    // Draw connecting edges in yellow
+    for &(i, j) in &edges[8..12] {
+        let (x0, y0) = rotated[i];
+        let (x1, y1) = rotated[j];
+        draw_line(img, x0, y0, x1, y1, Rgb([255, 255, 0]));
+    }
+}
+
+/// Draw a line using Bresenham's algorithm.
+fn draw_line(img: &mut RgbImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgb<u8>) {
+    let (width, height) = (img.width() as i32, img.height() as i32);
+
+    let dx = (x1 - x0).abs();
+    let dy = -(y1 - y0).abs();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+
+    let mut x = x0;
+    let mut y = y0;
+
+    loop {
+        if x >= 0 && x < width && y >= 0 && y < height {
+            img.put_pixel(x as u32, y as u32, color);
+        }
+
+        if x == x1 && y == y1 {
+            break;
+        }
+
+        let e2 = 2 * err;
+        if e2 >= dy {
+            err += dy;
+            x += sx;
+        }
+        if e2 <= dx {
+            err += dx;
+            y += sy;
+        }
+    }
+}
 
 /// Estimates head pose and filters non-frontal faces.
 ///
@@ -33,7 +210,7 @@ impl ProcessingStep for HeadPoseStep {
             return StepOutcome::Continue(ctx);
         }
 
-        let image = match ctx.require_image("head pose estimation") {
+        let image: &DynamicImage = match ctx.require_image("head pose estimation") {
             Ok(img) => img,
             Err(e) => return StepOutcome::Error { ctx, error: e },
         };
@@ -43,13 +220,16 @@ impl ProcessingStep for HeadPoseStep {
             Ok(m) => m,
             Err(e) => {
                 // If model isn't available, skip this step with a warning
-                tracing::warn!("DMHead model not available, skipping head pose check: {}", e);
+                tracing::warn!(
+                    "DMHead model not available, skipping head pose check: {}",
+                    e
+                );
                 return StepOutcome::Continue(ctx);
             }
         };
 
-        // Extract a tighter face crop if we have the face rectangle
-        // DMHead works better with tight face crops centered on the face
+        // Extract a square face crop if we have the face rectangle
+        // Square crop prevents aspect ratio distortion when DMHead resizes to 224x224
         let face_image: DynamicImage = if let Some(face_rect) = ctx
             .get_computed(computed_keys::FACE_RECT)
             .and_then(|v| v.as_face_rect())
@@ -64,12 +244,27 @@ impl ProcessingStep for HeadPoseStep {
             if w > 10 && h > 10 {
                 // Add a small margin around the face for better model performance
                 let margin = (w.max(h) / 4).min(20);
-                let x = x.saturating_sub(margin);
-                let y = y.saturating_sub(margin);
-                let w = (w + margin * 2).min(img_w - x);
-                let h = (h + margin * 2).min(img_h - y);
+                let x_with_margin = x.saturating_sub(margin);
+                let y_with_margin = y.saturating_sub(margin);
+                let w_with_margin = (w + margin * 2).min(img_w - x_with_margin);
+                let h_with_margin = (h + margin * 2).min(img_h - y_with_margin);
 
-                image.crop_imm(x, y, w, h)
+                // Make the crop square by using the larger dimension
+                let size = w_with_margin.max(h_with_margin);
+
+                // Center the square crop around the face
+                let center_x = x_with_margin + w_with_margin / 2;
+                let center_y = y_with_margin + h_with_margin / 2;
+
+                let square_x = center_x.saturating_sub(size / 2);
+                let square_y = center_y.saturating_sub(size / 2);
+
+                // Ensure the square crop doesn't go out of bounds
+                let final_x = square_x.min(img_w.saturating_sub(size));
+                let final_y = square_y.min(img_h.saturating_sub(size));
+                let final_size = size.min(img_w - final_x).min(img_h - final_y);
+
+                image.crop_imm(final_x, final_y, final_size, final_size)
             } else {
                 // Face rect too small, use full image
                 image.clone()
@@ -153,44 +348,21 @@ impl ProcessingStep for HeadPoseStep {
         // Create a copy for visualization
         let mut debug_img = rgb.clone();
 
-        // Draw a center crosshair
-        let cx = width / 2;
-        let cy = height / 2;
-        let crosshair_size = 20u32;
+        // Get face rectangle if available
+        let face_rect = ctx
+            .get_computed(computed_keys::FACE_RECT)
+            .and_then(|v| v.as_face_rect());
 
-        // Horizontal line
-        for x in cx.saturating_sub(crosshair_size)..=(cx + crosshair_size).min(width - 1) {
-            debug_img.put_pixel(x, cy, Rgb([0, 255, 0]));
+        // Draw 3D cube where the back face is the face bounding box
+        if let Some(rect) = face_rect {
+            let x1 = rect.x1 as i32;
+            let y1 = rect.y1 as i32;
+            let x2 = rect.x2 as i32;
+            let y2 = rect.y2 as i32;
+
+            // Draw 3D cube with face box as back face
+            draw_3d_cube(&mut debug_img, x1, y1, x2, y2, pose.yaw, pose.pitch, pose.roll);
         }
-        // Vertical line
-        for y in cy.saturating_sub(crosshair_size)..=(cy + crosshair_size).min(height - 1) {
-            debug_img.put_pixel(cx, y, Rgb([0, 255, 0]));
-        }
-
-        // Draw pose direction arrow from center
-        // Yaw rotates left/right, pitch rotates up/down
-        let arrow_len = 40.0_f32;
-        let yaw_rad = pose.yaw.to_radians();
-        let pitch_rad = pose.pitch.to_radians();
-
-        // Arrow endpoint based on yaw and pitch
-        let dx = (yaw_rad.sin() * arrow_len) as i32;
-        let dy = (-pitch_rad.sin() * arrow_len) as i32; // Negative because y increases downward
-
-        let ex = (cx as i32 + dx).clamp(0, width as i32 - 1) as u32;
-        let ey = (cy as i32 + dy).clamp(0, height as i32 - 1) as u32;
-
-        // Draw arrow line using Bresenham's algorithm
-        draw_line(&mut debug_img, cx as i32, cy as i32, ex as i32, ey as i32, Rgb([255, 0, 0]));
-
-        // Draw roll indicator as a tilted line through center
-        let roll_rad = pose.roll.to_radians();
-        let roll_len = 30.0_f32;
-        let rx1 = (cx as f32 - roll_rad.cos() * roll_len) as u32;
-        let ry1 = (cy as f32 - roll_rad.sin() * roll_len) as u32;
-        let rx2 = (cx as f32 + roll_rad.cos() * roll_len) as u32;
-        let ry2 = (cy as f32 + roll_rad.sin() * roll_len) as u32;
-        draw_line(&mut debug_img, rx1 as i32, ry1 as i32, rx2 as i32, ry2 as i32, Rgb([0, 255, 255]));
 
         // Draw text background bar at bottom for pose values
         let bar_height = 20u32;
@@ -200,49 +372,20 @@ impl ProcessingStep for HeadPoseStep {
             }
         }
 
-        // Draw simple text representation of values using block characters
-        // Format: Y:-20 P:+29 R:-21
+        // Draw simple text representation of values
         let text = format!(
             "Y:{:+.0} P:{:+.0} R:{:+.0}",
             pose.yaw, pose.pitch, pose.roll
         );
-        draw_simple_text(&mut debug_img, 5, height - bar_height + 4, &text, Rgb([255, 255, 255]));
+        draw_simple_text(
+            &mut debug_img,
+            5,
+            height - bar_height + 4,
+            &text,
+            Rgb([255, 255, 255]),
+        );
 
         Some(DynamicImage::ImageRgb8(debug_img))
-    }
-}
-
-/// Draw a line using Bresenham's algorithm.
-fn draw_line(img: &mut RgbImage, x0: i32, y0: i32, x1: i32, y1: i32, color: Rgb<u8>) {
-    let (width, height) = (img.width() as i32, img.height() as i32);
-
-    let dx = (x1 - x0).abs();
-    let dy = -(y1 - y0).abs();
-    let sx = if x0 < x1 { 1 } else { -1 };
-    let sy = if y0 < y1 { 1 } else { -1 };
-    let mut err = dx + dy;
-
-    let mut x = x0;
-    let mut y = y0;
-
-    loop {
-        if x >= 0 && x < width && y >= 0 && y < height {
-            img.put_pixel(x as u32, y as u32, color);
-        }
-
-        if x == x1 && y == y1 {
-            break;
-        }
-
-        let e2 = 2 * err;
-        if e2 >= dy {
-            err += dy;
-            x += sx;
-        }
-        if e2 <= dx {
-            err += dx;
-            y += sy;
-        }
     }
 }
 

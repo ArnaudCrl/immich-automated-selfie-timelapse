@@ -102,9 +102,20 @@ impl ImmichClient {
 
         Ok(Self {
             client,
-            base_url: config.base_url.trim_end_matches('/').to_string(),
+            base_url: Self::sanitize_base_url(&config.base_url),
             api_key: config.api_key.clone(),
         })
+    }
+
+    /// Sanitize the base URL to ensure it ends with /api.
+    fn sanitize_base_url(url: &str) -> String {
+        let trimmed = url.trim_end_matches('/');
+
+        if trimmed.ends_with("/api") {
+            trimmed.to_string()
+        } else {
+            format!("{}/api", trimmed)
+        }
     }
 
     /// Validate the connection to Immich.
@@ -273,6 +284,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_sanitize_base_url() {
+        // URL already ends with /api
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://localhost:2283/api"),
+            "http://localhost:2283/api"
+        );
+
+        // URL ends with /api/ (trailing slash)
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://localhost:2283/api/"),
+            "http://localhost:2283/api"
+        );
+
+        // URL without /api
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://localhost:2283"),
+            "http://localhost:2283/api"
+        );
+
+        // URL with trailing slash, no /api
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://localhost:2283/"),
+            "http://localhost:2283/api"
+        );
+
+        // URL with path but no /api
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://example.com/immich"),
+            "http://example.com/immich/api"
+        );
+
+        // URL with path and trailing slash
+        assert_eq!(
+            ImmichClient::sanitize_base_url("http://example.com/immich/"),
+            "http://example.com/immich/api"
+        );
+    }
+
+    #[test]
     fn test_client_creation() {
         let config = ApiConfig {
             api_key: "test-key".to_string(),
@@ -281,6 +331,18 @@ mod tests {
         };
         let client = ImmichClient::new(&config);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_client_creation_without_api_suffix() {
+        // URL without /api should be sanitized automatically
+        let config = ApiConfig {
+            api_key: "test-key".to_string(),
+            base_url: "http://localhost:2283".to_string(),
+            timeout_secs: 30,
+        };
+        let client = ImmichClient::new(&config).unwrap();
+        assert_eq!(client.base_url, "http://localhost:2283/api");
     }
 
     /// Helper to create a client for the demo server

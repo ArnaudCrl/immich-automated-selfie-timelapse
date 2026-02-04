@@ -9,8 +9,8 @@ output_dir = "output"
 # Your Immich API key (get from Immich user settings)
 api_key = "your-api-key-here"
 
-# Immich server URL (include /api suffix)
-base_url = "http://192.168.1.100:2283/api"
+# Immich server URL (/api suffix is optional, will be added automatically)
+base_url = "http://192.168.1.100:2283"
 
 # Request timeout in seconds
 timeout_secs = 30

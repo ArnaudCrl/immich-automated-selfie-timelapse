@@ -5,20 +5,18 @@
 
 mod alignment;
 mod brightness;
-mod crop;
+mod crop_and_resize;
 mod decode;
 mod eye_filter;
 mod face_resolution;
 mod head_pose;
 mod landmarks;
-mod resize;
 
 pub use alignment::AlignmentStep;
 pub use brightness::BrightnessStep;
-pub use crop::CropFaceStep;
+pub use crop_and_resize::CropAndResizeStep;
 pub use decode::DecodeImageStep;
 pub use eye_filter::EyeFilterStep;
 pub use face_resolution::FaceResolutionStep;
 pub use head_pose::HeadPoseStep;
 pub use landmarks::LandmarksStep;
-pub use resize::ResizeStep;

@@ -92,19 +92,18 @@ impl Pipeline {
 
     /// Create the processing pipeline based on configuration.
     ///
-    /// Only enabled steps are added to the pipeline. Core steps (decode, crop, resize)
+    /// Only enabled steps are added to the pipeline. Core steps (decode, crop_and_resize)
     /// are always included.
     ///
     /// Pipeline order:
     /// 1. FaceResolutionStep - Validate face size from Immich metadata (if enabled)
     /// 2. DecodeImageStep - Load and orient the image (always)
-    /// 3. CropFaceStep - Extract face region with padding (always)
+    /// 3. CropAndResizeStep - Extract face region with padding and resize to output size (always)
     /// 4. BrightnessStep - Filter by luminance on cropped face (if enabled)
     /// 5. HeadPoseStep - Filter non-frontal faces (if enabled)
     /// 6. LandmarksStep - Detect 68 facial landmarks (always)
     /// 7. EyeFilterStep - Filter closed eyes by EAR (if enabled)
-    /// 8. AlignmentStep - Align face based on eye positions (always)
-    /// 9. ResizeStep - Final resize to output size (always)
+    /// 8. AlignmentStep - Align face based on eye positions and resize to final output (always)
     pub fn with_steps_from_config(config: &Config) -> Self {
         use steps::*;
 
@@ -118,8 +117,8 @@ impl Pipeline {
         // Core: Always decode the image
         pipeline.add_step(Box::new(DecodeImageStep));
 
-        // Core: Always crop the face
-        pipeline.add_step(Box::new(CropFaceStep));
+        // Core: Always crop and resize the face
+        pipeline.add_step(Box::new(CropAndResizeStep));
 
         // Optional: Brightness validation (on cropped face region)
         if config.processing.brightness.enabled {
@@ -139,11 +138,8 @@ impl Pipeline {
             pipeline.add_step(Box::new(EyeFilterStep));
         }
 
-        // Core: Always align face based on eye positions
+        // Core: Always align face based on eye positions (also performs final resize)
         pipeline.add_step(Box::new(AlignmentStep));
-
-        // Core: Always resize to output size
-        pipeline.add_step(Box::new(ResizeStep));
 
         pipeline
     }
@@ -156,13 +152,12 @@ impl Pipeline {
         let mut pipeline = Self::new();
         pipeline.add_step(Box::new(FaceResolutionStep));
         pipeline.add_step(Box::new(DecodeImageStep));
-        pipeline.add_step(Box::new(CropFaceStep));
+        pipeline.add_step(Box::new(CropAndResizeStep));
         pipeline.add_step(Box::new(BrightnessStep));
         pipeline.add_step(Box::new(HeadPoseStep));
         pipeline.add_step(Box::new(LandmarksStep));
         pipeline.add_step(Box::new(EyeFilterStep));
         pipeline.add_step(Box::new(AlignmentStep));
-        pipeline.add_step(Box::new(ResizeStep));
         pipeline
     }
 
@@ -359,12 +354,11 @@ mod tests {
         assert!(ids.contains(&"face_resolution"));
         assert!(ids.contains(&"decode"));
         assert!(ids.contains(&"brightness"));
-        assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"crop_and_resize"));
         assert!(ids.contains(&"head_pose"));
         assert!(ids.contains(&"landmarks"));
         assert!(ids.contains(&"eye_filter"));
         assert!(ids.contains(&"alignment"));
-        assert!(ids.contains(&"resize"));
     }
 
     #[test]
@@ -379,13 +373,12 @@ mod tests {
         let pipeline = Pipeline::with_steps_from_config(&config);
         let ids = pipeline.step_ids();
 
-        // Core steps: decode, crop, landmarks, alignment, resize
+        // Core steps: decode, crop_and_resize, landmarks, alignment
         assert!(ids.contains(&"decode"));
-        assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"crop_and_resize"));
         assert!(ids.contains(&"landmarks"));
         assert!(ids.contains(&"alignment"));
-        assert!(ids.contains(&"resize"));
-        assert_eq!(ids.len(), 5);
+        assert_eq!(ids.len(), 4);
     }
 
     #[test]
@@ -399,12 +392,11 @@ mod tests {
         let pipeline = Pipeline::with_steps_from_config(&config);
         let ids = pipeline.step_ids();
 
-        // Core steps (decode, crop, landmarks, alignment, resize) plus eye_filter
+        // Core steps (decode, crop_and_resize, landmarks, alignment) plus eye_filter
         assert!(ids.contains(&"decode"));
-        assert!(ids.contains(&"crop"));
+        assert!(ids.contains(&"crop_and_resize"));
         assert!(ids.contains(&"landmarks"));
         assert!(ids.contains(&"eye_filter"));
         assert!(ids.contains(&"alignment")); // Alignment is now always enabled
-        assert!(ids.contains(&"resize"));
     }
 }

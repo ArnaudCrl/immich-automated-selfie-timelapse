@@ -25,7 +25,7 @@ pub mod computed_keys {
     pub const LANDMARKS: &str = "landmarks";
     /// Head pose (yaw, pitch, roll) computed by HeadPoseStep.
     pub const HEAD_POSE: &str = "head_pose";
-    /// Face bounding box in current image coordinates computed by CropFaceStep.
+    /// Face bounding box in current image coordinates computed by CropAndResizeStep.
     pub const FACE_RECT: &str = "face_rect";
 }
 

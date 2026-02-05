@@ -129,9 +129,8 @@ impl DlibLandmarks {
             .map(|p| Point::new(p.x() as f32, p.y() as f32))
             .collect();
 
-        Landmarks::new(points).ok_or_else(|| {
-            Error::Model("Could not detect 68 facial landmarks".to_string())
-        })
+        Landmarks::new(points)
+            .ok_or_else(|| Error::Model("Could not detect 68 facial landmarks".to_string()))
     }
 }
 

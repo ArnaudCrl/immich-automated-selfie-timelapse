@@ -38,7 +38,10 @@ async fn main() -> anyhow::Result<()> {
     // Pre-load ML models to avoid loading during processing
     match DlibLandmarks::init() {
         Ok(_) => tracing::info!("Dlib landmarks model loaded"),
-        Err(e) => tracing::warn!("Dlib landmarks model not available: {} - landmark detection will be skipped", e),
+        Err(e) => tracing::warn!(
+            "Dlib landmarks model not available: {} - landmark detection will be skipped",
+            e
+        ),
     }
 
     // Create application state
@@ -69,7 +72,10 @@ fn load_config() -> anyhow::Result<Config> {
 
     // Validation is optional at startup - API key might be set via web UI later
     if let Err(e) = config.validate() {
-        tracing::warn!("Configuration incomplete: {} - some features may not work", e);
+        tracing::warn!(
+            "Configuration incomplete: {} - some features may not work",
+            e
+        );
     }
 
     Ok(config)

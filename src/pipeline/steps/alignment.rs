@@ -4,7 +4,7 @@
 //! across all images in the timelapse.
 
 use crate::config::Config;
-use crate::pipeline::{computed_keys, Point, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{computed_keys, PipelineContext, Point, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
 use image::{DynamicImage, GenericImageView, Rgb};
 use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
@@ -39,7 +39,8 @@ impl ProcessingStep for AlignmentStep {
                 // Landmarks should always be available since LandmarksStep is mandatory
                 return StepOutcome::Error {
                     ctx,
-                    error: "Landmarks not available for alignment - pipeline misconfigured".to_string(),
+                    error: "Landmarks not available for alignment - pipeline misconfigured"
+                        .to_string(),
                 };
             }
         };
@@ -101,10 +102,8 @@ impl ProcessingStep for AlignmentStep {
         // Rotate eye_center around image center
         let dx = eye_center.x - cx;
         let dy = eye_center.y - cy;
-        let rotated_eye_center = Point::new(
-            cx + dx * cos_a + dy * sin_a,
-            cy - dx * sin_a + dy * cos_a,
-        );
+        let rotated_eye_center =
+            Point::new(cx + dx * cos_a + dy * sin_a, cy - dx * sin_a + dy * cos_a);
 
         // Now calculate crop region to achieve the desired scale and positioning
         // We want the eye center at (output_size/2, target_eye_y)
@@ -116,8 +115,10 @@ impl ProcessingStep for AlignmentStep {
         let crop_size = (output_size as f32 / scale) as u32;
 
         // Crop center in source image (accounting for where we want eyes to end up)
-        let crop_center_x = rotated_eye_center.x - (target_center_x - output_size as f32 / 2.0) / scale;
-        let crop_center_y = rotated_eye_center.y + (target_eye_y - output_size as f32 / 2.0) / scale;
+        let crop_center_x =
+            rotated_eye_center.x - (target_center_x - output_size as f32 / 2.0) / scale;
+        let crop_center_y =
+            rotated_eye_center.y + (target_eye_y - output_size as f32 / 2.0) / scale;
 
         // Calculate crop bounds
         let crop_x = (crop_center_x - crop_size as f32 / 2.0).max(0.0) as u32;

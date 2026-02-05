@@ -23,7 +23,10 @@ impl JobStatus {
     /// Returns true if this is a terminal status (job has finished).
     /// Terminal statuses should not be overwritten by non-terminal statuses.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, JobStatus::Completed | JobStatus::Cancelled | JobStatus::Error(_))
+        matches!(
+            self,
+            JobStatus::Completed | JobStatus::Cancelled | JobStatus::Error(_)
+        )
     }
 }
 
@@ -221,8 +224,7 @@ impl AppState {
             // Update progress to show cancelling state immediately.
             // Only change to Cancelling if in an active (non-terminal) state.
             let mut progress = self.progress.write().await;
-            if progress.status == JobStatus::Running
-                || progress.status == JobStatus::CompilingVideo
+            if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo
             {
                 progress.status = JobStatus::Cancelling;
                 progress.message = Some("Cancelling...".to_string());
@@ -273,7 +275,10 @@ impl std::error::Error for JobRunningError {}
 /// Validate that a path component (folder name or filename) is safe.
 ///
 /// Returns an error if the path contains traversal sequences or separators.
-pub fn validate_path_component(name: &str, component_type: &str) -> Result<(), PathValidationError> {
+pub fn validate_path_component(
+    name: &str,
+    component_type: &str,
+) -> Result<(), PathValidationError> {
     if name.contains("..") || name.contains('/') || name.contains('\\') {
         Err(PathValidationError {
             component_type: component_type.to_string(),

@@ -5,7 +5,9 @@
 
 use crate::config::Config;
 use crate::pipeline::crop_face_with_intermediate;
-use crate::pipeline::{computed_keys, BoundingBox, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{
+    computed_keys, BoundingBox, ComputedValue, PipelineContext, ProcessingStep, StepOutcome,
+};
 use async_trait::async_trait;
 
 /// Crops the face region from the full image and resizes it.
@@ -50,7 +52,10 @@ impl ProcessingStep for CropAndResizeStep {
                 };
 
                 // Store the scaled face rectangle for later steps
-                ctx.set_computed(computed_keys::FACE_RECT, ComputedValue::FaceRect(scaled_face_rect));
+                ctx.set_computed(
+                    computed_keys::FACE_RECT,
+                    ComputedValue::FaceRect(scaled_face_rect),
+                );
 
                 StepOutcome::Continue(ctx)
             }
@@ -67,7 +72,7 @@ impl ProcessingStep for CropAndResizeStep {
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
-    use image::{DynamicImage, RgbImage, Rgb};
+    use image::{DynamicImage, Rgb, RgbImage};
 
     fn make_ctx_with_image(image: DynamicImage) -> PipelineContext {
         // Face in the center of a 100x100 image

@@ -330,12 +330,14 @@ impl AlignmentConfig {
         }
         if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
             return Err(Error::Config(
-                "Alignment eye_y_position should be between 0.2 and 0.5 for best results".to_string(),
+                "Alignment eye_y_position should be between 0.2 and 0.5 for best results"
+                    .to_string(),
             ));
         }
         if self.inter_eye_distance <= 0.0 {
             return Err(Error::Config(
-                "Alignment inter_eye_distance must be greater than 0 to prevent division by zero".to_string(),
+                "Alignment inter_eye_distance must be greater than 0 to prevent division by zero"
+                    .to_string(),
             ));
         }
         if self.inter_eye_distance >= 1.0 {
@@ -345,7 +347,8 @@ impl AlignmentConfig {
         }
         if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
             return Err(Error::Config(
-                "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results".to_string(),
+                "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results"
+                    .to_string(),
             ));
         }
         Ok(())
@@ -509,8 +512,7 @@ impl Config {
     /// Load configuration from a TOML file.
     pub fn from_file(path: impl AsRef<std::path::Path>) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Config =
-            toml::from_str(&content).map_err(|e| Error::Config(e.to_string()))?;
+        let config: Config = toml::from_str(&content).map_err(|e| Error::Config(e.to_string()))?;
         Ok(config)
     }
 
@@ -708,7 +710,9 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let temp_path = temp_dir.join("test_config_new.toml");
 
-        config.save_to_file(&temp_path).expect("Failed to save config");
+        config
+            .save_to_file(&temp_path)
+            .expect("Failed to save config");
 
         // Verify file was created and contains expected content
         let content = std::fs::read_to_string(&temp_path).expect("Failed to read config");

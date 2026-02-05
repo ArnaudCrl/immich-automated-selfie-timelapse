@@ -2,11 +2,7 @@
 
 use crate::job::{run_job, JobParams};
 use crate::web::state::{AppState, JobStatus, Progress, SkipStats};
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
-};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

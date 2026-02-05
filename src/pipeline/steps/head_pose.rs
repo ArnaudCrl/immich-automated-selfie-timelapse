@@ -85,9 +85,9 @@ fn draw_pose_axes(
     // Y axis (green) - points down (image coordinates)
     // Z axis (blue) - points out of screen (towards camera)
     let axes = [
-        (Point3D::new(axis_length, 0.0, 0.0), Rgb([255, 0, 0])),   // X - red
-        (Point3D::new(0.0, axis_length, 0.0), Rgb([0, 255, 0])),   // Y - green
-        (Point3D::new(0.0, 0.0, -axis_length), Rgb([0, 0, 255])),  // Z - blue (negative = towards camera)
+        (Point3D::new(axis_length, 0.0, 0.0), Rgb([255, 0, 0])), // X - red
+        (Point3D::new(0.0, axis_length, 0.0), Rgb([0, 255, 0])), // Y - green
+        (Point3D::new(0.0, 0.0, -axis_length), Rgb([0, 0, 255])), // Z - blue (negative = towards camera)
     ];
 
     // Negate roll and pitch to convert from model convention to image coordinates
@@ -333,7 +333,15 @@ impl ProcessingStep for HeadPoseStep {
             let cx = (x1 + x2) as f32 / 2.0;
             let cy = (y1 + y2) as f32 / 2.0;
             let axis_length = ((x2 - x1).max(y2 - y1) as f32) * 0.6;
-            draw_pose_axes(&mut debug_img, cx, cy, axis_length, pose.yaw, pose.pitch, pose.roll);
+            draw_pose_axes(
+                &mut debug_img,
+                cx,
+                cy,
+                axis_length,
+                pose.yaw,
+                pose.pitch,
+                pose.roll,
+            );
         }
 
         // Draw text background bar at bottom for pose values

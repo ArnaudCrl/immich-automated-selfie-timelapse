@@ -3,7 +3,9 @@
 //! Calculates average image brightness and skips images that are too dark or too bright.
 
 use crate::config::Config;
-use crate::pipeline::{computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{
+    computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome,
+};
 use async_trait::async_trait;
 use image::{DynamicImage, Rgb};
 
@@ -173,7 +175,7 @@ fn brightness_to_color(brightness: f32) -> Rgb<u8> {
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
-    use image::{DynamicImage, RgbImage, Rgb};
+    use image::{DynamicImage, Rgb, RgbImage};
 
     fn make_ctx_with_image(image: DynamicImage) -> PipelineContext {
         let face_data = FaceData {
@@ -225,7 +227,8 @@ mod tests {
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {
                 // Should still compute brightness even when disabled
-                let brightness = new_ctx.get_computed(computed_keys::BRIGHTNESS)
+                let brightness = new_ctx
+                    .get_computed(computed_keys::BRIGHTNESS)
                     .and_then(|v| v.as_float())
                     .unwrap();
                 assert!(brightness > 0.45 && brightness < 0.55);

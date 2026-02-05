@@ -96,7 +96,9 @@ mod tests {
             StepOutcome::Continue(new_ctx) => {
                 // Should have stored face_size
                 assert_eq!(
-                    new_ctx.get_computed(computed_keys::FACE_SIZE).and_then(|v| v.as_int()),
+                    new_ctx
+                        .get_computed(computed_keys::FACE_SIZE)
+                        .and_then(|v| v.as_int()),
                     Some(100)
                 );
             }

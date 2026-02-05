@@ -395,11 +395,7 @@ pub async fn delete_images_bulk(
     let mut remaining_images = 0u32;
     if let Ok(mut entries) = tokio::fs::read_dir(&images_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
-            if entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext == "jpg")
-            {
+            if entry.path().extension().is_some_and(|ext| ext == "jpg") {
                 remaining_images += 1;
             }
         }
@@ -448,11 +444,7 @@ pub async fn compile_folder_video(
     let mut image_count = 0u32;
     if let Ok(mut entries) = tokio::fs::read_dir(&images_dir).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
-            if entry
-                .path()
-                .extension()
-                .is_some_and(|ext| ext == "jpg")
-            {
+            if entry.path().extension().is_some_and(|ext| ext == "jpg") {
                 image_count += 1;
             }
         }
@@ -490,29 +482,34 @@ pub async fn compile_folder_video(
 
     // Spawn the compilation job in the background
     tokio::spawn(async move {
-        let result = crate::video::compile_timelapse(&images_dir, &output_path, &video_config, |current, total| {
-            // Check for cancellation
-            if cancel_token.is_cancelled() {
-                return;
-            }
+        let result = crate::video::compile_timelapse(
+            &images_dir,
+            &output_path,
+            &video_config,
+            |current, total| {
+                // Check for cancellation
+                if cancel_token.is_cancelled() {
+                    return;
+                }
 
-            // Update progress (fire and forget since we're in sync callback)
-            let state_clone = job_state.clone();
-            let folder_clone = folder_name_clone.clone();
-            tokio::spawn(async move {
-                state_clone
-                    .update_progress(Progress {
-                        status: JobStatus::CompilingVideo,
-                        completed: current,
-                        total,
-                        message: Some(format!("Compiling video for {}...", folder_clone)),
-                        skip_stats: SkipStats::default(),
-                        person_id: None,
-                        person_name: Some(folder_clone),
-                    })
-                    .await;
-            });
-        })
+                // Update progress (fire and forget since we're in sync callback)
+                let state_clone = job_state.clone();
+                let folder_clone = folder_name_clone.clone();
+                tokio::spawn(async move {
+                    state_clone
+                        .update_progress(Progress {
+                            status: JobStatus::CompilingVideo,
+                            completed: current,
+                            total,
+                            message: Some(format!("Compiling video for {}...", folder_clone)),
+                            skip_stats: SkipStats::default(),
+                            person_id: None,
+                            person_name: Some(folder_clone),
+                        })
+                        .await;
+                });
+            },
+        )
         .await;
 
         // Update final status

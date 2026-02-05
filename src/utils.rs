@@ -19,10 +19,7 @@ pub fn sanitize_folder_name(name: Option<&str>, id: &str) -> String {
     let base = name.filter(|n| !n.is_empty()).unwrap_or(id);
 
     // Remove accents by decomposing to NFD and filtering combining marks
-    let without_accents: String = base
-        .nfd()
-        .filter(|c| !is_combining_mark(*c))
-        .collect();
+    let without_accents: String = base.nfd().filter(|c| !is_combining_mark(*c)).collect();
 
     // Convert to lowercase and replace unsafe characters with underscores
     let sanitized: String = without_accents
@@ -71,10 +68,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_folder_name_trims_whitespace() {
-        assert_eq!(
-            sanitize_folder_name(Some("  John Doe  "), "id"),
-            "john_doe"
-        );
+        assert_eq!(sanitize_folder_name(Some("  John Doe  "), "id"), "john_doe");
     }
 
     #[test]
@@ -99,6 +93,9 @@ mod tests {
         assert_eq!(sanitize_folder_name(Some("Peña"), "id"), "pena");
 
         // Mixed accents
-        assert_eq!(sanitize_folder_name(Some("Élève Français"), "id"), "eleve_francais");
+        assert_eq!(
+            sanitize_folder_name(Some("Élève Français"), "id"),
+            "eleve_francais"
+        );
     }
 }

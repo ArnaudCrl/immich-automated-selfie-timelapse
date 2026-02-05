@@ -52,8 +52,8 @@ impl ProcessingStep for DecodeImageStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::Bytes;
     use crate::immich_api::FaceData;
+    use bytes::Bytes;
     use image::{DynamicImage, RgbImage};
     use std::io::Cursor;
 
@@ -63,7 +63,9 @@ mod tests {
         let dynamic = DynamicImage::ImageRgb8(img);
 
         let mut buffer = Cursor::new(Vec::new());
-        dynamic.write_to(&mut buffer, image::ImageFormat::Jpeg).unwrap();
+        dynamic
+            .write_to(&mut buffer, image::ImageFormat::Jpeg)
+            .unwrap();
 
         Bytes::from(buffer.into_inner())
     }

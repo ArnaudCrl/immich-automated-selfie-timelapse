@@ -94,7 +94,12 @@ pub fn crop_face_with_intermediate(
 ///
 /// When the crop region extends past the image borders, edge pixels are repeated
 /// (e.g., column -1 uses column 0, column -2 uses column 0, etc.).
-fn crop_with_replicate_fill(img: &DynamicImage, x_offset: i32, y_offset: i32, size: u32) -> DynamicImage {
+fn crop_with_replicate_fill(
+    img: &DynamicImage,
+    x_offset: i32,
+    y_offset: i32,
+    size: u32,
+) -> DynamicImage {
     let rgb = img.to_rgb8();
     let (w, h) = (rgb.width() as i32, rgb.height() as i32);
 

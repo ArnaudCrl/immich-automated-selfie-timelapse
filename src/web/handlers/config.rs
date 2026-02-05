@@ -192,11 +192,7 @@ fn validate_video_config(vid: &VideoConfigUpdate) -> Result<(), ValidationError>
         if !valid_codecs.contains(&v.as_str()) {
             return Err(ValidationError::new(
                 "video.codec",
-                format!(
-                    "must be one of: {}, got '{}'",
-                    valid_codecs.join(", "),
-                    v
-                ),
+                format!("must be one of: {}, got '{}'", valid_codecs.join(", "), v),
             ));
         }
     }

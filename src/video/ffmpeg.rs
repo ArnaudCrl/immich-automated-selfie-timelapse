@@ -94,12 +94,9 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    let mut child = cmd.spawn().map_err(|e| {
-        Error::FFmpeg(format!(
-            "Failed to spawn ffmpeg (is it installed?): {}",
-            e
-        ))
-    })?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| Error::FFmpeg(format!("Failed to spawn ffmpeg (is it installed?): {}", e)))?;
 
     // Capture stdout for progress and stderr for errors
     let stdout = child
@@ -149,8 +146,7 @@ where
 
         return Err(Error::FFmpeg(format!(
             "ffmpeg exited with status {}\n{}",
-            status,
-            error_detail
+            status, error_detail
         )));
     }
 

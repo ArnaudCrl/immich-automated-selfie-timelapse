@@ -4,8 +4,8 @@
 //! extensible image processing pipelines.
 
 use crate::config::Config;
-use crate::pipeline::types::{BoundingBox, HeadPose, Landmarks};
 use crate::immich_api::FaceData;
+use crate::pipeline::types::{BoundingBox, HeadPose, Landmarks};
 use async_trait::async_trait;
 use bytes::Bytes;
 use image::DynamicImage;
@@ -41,10 +41,7 @@ pub enum StepOutcome {
         detail: Option<String>,
     },
     /// An error occurred during processing. Context is preserved for debug visualization.
-    Error {
-        ctx: PipelineContext,
-        error: String,
-    },
+    Error { ctx: PipelineContext, error: String },
 }
 
 /// Values computed by pipeline steps that can be shared with subsequent steps.
@@ -232,8 +229,14 @@ impl PipelineContext {
     /// * `step_id` - The identifier of the step that generated this image
     /// * `image` - The debug visualization image
     /// * `passed` - Whether the step passed (true) or failed/skipped (false)
-    pub fn add_debug_image(&mut self, step_id: impl Into<String>, image: DynamicImage, passed: bool) {
-        self.debug_images.insert(step_id.into(), DebugImage::new(image, passed));
+    pub fn add_debug_image(
+        &mut self,
+        step_id: impl Into<String>,
+        image: DynamicImage,
+        passed: bool,
+    ) {
+        self.debug_images
+            .insert(step_id.into(), DebugImage::new(image, passed));
     }
 }
 
@@ -328,21 +331,20 @@ mod tests {
             image_height: 1080,
         };
 
-        let mut ctx = PipelineContext::new(
-            "asset123".to_string(),
-            "2024-01-15".to_string(),
-            face_data,
-        );
+        let mut ctx =
+            PipelineContext::new("asset123".to_string(), "2024-01-15".to_string(), face_data);
 
         ctx.set_computed(computed_keys::BRIGHTNESS, ComputedValue::Float(0.65));
         ctx.set_computed(computed_keys::FACE_SIZE, ComputedValue::Int(150));
 
         assert_eq!(
-            ctx.get_computed(computed_keys::BRIGHTNESS).and_then(|v| v.as_float()),
+            ctx.get_computed(computed_keys::BRIGHTNESS)
+                .and_then(|v| v.as_float()),
             Some(0.65)
         );
         assert_eq!(
-            ctx.get_computed(computed_keys::FACE_SIZE).and_then(|v| v.as_int()),
+            ctx.get_computed(computed_keys::FACE_SIZE)
+                .and_then(|v| v.as_int()),
             Some(150)
         );
         assert!(ctx.get_computed("nonexistent").is_none());

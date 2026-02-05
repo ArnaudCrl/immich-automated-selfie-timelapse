@@ -4,7 +4,9 @@
 
 use crate::config::Config;
 use crate::models::DlibLandmarks;
-use crate::pipeline::{computed_keys, ComputedValue, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{
+    computed_keys, ComputedValue, Landmarks, PipelineContext, ProcessingStep, StepOutcome,
+};
 use async_trait::async_trait;
 use tokio::task;
 
@@ -90,7 +92,10 @@ impl ProcessingStep for LandmarksStep {
         ctx.set_computed(computed_keys::EAR, ComputedValue::Float(avg_ear));
 
         // Store landmarks
-        ctx.set_computed(computed_keys::LANDMARKS, ComputedValue::Landmarks(Box::new(landmarks)));
+        ctx.set_computed(
+            computed_keys::LANDMARKS,
+            ComputedValue::Landmarks(Box::new(landmarks)),
+        );
 
         tracing::trace!(
             "Landmarks detected: EAR left={:.3}, right={:.3}, avg={:.3}",

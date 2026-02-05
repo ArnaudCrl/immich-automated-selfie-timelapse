@@ -4,7 +4,9 @@
 //! from facial landmarks.
 
 use crate::config::Config;
-use crate::pipeline::{computed_keys, draw_simple_text, Landmarks, PipelineContext, ProcessingStep, StepOutcome};
+use crate::pipeline::{
+    computed_keys, draw_simple_text, Landmarks, PipelineContext, ProcessingStep, StepOutcome,
+};
 use async_trait::async_trait;
 use image::{DynamicImage, Rgb, RgbImage};
 
@@ -33,7 +35,10 @@ impl ProcessingStep for EyeFilterStep {
         }
 
         // Get EAR from computed values (set by LandmarksStep)
-        let avg_ear = match ctx.get_computed(computed_keys::EAR).and_then(|v| v.as_float()) {
+        let avg_ear = match ctx
+            .get_computed(computed_keys::EAR)
+            .and_then(|v| v.as_float())
+        {
             Some(ear) => ear,
             None => {
                 // No EAR available - landmarks step must have been skipped
@@ -85,8 +90,7 @@ impl ProcessingStep for EyeFilterStep {
             Rgb([255, 0, 0]) // Red - closed
         };
 
-        for i in 36..42 {
-            let point = &points[i];
+        for point in points.iter().skip(36).take(6) {
             draw_cross(&mut debug_img, point.x as u32, point.y as u32, left_color);
         }
 
@@ -97,16 +101,25 @@ impl ProcessingStep for EyeFilterStep {
             Rgb([255, 0, 0]) // Red - closed
         };
 
-        for i in 42..48 {
-            let point = &points[i];
+        for point in points.iter().skip(42).take(6) {
             draw_cross(&mut debug_img, point.x as u32, point.y as u32, right_color);
         }
 
         // Draw eye centers
         let left_eye = landmarks.left_eye_center();
         let right_eye = landmarks.right_eye_center();
-        draw_marker(&mut debug_img, left_eye.x as u32, left_eye.y as u32, Rgb([0, 255, 255]));
-        draw_marker(&mut debug_img, right_eye.x as u32, right_eye.y as u32, Rgb([0, 255, 255]));
+        draw_marker(
+            &mut debug_img,
+            left_eye.x as u32,
+            left_eye.y as u32,
+            Rgb([0, 255, 255]),
+        );
+        draw_marker(
+            &mut debug_img,
+            right_eye.x as u32,
+            right_eye.y as u32,
+            Rgb([0, 255, 255]),
+        );
 
         // Draw info bar at bottom
         let bar_height = 20u32;
@@ -120,10 +133,7 @@ impl ProcessingStep for EyeFilterStep {
         }
 
         // Draw EAR values
-        let text = format!(
-            "L:{:.2} R:{:.2} Avg:{:.2}",
-            ear.left, ear.right, avg_ear
-        );
+        let text = format!("L:{:.2} R:{:.2} Avg:{:.2}", ear.left, ear.right, avg_ear);
         draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
 
         Some(DynamicImage::ImageRgb8(debug_img))

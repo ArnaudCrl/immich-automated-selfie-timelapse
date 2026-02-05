@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 use crate::immich_api::FaceData;
 use crate::pipeline::BoundingBox;
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView};
+use image::{DynamicImage, GenericImageView, RgbImage};
 
 /// Result of cropping a face from an image.
 pub struct CropResult {
@@ -60,34 +60,27 @@ pub fn crop_face_with_intermediate(
     let center_x = (x1 + x2) / 2;
     let center_y = (y1 + y2) / 2;
 
-    // Calculate crop bounds, clamped to image dimensions
-    let crop_x1 = center_x
-        .saturating_sub(crop_size / 2)
-        .min(img_width.saturating_sub(crop_size));
-    let crop_y1 = center_y
-        .saturating_sub(crop_size / 2)
-        .min(img_height.saturating_sub(crop_size));
-
-    // Ensure we don't exceed image bounds
-    let actual_crop_size = crop_size.min(img_width - crop_x1).min(img_height - crop_y1);
-
-    if actual_crop_size < 10 {
+    if crop_size < 10 {
         return Err(Error::ImageProcessing("Crop area too small".to_string()));
     }
 
-    // Crop the face region (full resolution)
-    let cropped = img.crop_imm(crop_x1, crop_y1, actual_crop_size, actual_crop_size);
+    // Ideal crop region centered on the face (may extend outside image bounds)
+    let ideal_x1 = center_x as i32 - crop_size as i32 / 2;
+    let ideal_y1 = center_y as i32 - crop_size as i32 / 2;
+
+    // Crop with replicate-fill: always keeps the face centered by extending
+    // edge pixels at image borders instead of shifting the crop window.
+    let cropped = crop_with_replicate_fill(img, ideal_x1, ideal_y1, crop_size);
 
     // Resize to output size
     let resized = cropped.resize_exact(output_size, output_size, FilterType::Lanczos3);
 
-    // Calculate the face bounding box in crop coordinates
-    // These are the original face coordinates relative to the crop origin
+    // Face coordinates relative to the crop origin (face is always centered)
     let face_rect = BoundingBox {
-        x1: x1.saturating_sub(crop_x1) as f32,
-        y1: y1.saturating_sub(crop_y1) as f32,
-        x2: x2.saturating_sub(crop_x1).min(actual_crop_size) as f32,
-        y2: y2.saturating_sub(crop_y1).min(actual_crop_size) as f32,
+        x1: (x1 as i32 - ideal_x1) as f32,
+        y1: (y1 as i32 - ideal_y1) as f32,
+        x2: (x2 as i32 - ideal_x1) as f32,
+        y2: (y2 as i32 - ideal_y1) as f32,
     };
 
     Ok(CropResult {
@@ -95,4 +88,34 @@ pub fn crop_face_with_intermediate(
         resized,
         face_rect,
     })
+}
+
+/// Crop a region from an image, filling out-of-bounds areas with replicated edge pixels.
+///
+/// When the crop region extends past the image borders, edge pixels are repeated
+/// (e.g., column -1 uses column 0, column -2 uses column 0, etc.).
+fn crop_with_replicate_fill(img: &DynamicImage, x_offset: i32, y_offset: i32, size: u32) -> DynamicImage {
+    let rgb = img.to_rgb8();
+    let (w, h) = (rgb.width() as i32, rgb.height() as i32);
+
+    let out = RgbImage::from_fn(size, size, |px, py| {
+        let sx = replicate_coord(x_offset + px as i32, w);
+        let sy = replicate_coord(y_offset + py as i32, h);
+        *rgb.get_pixel(sx as u32, sy as u32)
+    });
+
+    DynamicImage::ImageRgb8(out)
+}
+
+/// Clamp a coordinate into the valid range [0, len) using replicate/edge boundary.
+///
+/// For a dimension of length `len`:
+/// - Coordinates in `[0, len)` map to themselves.
+/// - Negative coordinates clamp to 0.
+/// - Coordinates >= len clamp to len-1.
+fn replicate_coord(c: i32, len: i32) -> i32 {
+    if len <= 1 {
+        return 0;
+    }
+    c.clamp(0, len - 1)
 }

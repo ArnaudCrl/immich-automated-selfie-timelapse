@@ -69,87 +69,53 @@ impl Point3D {
     }
 }
 
-/// Draw a 3D cube where the back face is the face bounding box
-/// and the cube projects forward based on head pose
-fn draw_3d_cube(
+/// Draw 3D pose axes (RGB = XYZ) from face center, rotated by head pose.
+/// This is the standard visualization for head pose estimation.
+fn draw_pose_axes(
     img: &mut RgbImage,
-    x1: i32,
-    y1: i32,
-    x2: i32,
-    y2: i32,
+    cx: f32,
+    cy: f32,
+    axis_length: f32,
     yaw: f32,
     pitch: f32,
     roll: f32,
 ) {
-    // Calculate face center and size
-    let cx = ((x1 + x2) / 2) as f32;
-    let cy = ((y1 + y2) / 2) as f32;
-    let width = (x2 - x1) as f32;
-    let height = (y2 - y1) as f32;
-    let half_w = width / 2.0;
-    let half_h = height / 2.0;
-
-    // Depth of the cube (how far it projects forward)
-    let depth = width.max(height) * 0.8;
-
-    // Define 8 vertices of the cube
-    // Back face = face bounding box (at z=0)
-    // Front face = projected forward (at z=-depth, negative means towards camera)
-    let vertices = [
-        // Front face (closer to camera)
-        Point3D::new(-half_w, -half_h, -depth),  // 0: top-left-front
-        Point3D::new(half_w, -half_h, -depth),   // 1: top-right-front
-        Point3D::new(half_w, half_h, -depth),    // 2: bottom-right-front
-        Point3D::new(-half_w, half_h, -depth),   // 3: bottom-left-front
-        // Back face (face bounding box)
-        Point3D::new(-half_w, -half_h, 0.0),     // 4: top-left-back
-        Point3D::new(half_w, -half_h, 0.0),      // 5: top-right-back
-        Point3D::new(half_w, half_h, 0.0),       // 6: bottom-right-back
-        Point3D::new(-half_w, half_h, 0.0),      // 7: bottom-left-back
+    // Define axis endpoints (origin at 0,0,0)
+    // X axis (red) - points right
+    // Y axis (green) - points down (image coordinates)
+    // Z axis (blue) - points out of screen (towards camera)
+    let axes = [
+        (Point3D::new(axis_length, 0.0, 0.0), Rgb([255, 0, 0])),   // X - red
+        (Point3D::new(0.0, axis_length, 0.0), Rgb([0, 255, 0])),   // Y - green
+        (Point3D::new(0.0, 0.0, -axis_length), Rgb([0, 0, 255])),  // Z - blue (negative = towards camera)
     ];
 
-    // Apply rotations (order: yaw -> pitch -> roll) and project to 2D
-    let focal_length = width.max(height) * 2.0;
-    let rotated: Vec<(i32, i32)> = vertices
-        .iter()
-        .map(|&v| {
-            v.rotate_y(yaw)
-                .rotate_x(pitch)
-                .rotate_z(roll)
-                .project(cx, cy, focal_length)
-        })
-        .collect();
+    // Negate roll and pitch to convert from model convention to image coordinates
+    // (image Y-axis points down, model assumes Y-axis points up)
+    let focal_length = axis_length * 2.0;
+    let origin = Point3D::new(0.0, 0.0, 0.0)
+        .rotate_y(yaw)
+        .rotate_x(-pitch)
+        .rotate_z(-roll)
+        .project(cx, cy, focal_length);
 
-    // Define edges (pairs of vertex indices)
-    let edges = [
-        // Front face (cyan - closer to camera)
-        (0, 1), (1, 2), (2, 3), (3, 0),
-        // Back face (green - face bounding box)
-        (4, 5), (5, 6), (6, 7), (7, 4),
-        // Connecting edges (yellow)
-        (0, 4), (1, 5), (2, 6), (3, 7),
-    ];
+    for (endpoint, color) in axes {
+        let rotated = endpoint
+            .rotate_y(yaw)
+            .rotate_x(-pitch)
+            .rotate_z(-roll)
+            .project(cx, cy, focal_length);
 
-    // Draw front face in cyan (brighter)
-    for &(i, j) in &edges[0..4] {
-        let (x0, y0) = rotated[i];
-        let (x1, y1) = rotated[j];
-        draw_line(img, x0, y0, x1, y1, Rgb([0, 255, 255]));
+        draw_line(img, origin.0, origin.1, rotated.0, rotated.1, color);
     }
+}
 
-    // Draw back face in green (face bounding box)
-    for &(i, j) in &edges[4..8] {
-        let (x0, y0) = rotated[i];
-        let (x1, y1) = rotated[j];
-        draw_line(img, x0, y0, x1, y1, Rgb([0, 255, 0]));
-    }
-
-    // Draw connecting edges in yellow
-    for &(i, j) in &edges[8..12] {
-        let (x0, y0) = rotated[i];
-        let (x1, y1) = rotated[j];
-        draw_line(img, x0, y0, x1, y1, Rgb([255, 255, 0]));
-    }
+/// Draw an axis-aligned bounding box (no rotation applied).
+fn draw_axis_aligned_rect(img: &mut RgbImage, x1: i32, y1: i32, x2: i32, y2: i32, color: Rgb<u8>) {
+    draw_line(img, x1, y1, x2, y1, color); // top
+    draw_line(img, x2, y1, x2, y2, color); // right
+    draw_line(img, x2, y2, x1, y2, color); // bottom
+    draw_line(img, x1, y2, x1, y1, color); // left
 }
 
 /// Draw a line using Bresenham's algorithm.
@@ -353,15 +319,21 @@ impl ProcessingStep for HeadPoseStep {
             .get_computed(computed_keys::FACE_RECT)
             .and_then(|v| v.as_face_rect());
 
-        // Draw 3D cube where the back face is the face bounding box
+        // Draw axis-aligned face bounding box and 3D pose axes
         if let Some(rect) = face_rect {
             let x1 = rect.x1 as i32;
             let y1 = rect.y1 as i32;
             let x2 = rect.x2 as i32;
             let y2 = rect.y2 as i32;
 
-            // Draw 3D cube with face box as back face
-            draw_3d_cube(&mut debug_img, x1, y1, x2, y2, pose.yaw, pose.pitch, pose.roll);
+            // Draw axis-aligned bounding box in cyan
+            draw_axis_aligned_rect(&mut debug_img, x1, y1, x2, y2, Rgb([0, 255, 255]));
+
+            // Draw 3D pose axes from face center
+            let cx = (x1 + x2) as f32 / 2.0;
+            let cy = (y1 + y2) as f32 / 2.0;
+            let axis_length = ((x2 - x1).max(y2 - y1) as f32) * 0.6;
+            draw_pose_axes(&mut debug_img, cx, cy, axis_length, pose.yaw, pose.pitch, pose.roll);
         }
 
         // Draw text background bar at bottom for pose values

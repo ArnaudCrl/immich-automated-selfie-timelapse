@@ -61,17 +61,25 @@
   );
 
   // Match backend's sanitize_folder_name logic for video path construction
+  // Must exactly replicate src/utils.rs sanitize_folder_name
   function sanitizeFolderName(name, id) {
     const base = name && name.trim() ? name : id;
+
+    // Remove accents by decomposing to NFD and filtering combining marks
+    const withoutAccents = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // Convert to lowercase and replace unsafe characters with underscores
     let sanitized = '';
-    for (const c of base) {
-      if (/^[\p{L}\p{N}\-_ ]$/u.test(c)) {
+    for (const c of withoutAccents.toLowerCase()) {
+      if (/^[a-z0-9\-_]$/.test(c)) {
         sanitized += c;
       } else {
         sanitized += '_';
       }
     }
-    sanitized = sanitized.trim();
+
+    // Trim whitespace and underscores, then limit length
+    sanitized = sanitized.replace(/^[\s_]+|[\s_]+$/g, '');
     return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
   }
 

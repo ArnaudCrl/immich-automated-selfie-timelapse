@@ -641,12 +641,13 @@ mod tests {
 
     #[test]
     fn test_brightness_validation() {
-        let mut config = BrightnessConfig::default();
-        config.enabled = true;
+        let mut config = BrightnessConfig {
+            enabled: true,
+            min_brightness: 0.1,
+            max_brightness: 0.9,
+        };
 
         // Valid config
-        config.min_brightness = 0.1;
-        config.max_brightness = 0.9;
         assert!(config.validate().is_ok());
 
         // Invalid: min >= max

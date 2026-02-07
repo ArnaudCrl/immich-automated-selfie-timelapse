@@ -286,16 +286,9 @@ impl ProcessingStep for HeadPoseStep {
             };
         }
 
-        if pose.roll.abs() > head_pose_config.max_roll {
-            return StepOutcome::Skip {
-                ctx,
-                reason: "head_turned".to_string(),
-                detail: Some(format!(
-                    "Roll {:.1}° exceeds threshold {:.1}°",
-                    pose.roll, head_pose_config.max_roll
-                )),
-            };
-        }
+        // Note: Roll is not checked for pass/fail - only used for visualization
+        // Roll (head tilt) is less important for timelapse alignment since
+        // the alignment step can handle rotated faces
 
         StepOutcome::Continue(ctx)
     }

@@ -161,8 +161,8 @@ mod tests {
     fn test_input_format() {
         // DMHead expects raw [0, 255] pixel values as floats, no normalization
         // See: https://github.com/PINTO0309/DMHead/blob/main/demo_video.py
-        assert_eq!(0_u8 as f32, 0.0);
-        assert_eq!(255_u8 as f32, 255.0);
-        assert_eq!(128_u8 as f32, 128.0);
+        assert_eq!(0_f32, 0.0);
+        assert_eq!(255_f32, 255.0);
+        assert_eq!(128_f32, 128.0);
     }
 }

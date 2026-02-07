@@ -38,8 +38,7 @@
         keep_intermediates: false,
       },
       alignment: {
-        left_eye_y_position: 0.4,
-        left_eye_x_position: 0.35,
+        eye_distance: 0.3,
       },
     },
     video: {
@@ -116,8 +115,7 @@
         keep_intermediates: false,
       },
       alignment: {
-        left_eye_y_position: 0.4,
-        left_eye_x_position: 0.35,
+        eye_distance: 0.3,
       },
     },
     video: {
@@ -353,35 +351,18 @@
 
                 <div class="setting-row sub-setting">
                   <label>
-                    <span class="setting-label">Left Eye Y Position</span>
-                    <span class="setting-hint">Vertical position of left eye (% from top)</span>
+                    <span class="setting-label">Eye Distance</span>
+                    <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
                   </label>
                   <div class="setting-control">
                     <input
                       type="range"
-                      bind:value={config.processing.alignment.left_eye_y_position}
-                      min="0.2"
-                      max="0.6"
+                      bind:value={config.processing.alignment.eye_distance}
+                      min="0.1"
+                      max="0.5"
                       step="0.01"
                     />
-                    <span class="value">{(config.processing.alignment.left_eye_y_position * 100).toFixed(0)}%</span>
-                  </div>
-                </div>
-
-                <div class="setting-row sub-setting">
-                  <label>
-                    <span class="setting-label">Left Eye X Position</span>
-                    <span class="setting-hint">Horizontal position of left eye (% from left)</span>
-                  </label>
-                  <div class="setting-control">
-                    <input
-                      type="range"
-                      bind:value={config.processing.alignment.left_eye_x_position}
-                      min="0.25"
-                      max="0.45"
-                      step="0.01"
-                    />
-                    <span class="value">{(config.processing.alignment.left_eye_x_position * 100).toFixed(0)}%</span>
+                    <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
                   </div>
                 </div>
               </div>

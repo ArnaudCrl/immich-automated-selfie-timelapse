@@ -299,63 +299,66 @@ impl EyeFilterConfig {
 /// Aligns faces based on eye positions detected from facial landmarks,
 /// ensuring consistent eye placement across all images for smoother timelapses.
 ///
+/// Uses a single `eye_distance` parameter to control framing. Eye positions
+/// are derived by estimating the visual face center (approximately at the nose
+/// tip) from standard face proportions, then placing that point at the image
+/// center with a small downward offset to show more neck.
+///
 /// Note: Face alignment is always enabled and is a core part of the pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlignmentConfig {
-    /// Target Y position for left eye as percentage from top (0.0-1.0).
-    /// Default 0.4 places left eye at 40% from the top.
-    /// Both eyes are positioned at the same vertical level.
-    pub left_eye_y_position: f32,
-
-    /// Target X position for left eye as percentage from left (0.0-1.0).
-    /// Default 0.35 places left eye at 35% from the left edge.
-    /// Right eye will be placed at (1.0 - left_eye_x_position).
-    pub left_eye_x_position: f32,
+    /// Distance between left and right eye centers as a fraction of output
+    /// image width (0.0-1.0). Default 0.3 means the eyes span 30% of the
+    /// output width. Larger values zoom in (bigger face), smaller values
+    /// zoom out (more background).
+    pub eye_distance: f32,
 }
 
 impl Default for AlignmentConfig {
     fn default() -> Self {
         Self {
-            left_eye_y_position: 0.4,
-            left_eye_x_position: 0.35,
+            eye_distance: 0.3,
         }
     }
 }
 
 impl AlignmentConfig {
+    /// Offset from the eye line to the approximate visual face center
+    /// (with a slight neck bias), expressed as a multiple of the inter-eye
+    /// distance. The visible face center (hairline-to-chin midpoint) is
+    /// about 0.4× IPD below the eyes; adding a small neck offset brings
+    /// this to 0.5× IPD. This matches the standard used by dlib and OpenCV
+    /// face alignment (desiredLeftEye = (0.35, 0.35) with IPD = 0.3).
+    /// This point is placed at the image center (0.5, 0.5).
+    const FACE_CENTER_BELOW_EYES: f32 = 0.5;
+
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
-        if self.left_eye_y_position <= 0.0 || self.left_eye_y_position >= 1.0 {
+        if self.eye_distance <= 0.0 || self.eye_distance >= 1.0 {
             return Err(Error::Config(
-                "Alignment left_eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
+                "Alignment eye_distance must be between 0.0 and 1.0 (exclusive)".to_string(),
             ));
         }
-        if self.left_eye_y_position < 0.2 || self.left_eye_y_position > 0.6 {
+        if self.eye_distance < 0.1 || self.eye_distance > 0.5 {
             return Err(Error::Config(
-                "Alignment left_eye_y_position should be between 0.2 and 0.6 for best results"
-                    .to_string(),
-            ));
-        }
-        if self.left_eye_x_position <= 0.0 || self.left_eye_x_position >= 0.5 {
-            return Err(Error::Config(
-                "Alignment left_eye_x_position must be between 0.0 and 0.5 (left eye must be in left half)"
-                    .to_string(),
-            ));
-        }
-        if self.left_eye_x_position < 0.25 || self.left_eye_x_position > 0.45 {
-            return Err(Error::Config(
-                "Alignment left_eye_x_position should be between 0.25 and 0.45 for best results"
+                "Alignment eye_distance should be between 0.1 and 0.5 for best results"
                     .to_string(),
             ));
         }
         Ok(())
     }
 
-    /// Calculate the target inter-eye distance as a fraction of output width.
-    /// Since left eye is at left_eye_x_position and right eye is at (1 - left_eye_x_position),
-    /// the distance between them is: (1 - left_eye_x_position) - left_eye_x_position = 1 - 2*left_eye_x_position
-    pub fn inter_eye_distance(&self) -> f32 {
-        1.0 - 2.0 * self.left_eye_x_position
+    /// Target X position for the left eye as a fraction of output width.
+    /// Eyes are centered horizontally: `left_eye_x = (1 - eye_distance) / 2`.
+    pub fn left_eye_x(&self) -> f32 {
+        (1.0 - self.eye_distance) / 2.0
+    }
+
+    /// Target Y position for both eyes as a fraction of output height.
+    /// Derived by placing the estimated face center at the image center:
+    /// `eye_y = 0.5 - eye_distance * FACE_CENTER_BELOW_EYES`.
+    pub fn left_eye_y(&self) -> f32 {
+        0.5 - self.eye_distance * Self::FACE_CENTER_BELOW_EYES
     }
 }
 

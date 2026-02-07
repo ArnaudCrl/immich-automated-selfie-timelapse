@@ -174,14 +174,17 @@ fn calculate_eye_alignment_transform(
 ) -> AffineMatrix {
     let output_size_f = output_size as f32;
 
-    // Calculate target eye positions
+    // Calculate target eye positions from the single eye_distance setting
+    let left_eye_x = alignment_config.left_eye_x();
+    let left_eye_y = alignment_config.left_eye_y();
+
     let left_eye_target = Point::new(
-        output_size_f * alignment_config.left_eye_x_position,
-        output_size_f * alignment_config.left_eye_y_position,
+        output_size_f * left_eye_x,
+        output_size_f * left_eye_y,
     );
     let right_eye_target = Point::new(
-        output_size_f * (1.0 - alignment_config.left_eye_x_position),
-        output_size_f * alignment_config.left_eye_y_position,
+        output_size_f * (1.0 - left_eye_x),
+        output_size_f * left_eye_y,
     );
 
     // Calculate angles

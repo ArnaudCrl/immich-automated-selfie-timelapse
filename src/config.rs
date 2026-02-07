@@ -302,20 +302,22 @@ impl EyeFilterConfig {
 /// Note: Face alignment is always enabled and is a core part of the pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlignmentConfig {
-    /// Target Y position for eyes as percentage from top (0.0-1.0).
-    /// Default 0.35 places eyes at 35% from the top.
-    pub eye_y_position: f32,
+    /// Target Y position for left eye as percentage from top (0.0-1.0).
+    /// Default 0.4 places left eye at 40% from the top.
+    /// Both eyes are positioned at the same vertical level.
+    pub left_eye_y_position: f32,
 
-    /// Target inter-eye distance as percentage of output width (0.0-1.0).
-    /// Default 0.3 makes the distance between eye centers 30% of image width.
-    pub inter_eye_distance: f32,
+    /// Target X position for left eye as percentage from left (0.0-1.0).
+    /// Default 0.35 places left eye at 35% from the left edge.
+    /// Right eye will be placed at (1.0 - left_eye_x_position).
+    pub left_eye_x_position: f32,
 }
 
 impl Default for AlignmentConfig {
     fn default() -> Self {
         Self {
-            eye_y_position: 0.35,
-            inter_eye_distance: 0.30,
+            left_eye_y_position: 0.4,
+            left_eye_x_position: 0.35,
         }
     }
 }
@@ -323,35 +325,37 @@ impl Default for AlignmentConfig {
 impl AlignmentConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
-        if self.eye_y_position <= 0.0 || self.eye_y_position >= 1.0 {
+        if self.left_eye_y_position <= 0.0 || self.left_eye_y_position >= 1.0 {
             return Err(Error::Config(
-                "Alignment eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
+                "Alignment left_eye_y_position must be between 0.0 and 1.0 (exclusive)".to_string(),
             ));
         }
-        if self.eye_y_position < 0.2 || self.eye_y_position > 0.5 {
+        if self.left_eye_y_position < 0.2 || self.left_eye_y_position > 0.6 {
             return Err(Error::Config(
-                "Alignment eye_y_position should be between 0.2 and 0.5 for best results"
+                "Alignment left_eye_y_position should be between 0.2 and 0.6 for best results"
                     .to_string(),
             ));
         }
-        if self.inter_eye_distance <= 0.0 {
+        if self.left_eye_x_position <= 0.0 || self.left_eye_x_position >= 0.5 {
             return Err(Error::Config(
-                "Alignment inter_eye_distance must be greater than 0 to prevent division by zero"
+                "Alignment left_eye_x_position must be between 0.0 and 0.5 (left eye must be in left half)"
                     .to_string(),
             ));
         }
-        if self.inter_eye_distance >= 1.0 {
+        if self.left_eye_x_position < 0.25 || self.left_eye_x_position > 0.45 {
             return Err(Error::Config(
-                "Alignment inter_eye_distance must be less than 1.0".to_string(),
-            ));
-        }
-        if self.inter_eye_distance < 0.2 || self.inter_eye_distance > 0.5 {
-            return Err(Error::Config(
-                "Alignment inter_eye_distance should be between 0.2 and 0.5 for best results"
+                "Alignment left_eye_x_position should be between 0.25 and 0.45 for best results"
                     .to_string(),
             ));
         }
         Ok(())
+    }
+
+    /// Calculate the target inter-eye distance as a fraction of output width.
+    /// Since left eye is at left_eye_x_position and right eye is at (1 - left_eye_x_position),
+    /// the distance between them is: (1 - left_eye_x_position) - left_eye_x_position = 1 - 2*left_eye_x_position
+    pub fn inter_eye_distance(&self) -> f32 {
+        1.0 - 2.0 * self.left_eye_x_position
     }
 }
 

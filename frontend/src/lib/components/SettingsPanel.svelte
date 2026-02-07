@@ -38,8 +38,8 @@
         keep_intermediates: false,
       },
       alignment: {
-        eye_y_position: 0.35,
-        inter_eye_distance: 0.30,
+        left_eye_y_position: 0.4,
+        left_eye_x_position: 0.35,
       },
     },
     video: {
@@ -116,8 +116,8 @@
         keep_intermediates: false,
       },
       alignment: {
-        eye_y_position: 0.35,
-        inter_eye_distance: 0.30,
+        left_eye_y_position: 0.4,
+        left_eye_x_position: 0.35,
       },
     },
     video: {
@@ -311,8 +311,6 @@
                       <span class="value">{config.processing.head_pose.max_pitch.toFixed(0)}°</span>
                     </div>
                   </div>
-
-                  </div>
                 {/if}
               </div>
 
@@ -355,35 +353,35 @@
 
                 <div class="setting-row sub-setting">
                   <label>
-                    <span class="setting-label">Eye Y Position</span>
-                    <span class="setting-hint">Vertical position of eyes (% from top)</span>
+                    <span class="setting-label">Left Eye Y Position</span>
+                    <span class="setting-hint">Vertical position of left eye (% from top)</span>
                   </label>
                   <div class="setting-control">
                     <input
                       type="range"
-                      bind:value={config.processing.alignment.eye_y_position}
+                      bind:value={config.processing.alignment.left_eye_y_position}
                       min="0.2"
-                      max="0.5"
+                      max="0.6"
                       step="0.01"
                     />
-                    <span class="value">{(config.processing.alignment.eye_y_position * 100).toFixed(0)}%</span>
+                    <span class="value">{(config.processing.alignment.left_eye_y_position * 100).toFixed(0)}%</span>
                   </div>
                 </div>
 
                 <div class="setting-row sub-setting">
                   <label>
-                    <span class="setting-label">Inter-eye Distance</span>
-                    <span class="setting-hint">Distance between eyes (% of width)</span>
+                    <span class="setting-label">Left Eye X Position</span>
+                    <span class="setting-hint">Horizontal position of left eye (% from left)</span>
                   </label>
                   <div class="setting-control">
                     <input
                       type="range"
-                      bind:value={config.processing.alignment.inter_eye_distance}
-                      min="0.2"
-                      max="0.5"
+                      bind:value={config.processing.alignment.left_eye_x_position}
+                      min="0.25"
+                      max="0.45"
                       step="0.01"
                     />
-                    <span class="value">{(config.processing.alignment.inter_eye_distance * 100).toFixed(0)}%</span>
+                    <span class="value">{(config.processing.alignment.left_eye_x_position * 100).toFixed(0)}%</span>
                   </div>
                 </div>
               </div>

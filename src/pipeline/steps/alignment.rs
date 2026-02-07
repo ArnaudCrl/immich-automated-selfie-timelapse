@@ -2,20 +2,24 @@
 //!
 //! Aligns faces based on eye positions to ensure consistent eye placement
 //! across all images in the timelapse.
+//!
+//! Uses a single affine transformation matrix that combines rotation, scaling,
+//! and translation to align eyes at the desired positions in one operation.
 
 use crate::config::Config;
 use crate::pipeline::{computed_keys, PipelineContext, Point, ProcessingStep, StepOutcome};
 use async_trait::async_trait;
-use image::{DynamicImage, GenericImageView, Rgb};
-use imageproc::geometric_transformations::{rotate_about_center, Interpolation};
+use image::{DynamicImage, Rgb, RgbImage};
 
 /// Aligns faces based on eye positions.
 ///
 /// This step:
 /// 1. Retrieves landmarks from ctx.computed["landmarks"]
-/// 2. Calculates rotation angle from eye positions
-/// 3. Applies affine transformation to align eyes horizontally
-/// 4. Scales and crops to position eyes at configured positions
+/// 2. Calculates a single affine transformation matrix that:
+///    - Rotates to make eyes horizontal
+///    - Scales to match desired inter-eye distance
+///    - Translates to position eyes at configured target positions
+/// 3. Applies the transformation using bilinear interpolation
 pub struct AlignmentStep;
 
 #[async_trait]
@@ -50,109 +54,246 @@ impl ProcessingStep for AlignmentStep {
             Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
-        let (width, height) = image.dimensions();
         let output_size = config.processing.output.size;
 
         // Get eye centers
         let left_eye = landmarks.left_eye_center();
         let right_eye = landmarks.right_eye_center();
 
-        // Calculate rotation angle to make eyes horizontal
-        let angle = landmarks.eye_rotation_angle();
-
-        // Calculate current inter-eye distance
-        let current_eye_dist = landmarks.inter_eye_distance();
-
-        // Target inter-eye distance based on config (as fraction of output width)
-        let target_eye_dist = output_size as f32 * config.processing.alignment.inter_eye_distance;
-
-        // Calculate scale factor
-        let scale = target_eye_dist / current_eye_dist;
-
-        // Target eye positions
-        let target_eye_y = output_size as f32 * config.processing.alignment.eye_y_position;
-        let target_left_eye_x = (output_size as f32 - target_eye_dist) / 2.0;
-        let _target_right_eye_x = target_left_eye_x + target_eye_dist;
-
-        // Eye center (midpoint between eyes)
-        let eye_center = Point::new(
-            (left_eye.x + right_eye.x) / 2.0,
-            (left_eye.y + right_eye.y) / 2.0,
-        );
-
-        // First, rotate the image to make eyes horizontal
-        let rgb = image.to_rgb8();
-        let rotated = rotate_about_center(
-            &rgb,
-            -angle, // Negative because we want to counter-rotate
-            Interpolation::Bilinear,
-            Rgb([0, 0, 0]), // Black background for rotated areas
-        );
-
-        // After rotation, the eye center moves. Calculate new position.
-        // For small angles, we can approximate that the center stays roughly the same
-        // For more accuracy, we'd need to transform the point through the rotation
-
-        // Calculate the new eye center after rotation
-        let cos_a = angle.cos();
-        let sin_a = angle.sin();
-        let cx = width as f32 / 2.0;
-        let cy = height as f32 / 2.0;
-
-        // Rotate eye_center around image center
-        let dx = eye_center.x - cx;
-        let dy = eye_center.y - cy;
-        let rotated_eye_center =
-            Point::new(cx + dx * cos_a + dy * sin_a, cy - dx * sin_a + dy * cos_a);
-
-        // Now calculate crop region to achieve the desired scale and positioning
-        // We want the eye center at (output_size/2, target_eye_y)
-        let target_center_x = output_size as f32 / 2.0;
-        let _target_center_y = target_eye_y;
-
-        // Calculate crop region in the rotated image
-        // The crop should be (output_size / scale) pixels, centered appropriately
-        let crop_size = (output_size as f32 / scale) as u32;
-
-        // Crop center in source image (accounting for where we want eyes to end up)
-        let crop_center_x =
-            rotated_eye_center.x - (target_center_x - output_size as f32 / 2.0) / scale;
-        let crop_center_y =
-            rotated_eye_center.y + (target_eye_y - output_size as f32 / 2.0) / scale;
-
-        // Calculate crop bounds
-        let crop_x = (crop_center_x - crop_size as f32 / 2.0).max(0.0) as u32;
-        let crop_y = (crop_center_y - crop_size as f32 / 2.0).max(0.0) as u32;
-
-        // Clamp to image bounds
-        let (rot_width, rot_height) = (rotated.width(), rotated.height());
-        let crop_x = crop_x.min(rot_width.saturating_sub(crop_size));
-        let crop_y = crop_y.min(rot_height.saturating_sub(crop_size));
-        let actual_crop_size = crop_size.min(rot_width - crop_x).min(rot_height - crop_y);
-
-        // Crop and resize
-        let rotated_dyn = DynamicImage::ImageRgb8(rotated);
-        let cropped = rotated_dyn.crop_imm(crop_x, crop_y, actual_crop_size, actual_crop_size);
-        let aligned = cropped.resize_exact(
+        // Calculate the transformation matrix
+        let transform = calculate_eye_alignment_transform(
+            left_eye,
+            right_eye,
             output_size,
-            output_size,
-            image::imageops::FilterType::Lanczos3,
+            &config.processing.alignment,
         );
+
+        // Apply the transformation
+        let aligned = apply_affine_transform(&image, &transform, output_size);
 
         ctx.image = Some(aligned);
 
         tracing::trace!(
-            "Aligned: rotation={:.2}deg, scale={:.2}, crop={}x{} at ({},{})",
-            angle.to_degrees(),
-            scale,
-            actual_crop_size,
-            actual_crop_size,
-            crop_x,
-            crop_y
+            "Aligned: left_eye=({:.1},{:.1}), right_eye=({:.1},{:.1}), target_size={}",
+            left_eye.x,
+            left_eye.y,
+            right_eye.x,
+            right_eye.y,
+            output_size
         );
 
         StepOutcome::Continue(ctx)
     }
+}
+
+/// 2x3 affine transformation matrix.
+/// Represents the transformation: [x', y'] = [[a, b, c], [d, e, f]] * [x, y, 1]
+#[derive(Debug, Clone, Copy)]
+struct AffineMatrix {
+    a: f32,
+    b: f32,
+    c: f32,
+    d: f32,
+    e: f32,
+    f: f32,
+}
+
+impl AffineMatrix {
+    /// Create a translation matrix.
+    fn translation(tx: f32, ty: f32) -> Self {
+        Self {
+            a: 1.0,
+            b: 0.0,
+            c: tx,
+            d: 0.0,
+            e: 1.0,
+            f: ty,
+        }
+    }
+
+    /// Create a rotation matrix (angle in radians).
+    fn rotation(angle: f32) -> Self {
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        Self {
+            a: cos_a,
+            b: -sin_a,
+            c: 0.0,
+            d: sin_a,
+            e: cos_a,
+            f: 0.0,
+        }
+    }
+
+    /// Create a scale matrix.
+    fn scale(s: f32) -> Self {
+        Self {
+            a: s,
+            b: 0.0,
+            c: 0.0,
+            d: 0.0,
+            e: s,
+            f: 0.0,
+        }
+    }
+
+    /// Compose this transformation with another (self * other).
+    /// This applies 'other' first, then 'self'.
+    fn compose(&self, other: &AffineMatrix) -> AffineMatrix {
+        AffineMatrix {
+            a: self.a * other.a + self.b * other.d,
+            b: self.a * other.b + self.b * other.e,
+            c: self.a * other.c + self.b * other.f + self.c,
+            d: self.d * other.a + self.e * other.d,
+            e: self.d * other.b + self.e * other.e,
+            f: self.d * other.c + self.e * other.f + self.f,
+        }
+    }
+
+    /// Transform a point using this matrix.
+    fn transform_point(&self, x: f32, y: f32) -> (f32, f32) {
+        (
+            self.a * x + self.b * y + self.c,
+            self.d * x + self.e * y + self.f,
+        )
+    }
+}
+
+/// Calculate the affine transformation matrix to align eyes at desired positions.
+///
+/// This implements the same algorithm as the Python example:
+/// 1. Calculate target eye positions based on config
+/// 2. Compute rotation angle to make eyes horizontal
+/// 3. Compute scale to match desired inter-eye distance
+/// 4. Combine translation, rotation, scale, and final translation into one matrix
+fn calculate_eye_alignment_transform(
+    left_eye: Point,
+    right_eye: Point,
+    output_size: u32,
+    alignment_config: &crate::config::AlignmentConfig,
+) -> AffineMatrix {
+    let output_size_f = output_size as f32;
+
+    // Calculate target eye positions
+    let left_eye_target = Point::new(
+        output_size_f * alignment_config.left_eye_x_position,
+        output_size_f * alignment_config.left_eye_y_position,
+    );
+    let right_eye_target = Point::new(
+        output_size_f * (1.0 - alignment_config.left_eye_x_position),
+        output_size_f * alignment_config.left_eye_y_position,
+    );
+
+    // Calculate angles
+    let current_angle = (right_eye.y - left_eye.y).atan2(right_eye.x - left_eye.x);
+    let target_angle =
+        (right_eye_target.y - left_eye_target.y).atan2(right_eye_target.x - left_eye_target.x);
+    let rotation_angle = target_angle - current_angle;
+
+    // Calculate scale
+    let current_eye_distance =
+        ((right_eye.x - left_eye.x).powi(2) + (right_eye.y - left_eye.y).powi(2)).sqrt();
+    let target_eye_distance = ((right_eye_target.x - left_eye_target.x).powi(2)
+        + (right_eye_target.y - left_eye_target.y).powi(2))
+    .sqrt();
+    let scale = target_eye_distance / current_eye_distance;
+
+    // Eye centers
+    let center = Point::new(
+        (left_eye.x + right_eye.x) / 2.0,
+        (left_eye.y + right_eye.y) / 2.0,
+    );
+    let target_center = Point::new(
+        (left_eye_target.x + right_eye_target.x) / 2.0,
+        (left_eye_target.y + right_eye_target.y) / 2.0,
+    );
+
+    // Build the transformation matrix by composing:
+    // 1. Translate to origin (center of eyes)
+    // 2. Rotate
+    // 3. Scale
+    // 4. Translate to target position
+    let m1 = AffineMatrix::translation(-center.x, -center.y);
+    let m2 = AffineMatrix::rotation(rotation_angle);
+    let m3 = AffineMatrix::scale(scale);
+    let m4 = AffineMatrix::translation(target_center.x, target_center.y);
+
+    // Compose: M = M4 * M3 * M2 * M1
+    // This means we apply M1 first, then M2, then M3, then M4
+    m4.compose(&m3.compose(&m2.compose(&m1)))
+}
+
+/// Apply an affine transformation to an image.
+///
+/// Uses inverse mapping with bilinear interpolation to avoid holes in the output.
+fn apply_affine_transform(
+    image: &DynamicImage,
+    transform: &AffineMatrix,
+    output_size: u32,
+) -> DynamicImage {
+    let rgb = image.to_rgb8();
+    let (width, height) = rgb.dimensions();
+
+    // We need the inverse transform to do inverse mapping
+    // For an affine transform, the inverse can be computed analytically
+    let det = transform.a * transform.e - transform.b * transform.d;
+    if det.abs() < 1e-10 {
+        // Degenerate transform, return black image
+        return DynamicImage::ImageRgb8(RgbImage::new(output_size, output_size));
+    }
+
+    let inv_det = 1.0 / det;
+    let inv_transform = AffineMatrix {
+        a: transform.e * inv_det,
+        b: -transform.b * inv_det,
+        c: (transform.b * transform.f - transform.e * transform.c) * inv_det,
+        d: -transform.d * inv_det,
+        e: transform.a * inv_det,
+        f: (transform.d * transform.c - transform.a * transform.f) * inv_det,
+    };
+
+    // Create output image using inverse mapping
+    let output = RgbImage::from_fn(output_size, output_size, |x, y| {
+        // Map output pixel to source pixel
+        let (src_x, src_y) = inv_transform.transform_point(x as f32, y as f32);
+
+        // Bilinear interpolation
+        if src_x >= 0.0 && src_x < (width - 1) as f32 && src_y >= 0.0 && src_y < (height - 1) as f32
+        {
+            let x0 = src_x.floor() as u32;
+            let y0 = src_y.floor() as u32;
+            let x1 = x0 + 1;
+            let y1 = y0 + 1;
+
+            let dx = src_x - x0 as f32;
+            let dy = src_y - y0 as f32;
+
+            let p00 = rgb.get_pixel(x0, y0);
+            let p10 = rgb.get_pixel(x1, y0);
+            let p01 = rgb.get_pixel(x0, y1);
+            let p11 = rgb.get_pixel(x1, y1);
+
+            let r = (p00[0] as f32 * (1.0 - dx) * (1.0 - dy)
+                + p10[0] as f32 * dx * (1.0 - dy)
+                + p01[0] as f32 * (1.0 - dx) * dy
+                + p11[0] as f32 * dx * dy) as u8;
+            let g = (p00[1] as f32 * (1.0 - dx) * (1.0 - dy)
+                + p10[1] as f32 * dx * (1.0 - dy)
+                + p01[1] as f32 * (1.0 - dx) * dy
+                + p11[1] as f32 * dx * dy) as u8;
+            let b = (p00[2] as f32 * (1.0 - dx) * (1.0 - dy)
+                + p10[2] as f32 * dx * (1.0 - dy)
+                + p01[2] as f32 * (1.0 - dx) * dy
+                + p11[2] as f32 * dx * dy) as u8;
+
+            Rgb([r, g, b])
+        } else {
+            // Out of bounds - use black
+            Rgb([0, 0, 0])
+        }
+    });
+
+    DynamicImage::ImageRgb8(output)
 }
 
 #[cfg(test)]

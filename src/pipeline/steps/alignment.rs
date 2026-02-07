@@ -73,15 +73,6 @@ impl ProcessingStep for AlignmentStep {
 
         ctx.image = Some(aligned);
 
-        tracing::trace!(
-            "Aligned: left_eye=({:.1},{:.1}), right_eye=({:.1},{:.1}), target_size={}",
-            left_eye.x,
-            left_eye.y,
-            right_eye.x,
-            right_eye.y,
-            output_size
-        );
-
         StepOutcome::Continue(ctx)
     }
 }
@@ -178,10 +169,7 @@ fn calculate_eye_alignment_transform(
     let left_eye_x = alignment_config.left_eye_x();
     let left_eye_y = alignment_config.left_eye_y();
 
-    let left_eye_target = Point::new(
-        output_size_f * left_eye_x,
-        output_size_f * left_eye_y,
-    );
+    let left_eye_target = Point::new(output_size_f * left_eye_x, output_size_f * left_eye_y);
     let right_eye_target = Point::new(
         output_size_f * (1.0 - left_eye_x),
         output_size_f * left_eye_y,

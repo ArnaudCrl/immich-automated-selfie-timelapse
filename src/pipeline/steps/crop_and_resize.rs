@@ -34,9 +34,10 @@ impl ProcessingStep for CropAndResizeStep {
         };
 
         let output_size = config.processing.output.size;
+        let eye_distance = config.processing.alignment.eye_distance;
 
         // Crop returns CropResult with cropped images and face rectangle in crop coordinates
-        match crop_face_with_intermediate(image, &ctx.face_data, output_size) {
+        match crop_face_with_intermediate(image, &ctx.face_data, output_size, eye_distance) {
             Ok(crop_result) => {
                 // Use the pre-resized image from the crop function
                 let cropped_size = crop_result.cropped.width();

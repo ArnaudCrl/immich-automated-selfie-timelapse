@@ -95,13 +95,14 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/config", get(get_config))
         .route("/api/config", put(update_config))
-        // Serve output files (video, images) with cache headers
+        // Serve output files (video, images) — no-cache so browsers revalidate
+        // after reprocessing (filenames stay the same across runs)
         .nest_service(
             "/output",
             ServiceBuilder::new()
-                .layer(SetResponseHeaderLayer::if_not_present(
+                .layer(SetResponseHeaderLayer::overriding(
                     header::CACHE_CONTROL,
-                    header::HeaderValue::from_static("public, max-age=86400"),
+                    header::HeaderValue::from_static("no-store"),
                 ))
                 .service(ServeDir::new(output_dir)),
         )

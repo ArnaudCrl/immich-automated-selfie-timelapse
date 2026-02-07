@@ -316,9 +316,7 @@ pub struct AlignmentConfig {
 
 impl Default for AlignmentConfig {
     fn default() -> Self {
-        Self {
-            eye_distance: 0.3,
-        }
+        Self { eye_distance: 0.3 }
     }
 }
 
@@ -341,8 +339,7 @@ impl AlignmentConfig {
         }
         if self.eye_distance < 0.1 || self.eye_distance > 0.5 {
             return Err(Error::Config(
-                "Alignment eye_distance should be between 0.1 and 0.5 for best results"
-                    .to_string(),
+                "Alignment eye_distance should be between 0.1 and 0.5 for best results".to_string(),
             ));
         }
         Ok(())

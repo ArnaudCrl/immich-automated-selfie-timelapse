@@ -27,6 +27,7 @@ pub fn crop_face_with_intermediate(
     img: &DynamicImage,
     face_data: &FaceData,
     output_size: u32,
+    eye_distance: f32,
 ) -> Result<CropResult> {
     let (img_width, img_height) = img.dimensions();
 
@@ -50,19 +51,19 @@ pub fn crop_face_with_intermediate(
         ));
     }
 
-    // Expand the crop area to include some context around the face
-    // and make it square for consistent output
-    let face_size = face_width.max(face_height);
-    let padding = face_size / 2; // 50% padding on each side
-    let crop_size = face_size + padding * 2;
+    // Derive crop size from eye_distance so the initial crop captures
+    // the right amount of context for the alignment step.
+    const IPD_RATIO: f32 = 0.37;
+    const SAFETY_MARGIN: f32 = 1.30;
+
+    let face_size = face_width.max(face_height) as f32;
+    let estimated_ipd = IPD_RATIO * face_width as f32;
+    let ideal_crop = (estimated_ipd / eye_distance) * SAFETY_MARGIN;
+    let crop_size = ideal_crop.max(face_size * 1.5).max(10.0).round() as u32;
 
     // Calculate center of face
     let center_x = (x1 + x2) / 2;
     let center_y = (y1 + y2) / 2;
-
-    if crop_size < 10 {
-        return Err(Error::ImageProcessing("Crop area too small".to_string()));
-    }
 
     // Ideal crop region centered on the face (may extend outside image bounds)
     let ideal_x1 = center_x as i32 - crop_size as i32 / 2;

@@ -14,6 +14,7 @@
   let deleting = $state(false);
   let compiling = $state(false);
   let videoExists = $state(false);
+  let cacheBust = $state(Date.now());
 
   let selectedCount = $derived(selectedImages.size);
   let allSelected = $derived(images.length > 0 && selectedImages.size === images.length);
@@ -21,6 +22,7 @@
   async function loadImages() {
     loading = true;
     error = null;
+    cacheBust = Date.now();
     try {
       const res = await fetch(`/api/output/${encodeURIComponent(folderName)}/images`);
       if (!res.ok) {
@@ -197,7 +199,7 @@
             <span class="checkbox">{selectedImages.has(image.filename) ? '✓' : ''}</span>
           </div>
           <img
-            src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(image.filename)}"
+            src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(image.filename)}?v={cacheBust}"
             alt={image.filename}
             loading="lazy"
           />

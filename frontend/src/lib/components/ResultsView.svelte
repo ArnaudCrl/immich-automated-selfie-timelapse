@@ -7,9 +7,10 @@
 
   let { folderName = null } = $props();
 
+  let cacheBust = $state(Date.now());
   let videoUrl = $derived(
     folderName
-      ? `/output/${encodeURIComponent(folderName)}/${encodeURIComponent(folderName)}.mp4`
+      ? `/output/${encodeURIComponent(folderName)}/${encodeURIComponent(folderName)}.mp4?v=${cacheBust}`
       : null
   );
   let videoError = $state(false);

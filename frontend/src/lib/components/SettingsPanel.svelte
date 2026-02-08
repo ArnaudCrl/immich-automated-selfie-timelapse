@@ -160,12 +160,13 @@
 
                 {#if config.processing.face_resolution.enabled}
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="min-face-size">
                       <span class="setting-label">Min Face Size</span>
                       <span class="setting-hint">Minimum face resolution in pixels</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="min-face-size"
                         type="range"
                         bind:value={config.processing.face_resolution.min_size}
                         min="20"
@@ -190,12 +191,13 @@
 
                 {#if config.processing.brightness.enabled}
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="min-brightness">
                       <span class="setting-label">Min Brightness</span>
                       <span class="setting-hint">Skip images darker than this</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="min-brightness"
                         type="range"
                         bind:value={config.processing.brightness.min_brightness}
                         min="0"
@@ -207,12 +209,13 @@
                   </div>
 
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="max-brightness">
                       <span class="setting-label">Max Brightness</span>
                       <span class="setting-hint">Skip images brighter than this</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="max-brightness"
                         type="range"
                         bind:value={config.processing.brightness.max_brightness}
                         min="0.5"
@@ -237,12 +240,13 @@
 
                 {#if config.processing.head_pose.enabled}
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="max-yaw">
                       <span class="setting-label">Max Yaw</span>
                       <span class="setting-hint">Maximum left/right turn angle</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="max-yaw"
                         type="range"
                         bind:value={config.processing.head_pose.max_yaw}
                         min="5"
@@ -254,12 +258,13 @@
                   </div>
 
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="max-pitch">
                       <span class="setting-label">Max Pitch</span>
                       <span class="setting-hint">Maximum up/down tilt angle</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="max-pitch"
                         type="range"
                         bind:value={config.processing.head_pose.max_pitch}
                         min="5"
@@ -284,12 +289,13 @@
 
                 {#if config.processing.eye_filter.enabled}
                   <div class="setting-row sub-setting">
-                    <label>
+                    <label for="min-ear">
                       <span class="setting-label">Min EAR</span>
                       <span class="setting-hint">Eye Aspect Ratio threshold (lower = more closed)</span>
                     </label>
                     <div class="setting-control">
                       <input
+                        id="min-ear"
                         type="range"
                         bind:value={config.processing.eye_filter.min_ear}
                         min="0.1"
@@ -310,12 +316,13 @@
                 </div>
 
                 <div class="setting-row sub-setting">
-                  <label>
+                  <label for="eye-distance">
                     <span class="setting-label">Eye Distance</span>
                     <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
                   </label>
                   <div class="setting-control">
                     <input
+                      id="eye-distance"
                       type="range"
                       bind:value={config.processing.alignment.eye_distance}
                       min="0.1"
@@ -330,12 +337,13 @@
           {:else if activeTab === 'output'}
             <fieldset disabled={disabled || saving}>
               <div class="setting-row">
-                <label>
+                <label for="output-size">
                   <span class="setting-label">Output Size</span>
                   <span class="setting-hint">Final image dimensions (square)</span>
                 </label>
                 <div class="setting-control">
                   <input
+                    id="output-size"
                     type="range"
                     bind:value={config.processing.output.size}
                     min="128"
@@ -347,12 +355,13 @@
               </div>
 
               <div class="setting-row">
-                <label>
+                <label for="max-workers">
                   <span class="setting-label">Parallel Workers</span>
                   <span class="setting-hint">Concurrent image processing tasks</span>
                 </label>
                 <div class="setting-control">
                   <input
+                    id="max-workers"
                     type="range"
                     bind:value={config.processing.max_workers}
                     min="1"
@@ -364,22 +373,23 @@
               </div>
 
               <div class="setting-row checkbox-row">
-                <label>
+                <label for="keep-intermediates">
                   <span class="setting-label">Keep Debug Images</span>
                   <span class="setting-hint">Save intermediate processing visualizations</span>
                 </label>
-                <input type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
+                <input id="keep-intermediates" type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
               </div>
             </fieldset>
           {:else if activeTab === 'video'}
             <fieldset disabled={disabled || saving}>
               <div class="setting-row">
-                <label>
+                <label for="video-framerate">
                   <span class="setting-label">Framerate</span>
                   <span class="setting-hint">Video frames per second</span>
                 </label>
                 <div class="setting-control">
                   <input
+                    id="video-framerate"
                     type="range"
                     bind:value={config.video.framerate}
                     min="1"
@@ -391,12 +401,13 @@
               </div>
 
               <div class="setting-row">
-                <label>
+                <label for="video-crf">
                   <span class="setting-label">Quality (CRF)</span>
                   <span class="setting-hint">Lower = better quality, larger file</span>
                 </label>
                 <div class="setting-control">
                   <input
+                    id="video-crf"
                     type="range"
                     bind:value={config.video.crf}
                     min="15"
@@ -408,11 +419,11 @@
               </div>
 
               <div class="setting-row">
-                <label>
+                <label for="video-codec">
                   <span class="setting-label">Codec</span>
                   <span class="setting-hint">Video encoding format</span>
                 </label>
-                <select bind:value={config.video.codec}>
+                <select id="video-codec" bind:value={config.video.codec}>
                   <option value="libx264">H.264 (libx264)</option>
                   <option value="libx265">H.265 (libx265)</option>
                   <option value="libvpx-vp9">VP9 (libvpx-vp9)</option>
@@ -420,11 +431,11 @@
               </div>
 
               <div class="setting-row checkbox-row">
-                <label>
+                <label for="video-enabled">
                   <span class="setting-label">Auto-compile Video</span>
                   <span class="setting-hint">Automatically create video after processing</span>
                 </label>
-                <input type="checkbox" bind:checked={config.video.enabled} />
+                <input id="video-enabled" type="checkbox" bind:checked={config.video.enabled} />
               </div>
             </fieldset>
           {/if}

@@ -8,7 +8,12 @@
   let loading = $state(true);
   let error = $state(null);
   let searchQuery = $state('');
-  let selectedId = $state(initialSelectedId);
+  let selectedId = $state(null);
+
+  // Sync selectedId with initialSelectedId prop changes
+  $effect(() => {
+    selectedId = initialSelectedId;
+  });
 
   let filteredPeople = $derived(
     people.filter(p => {

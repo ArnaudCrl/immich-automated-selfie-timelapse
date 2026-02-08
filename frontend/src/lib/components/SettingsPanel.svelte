@@ -4,6 +4,7 @@
   import { handleError } from '../errorHandler.js';
   import EyeIndicator from './visual/EyeIndicator.svelte';
   import AlignmentIndicator from './visual/AlignmentIndicator.svelte';
+  import BrightnessIndicator from './visual/BrightnessIndicator.svelte';
 
   let { disabled = false } = $props();
 
@@ -192,39 +193,15 @@
                 </div>
 
                 {#if config.processing.brightness.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="min-brightness">
-                      <span class="setting-label">Min Brightness</span>
-                      <span class="setting-hint">Skip images darker than this</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="min-brightness"
-                        type="range"
-                        bind:value={config.processing.brightness.min_brightness}
-                        min="0"
-                        max="0.5"
-                        step="0.05"
-                      />
-                      <span class="value">{config.processing.brightness.min_brightness.toFixed(2)}</span>
+                  <div class="brightness-visual-control sub-setting">
+                    <div class="brightness-hint">
+                      Drag the markers to set the acceptable brightness range
                     </div>
-                  </div>
-
-                  <div class="setting-row sub-setting">
-                    <label for="max-brightness">
-                      <span class="setting-label">Max Brightness</span>
-                      <span class="setting-hint">Skip images brighter than this</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="max-brightness"
-                        type="range"
-                        bind:value={config.processing.brightness.max_brightness}
-                        min="0.5"
-                        max="1.0"
-                        step="0.05"
+                    <div class="brightness-indicator-container">
+                      <BrightnessIndicator
+                        bind:minBrightness={config.processing.brightness.min_brightness}
+                        bind:maxBrightness={config.processing.brightness.max_brightness}
                       />
-                      <span class="value">{config.processing.brightness.max_brightness.toFixed(2)}</span>
                     </div>
                   </div>
                 {/if}
@@ -316,7 +293,7 @@
               <!-- Alignment Section -->
               <div class="setting-section">
                 <div class="section-header">
-                  <span class="section-title">Final image composition</span>
+                  <span class="section-title">Final Image Composition</span>
                 </div>
                 <div class="setting-row sub-setting">
                   <label for="eye-distance">
@@ -748,5 +725,27 @@
     border-radius: 6px;
     width: 96px;
     height: 96px;
+  }
+
+  /* Brightness visual control */
+  .brightness-visual-control {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .brightness-hint {
+    font-size: 0.75rem;
+    color: #666;
+    text-align: center;
+  }
+
+  .brightness-indicator-container {
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    border-radius: 6px;
   }
 </style>

@@ -8,6 +8,7 @@
   import ProgressDisplay from './lib/components/ProgressDisplay.svelte';
   import ResultsView from './lib/components/ResultsView.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
+  import { sanitizeFolderName } from './lib/utils.js';
 
   // Configuration constants
   const STORAGE_KEY_PERSON = 'immich-timelapse-selected-person';
@@ -53,35 +54,11 @@
   let savedScrollPosition = $state(0);
 
   // Output folder management
-  let outputFolderRefreshKey = $state(0);
   let outputFolders = $state([]);
 
   let isJobRunning = $derived(
     jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
   );
-
-  // Match backend's sanitize_folder_name logic for video path construction
-  // Must exactly replicate src/utils.rs sanitize_folder_name
-  function sanitizeFolderName(name, id) {
-    const base = name && name.trim() ? name : id;
-
-    // Remove accents by decomposing to NFD and filtering combining marks
-    const withoutAccents = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    // Convert to lowercase and replace unsafe characters with underscores
-    let sanitized = '';
-    for (const c of withoutAccents.toLowerCase()) {
-      if (/^[a-z0-9\-_]$/.test(c)) {
-        sanitized += c;
-      } else {
-        sanitized += '_';
-      }
-    }
-
-    // Trim whitespace and underscores, then limit length
-    sanitized = sanitized.replace(/^[\s_]+|[\s_]+$/g, '');
-    return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
-  }
 
   // Compute folder name from progress for video display
   let completedFolderName = $derived(
@@ -90,8 +67,15 @@
       : null
   );
 
-  function handleFoldersLoaded(folders) {
-    outputFolders = folders;
+  async function loadOutputFolders() {
+    try {
+      const res = await fetch('/api/output');
+      if (res.ok) {
+        outputFolders = await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to load output folders:', e);
+    }
   }
 
   function handleFolderDeleted(folderName) {
@@ -101,6 +85,8 @@
       jobStatus = 'idle';
       progress = { completed: 0, total: 0, message: '' };
     }
+    // Reload folder list after deletion
+    loadOutputFolders();
   }
 
   function openGallery(folder) {
@@ -175,7 +161,7 @@
         // Refresh output folders when job finishes (was running before)
         if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error') {
           if (previousStatus === 'running' || previousStatus === 'compiling_video' || previousStatus === 'cancelling') {
-            outputFolderRefreshKey++;
+            loadOutputFolders();
           }
         }
       } catch (e) {
@@ -220,6 +206,17 @@
 
   onMount(() => {
     // Initial check will happen when connection is established
+    // Load output folders initially and when connection is established
+    if (connectionOk) {
+      loadOutputFolders();
+    }
+  });
+
+  // Reload folders when connection is established
+  $effect(() => {
+    if (connectionOk) {
+      loadOutputFolders();
+    }
   });
 
   onDestroy(() => {
@@ -280,9 +277,8 @@
       <section class="output">
         <OutputManager
           disabled={isJobRunning}
+          folders={outputFolders}
           onOpenGallery={openGallery}
-          refreshKey={outputFolderRefreshKey}
-          onFoldersLoaded={handleFoldersLoaded}
           onFolderDeleted={handleFolderDeleted}
         />
       </section>

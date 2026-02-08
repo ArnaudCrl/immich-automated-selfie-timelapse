@@ -1,35 +1,9 @@
 <script>
-  import { onMount } from 'svelte';
+  import { formatSize } from '../utils.js';
 
-  let { disabled = false, onOpenGallery, refreshKey = 0, onFoldersLoaded, onFolderDeleted } = $props();
+  let { disabled = false, folders = [], onOpenGallery, onFolderDeleted } = $props();
 
-  let folders = $state([]);
-  let loading = $state(true);
-  let error = $state(null);
   let deleting = $state(null);
-
-  // Re-fetch when refreshKey changes
-  $effect(() => {
-    if (refreshKey > 0) {
-      loadFolders();
-    }
-  });
-
-  async function loadFolders() {
-    loading = true;
-    error = null;
-    try {
-      const res = await fetch('/api/output');
-      if (!res.ok) throw new Error('Failed to load output folders');
-      folders = await res.json();
-      // Notify parent about loaded folders (for existing folder warnings)
-      onFoldersLoaded?.(folders);
-    } catch (e) {
-      error = e.message;
-    } finally {
-      loading = false;
-    }
-  }
 
   async function deleteFolder(name) {
     if (!confirm(`Delete output folder "${name}"? This cannot be undone.`)) {
@@ -45,10 +19,8 @@
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || 'Failed to delete folder');
       }
-      // Notify parent that folder was deleted
+      // Notify parent that folder was deleted (parent will reload)
       onFolderDeleted?.(name);
-      // Reload the list
-      await loadFolders();
     } catch (e) {
       alert(e.message);
     } finally {
@@ -72,39 +44,20 @@
       }
       // Notify parent that all folders were deleted (null = all)
       onFolderDeleted?.(null);
-      // Reload the list
-      await loadFolders();
     } catch (e) {
       alert(e.message);
     } finally {
       deleting = null;
     }
   }
-
-  function formatSize(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  onMount(() => {
-    loadFolders();
-  });
 </script>
 
 <div class="output-manager">
   <div class="header">
     <h3>Output Folders</h3>
-    <button type="button" class="refresh-btn" onclick={loadFolders} disabled={loading || disabled}>
-      {loading ? '...' : '↻'}
-    </button>
   </div>
 
-  {#if loading}
-    <p class="status">Loading...</p>
-  {:else if error}
-    <p class="error">{error}</p>
-  {:else if folders.length === 0}
+  {#if folders.length === 0}
     <p class="status empty">No output folders yet</p>
   {:else}
     <ul class="folder-list">
@@ -192,28 +145,6 @@
     margin: 0;
   }
 
-  .refresh-btn {
-    width: 2rem;
-    height: 2rem;
-    background: #252525;
-    border: none;
-    border-radius: 4px;
-    color: #888;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .refresh-btn:hover:not(:disabled) {
-    background: #333;
-    color: #e0e0e0;
-  }
-
-  .refresh-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
   .status {
     font-size: 0.875rem;
     color: #888;
@@ -224,13 +155,6 @@
   .status.empty {
     color: #666;
     font-style: italic;
-  }
-
-  .error {
-    font-size: 0.875rem;
-    color: #dc2626;
-    text-align: center;
-    padding: 1rem;
   }
 
   .folder-list {

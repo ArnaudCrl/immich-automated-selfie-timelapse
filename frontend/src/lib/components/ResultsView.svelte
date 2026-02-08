@@ -1,10 +1,4 @@
 <script>
-  // Future: This component can be extended to show:
-  // - Preview grid of processed faces
-  // - Before/after alignment comparison
-  // - Skipped images with reasons
-  // - Face landmark visualization
-
   let { folderName = null } = $props();
 
   let cacheBust = $state(Date.now());
@@ -53,33 +47,6 @@
       </a>
     </div>
   {/if}
-
-  <!-- Future: Face preview grid -->
-  <!--
-  <div class="preview-section">
-    <h3>Processed Faces</h3>
-    <div class="preview-grid">
-      {#each processedFaces as face}
-        <div class="face-preview">
-          <img src={face.url} alt="Processed face" />
-          <span class="timestamp">{face.timestamp}</span>
-        </div>
-      {/each}
-    </div>
-  </div>
-  -->
-
-  <!-- Future: Skipped images -->
-  <!--
-  <details class="skipped-section">
-    <summary>Skipped Images ({skippedCount})</summary>
-    <ul>
-      {#each skippedImages as img}
-        <li>{img.reason}</li>
-      {/each}
-    </ul>
-  </details>
-  -->
 </div>
 
 <style>
@@ -147,32 +114,4 @@
   .download-btn:hover {
     background: #16a34a;
   }
-
-  /* Future styles for preview grid */
-  /*
-  .preview-section {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #333;
-  }
-
-  .preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 0.5rem;
-  }
-
-  .face-preview img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border-radius: 4px;
-  }
-
-  .skipped-section {
-    margin-top: 1rem;
-    font-size: 0.875rem;
-    color: #888;
-  }
-  */
 </style>

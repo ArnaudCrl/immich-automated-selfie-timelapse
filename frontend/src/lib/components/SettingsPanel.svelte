@@ -315,6 +315,9 @@
 
               <!-- Alignment Section -->
               <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Final image composition</span>
+                </div>
                 <div class="setting-row sub-setting">
                   <label for="eye-distance">
                     <span class="setting-label">Eye Distance</span>

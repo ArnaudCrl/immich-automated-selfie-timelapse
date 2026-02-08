@@ -38,26 +38,57 @@
       .join(' ');
   }
 
+  // Persist statistics so they remain visible after job completion
+  let savedSkipStats = $state({});
+  let savedCompleted = $state(0);
+
   // Skip statistics from the backend - dynamically handle any keys
   let skipStats = $derived(progress.skip_stats || {});
+
+  // Save statistics whenever they update during processing
+  $effect(() => {
+    // Save stats whenever we have valid data (not idle/error)
+    if (jobStatus !== 'idle' && jobStatus !== 'error') {
+      // Save skip stats if available
+      if (Object.keys(skipStats).length > 0) {
+        savedSkipStats = { ...skipStats };
+      }
+      // Save completed count if it's greater than what we have saved
+      if (progress.completed > savedCompleted) {
+        savedCompleted = progress.completed;
+      }
+    } else if (jobStatus === 'idle') {
+      // Clear saved stats when starting a new job
+      savedSkipStats = {};
+      savedCompleted = 0;
+    }
+  });
+
+  // Use current stats if available, otherwise fall back to saved stats
+  let displaySkipStats = $derived(
+    Object.keys(skipStats).length > 0 ? skipStats : savedSkipStats
+  );
+  let displayCompleted = $derived(
+    progress.completed > 0 ? progress.completed : savedCompleted
+  );
 
   // Use the backend-provided total if available, otherwise calculate from individual counts
   // Note: We exclude 'total' from manual calculation to avoid double-counting
   let skipTotal = $derived(
-    typeof skipStats.total === 'number'
-      ? skipStats.total
-      : Object.entries(skipStats)
+    typeof displaySkipStats.total === 'number'
+      ? displaySkipStats.total
+      : Object.entries(displaySkipStats)
           .filter(([key, _]) => key !== 'total')
           .reduce((sum, [_, val]) => sum + (typeof val === 'number' ? val : 0), 0)
   );
 
   // Calculate kept (successful) count: completed - skipped
-  let keptCount = $derived(Math.max(0, progress.completed - skipTotal));
+  let keptCount = $derived(Math.max(0, displayCompleted - skipTotal));
 
   // Dynamically build skip reasons from whatever the backend sends
   // Filter to only show non-zero counts, exclude the 'total' field
   let skipReasons = $derived(
-    Object.entries(skipStats)
+    Object.entries(displaySkipStats)
       .filter(([key, count]) => key !== 'total' && typeof count === 'number' && count > 0)
       .map(([key, count]) => ({ label: formatLabel(key), count }))
       .sort((a, b) => b.count - a.count) // Sort by count descending
@@ -81,7 +112,7 @@
       {/if}
     </div>
     <div class="header-right">
-      {#if progress.total > 0}
+      {#if progress.total > 0 && (jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling')}
         <span class="count">{progress.completed} / {progress.total}</span>
       {/if}
       {#if canCancel}
@@ -100,7 +131,7 @@
     <p class="message">{progress.message}</p>
   {/if}
 
-  {#if (jobStatus === 'running' || jobStatus === 'completed' || jobStatus === 'cancelled') && progress.completed > 0}
+  {#if (jobStatus === 'running' || jobStatus === 'completed' || jobStatus === 'cancelled') && (displayCompleted > 0 || Object.keys(displaySkipStats).length > 0)}
     <div class="skip-stats">
       <div class="skip-header">
         <span class="skip-label">Discarded : Kept</span>

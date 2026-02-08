@@ -1,5 +1,6 @@
 <script>
   import { formatSize } from '../utils.js';
+  import { showErrorAlert } from '../errorHandler.js';
 
   let { disabled = false, folders = [], onOpenGallery, onFolderDeleted } = $props();
 
@@ -15,14 +16,11 @@
       const res = await fetch(`/api/output/${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to delete folder');
-      }
+      if (!res.ok) throw res;
       // Notify parent that folder was deleted (parent will reload)
       onFolderDeleted?.(name);
     } catch (e) {
-      alert(e.message);
+      await showErrorAlert('Failed to delete folder', e);
     } finally {
       deleting = null;
     }
@@ -38,14 +36,11 @@
       const res = await fetch('/api/output', {
         method: 'DELETE',
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to delete folders');
-      }
+      if (!res.ok) throw res;
       // Notify parent that all folders were deleted (null = all)
       onFolderDeleted?.(null);
     } catch (e) {
-      alert(e.message);
+      await showErrorAlert('Failed to delete folders', e);
     } finally {
       deleting = null;
     }

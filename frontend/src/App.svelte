@@ -9,15 +9,12 @@
   import ResultsView from './lib/components/ResultsView.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import { sanitizeFolderName } from './lib/utils.js';
-
-  // Configuration constants
-  const STORAGE_KEY_PERSON = 'immich-timelapse-selected-person';
-  const WS_RECONNECT_DELAY_MS = 1000; // WebSocket reconnection delay
+  import { STORAGE_KEYS, WS, JOB_STATUS } from './lib/constants.js';
 
   // Load persisted state from localStorage
   function loadPersistedPersonId() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_PERSON);
+      const stored = localStorage.getItem(STORAGE_KEYS.selectedPerson);
       if (stored) {
         const parsed = JSON.parse(stored);
         return parsed?.id || null;
@@ -31,9 +28,9 @@
   function persistSelectedPerson(person) {
     try {
       if (person) {
-        localStorage.setItem(STORAGE_KEY_PERSON, JSON.stringify({ id: person.id, name: person.name }));
+        localStorage.setItem(STORAGE_KEYS.selectedPerson, JSON.stringify({ id: person.id, name: person.name }));
       } else {
-        localStorage.removeItem(STORAGE_KEY_PERSON);
+        localStorage.removeItem(STORAGE_KEYS.selectedPerson);
       }
     } catch (e) {
       console.warn('Failed to persist person:', e);
@@ -57,7 +54,7 @@
   let outputFolders = $state([]);
 
   let isJobRunning = $derived(
-    jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
+    jobStatus === JOB_STATUS.running || jobStatus === JOB_STATUS.compiling || jobStatus === JOB_STATUS.cancelling
   );
 
   // Compute folder name from progress for video display
@@ -81,8 +78,8 @@
   function handleFolderDeleted(folderName) {
     // If the deleted folder matches the completed job's folder, reset to idle
     // folderName === null means all folders were deleted
-    if (jobStatus === 'completed' && (folderName === null || folderName === completedFolderName)) {
-      jobStatus = 'idle';
+    if (jobStatus === JOB_STATUS.completed && (folderName === null || folderName === completedFolderName)) {
+      jobStatus = JOB_STATUS.idle;
       progress = { completed: 0, total: 0, message: '' };
     }
     // Reload folder list after deletion
@@ -137,10 +134,7 @@
       return; // Already connected or connecting
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
-
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(WS.getUrl());
 
     ws.onopen = () => {
       console.log('WebSocket connected');
@@ -152,15 +146,15 @@
         const previousStatus = jobStatus;
 
         // Only restore status if a job is actively running, or if we're not in idle state
-        const isActiveJob = data.status === 'running' || data.status === 'compiling_video' || data.status === 'cancelling';
-        if (isActiveJob || jobStatus !== 'idle') {
+        const isActiveJob = data.status === JOB_STATUS.running || data.status === JOB_STATUS.compiling || data.status === JOB_STATUS.cancelling;
+        if (isActiveJob || jobStatus !== JOB_STATUS.idle) {
           jobStatus = data.status;
           progress = data;
         }
 
         // Refresh output folders when job finishes (was running before)
-        if (data.status === 'completed' || data.status === 'cancelled' || data.status === 'error') {
-          if (previousStatus === 'running' || previousStatus === 'compiling_video' || previousStatus === 'cancelling') {
+        if (data.status === JOB_STATUS.completed || data.status === JOB_STATUS.cancelled || data.status === JOB_STATUS.error) {
+          if (previousStatus === JOB_STATUS.running || previousStatus === JOB_STATUS.compiling || previousStatus === JOB_STATUS.cancelling) {
             loadOutputFolders();
           }
         }
@@ -190,7 +184,7 @@
       if (connectionOk) {
         connectWebSocket();
       }
-    }, WS_RECONNECT_DELAY_MS);
+    }, WS.reconnectDelay);
   }
 
   function disconnectWebSocket() {
@@ -262,13 +256,13 @@
         {/if}
       </section>
 
-      {#if jobStatus !== 'idle'}
+      {#if jobStatus !== JOB_STATUS.idle}
         <section class="progress">
           <ProgressDisplay {jobStatus} {progress} />
         </section>
       {/if}
 
-      {#if jobStatus === 'completed'}
+      {#if jobStatus === JOB_STATUS.completed}
         <section class="results">
           <ResultsView folderName={completedFolderName} />
         </section>
@@ -292,19 +286,6 @@
 </main>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background: #0f0f0f;
-    color: #e0e0e0;
-    line-height: 1.6;
-  }
-
   main {
     max-width: 800px;
     margin: 0 auto;

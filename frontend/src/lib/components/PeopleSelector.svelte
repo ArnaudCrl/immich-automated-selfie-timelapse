@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { handleError } from '../errorHandler.js';
 
   let { disabled = false, onselect, initialSelectedId = null } = $props();
 
@@ -22,7 +23,7 @@
 
     try {
       const res = await fetch('/api/people');
-      if (!res.ok) throw new Error('Failed to load people');
+      if (!res.ok) throw res;
       people = await res.json();
 
       // If we have an initial selection, find and notify parent about the full person object
@@ -39,7 +40,7 @@
         }
       }
     } catch (e) {
-      error = e.message;
+      error = await handleError('Failed to load people', e);
     } finally {
       loading = false;
     }

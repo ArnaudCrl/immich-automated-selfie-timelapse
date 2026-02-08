@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { formatSize } from '../utils.js';
+  import { handleError, showErrorAlert } from '../errorHandler.js';
 
   let {
     folderName,
@@ -26,17 +27,14 @@
     cacheBust = Date.now();
     try {
       const res = await fetch(`/api/output/${encodeURIComponent(folderName)}/images`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to load images');
-      }
+      if (!res.ok) throw res;
       const data = await res.json();
       images = data.images;
       videoExists = data.video_exists;
       // Clear selection when reloading
       selectedImages = new Set();
     } catch (e) {
-      error = e.message;
+      error = await handleError('Failed to load images', e);
     } finally {
       loading = false;
     }
@@ -76,10 +74,7 @@
         body: JSON.stringify({ filenames: Array.from(selectedImages) })
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to delete images');
-      }
+      if (!res.ok) throw res;
 
       const result = await res.json();
 
@@ -90,7 +85,7 @@
       // Reload images
       await loadImages();
     } catch (e) {
-      alert(e.message);
+      await showErrorAlert('Failed to delete images', e);
     } finally {
       deleting = false;
     }
@@ -107,16 +102,13 @@
         method: 'POST'
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to start video compilation');
-      }
+      if (!res.ok) throw res;
 
       // The compilation runs in background - return to main view to see progress
       alert('Video compilation started. Return to main view to see progress.');
       onBack?.();
     } catch (e) {
-      alert(e.message);
+      await showErrorAlert('Failed to start video compilation', e);
       compiling = false;
     }
   }

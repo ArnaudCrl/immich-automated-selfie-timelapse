@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { handleError } from '../errorHandler.js';
 
   let { onchange } = $props();
 
@@ -26,7 +27,7 @@
       }
     } catch (e) {
       status = 'error';
-      error = 'Cannot reach backend server';
+      error = await handleError('Cannot reach backend server', e);
       onchange?.({ connected: false });
     }
   }

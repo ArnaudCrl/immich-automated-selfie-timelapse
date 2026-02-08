@@ -1,5 +1,7 @@
 <script>
   import { sanitizeFolderName, formatSize } from '../utils.js';
+  import { JOB_STATUS } from '../constants.js';
+  import { handleError } from '../errorHandler.js';
 
   let { personId, personName, jobStatus, outputFolders = [], onupdate } = $props();
 
@@ -7,9 +9,10 @@
   let dateTo = $state('');
   let assetCount = $state(null);
   let loadingCount = $state(false);
+  let starting = $state(false);
 
   let isRunning = $derived(
-    jobStatus === 'running' || jobStatus === 'compiling_video' || jobStatus === 'cancelling'
+    jobStatus === JOB_STATUS.running || jobStatus === JOB_STATUS.compiling || jobStatus === JOB_STATUS.cancelling
   );
 
   // Check if an output folder already exists for this person
@@ -30,17 +33,17 @@
     assetCount = null;
     try {
       const res = await fetch(`/api/people/${encodeURIComponent(id)}/asset-count`);
-      if (res.ok) {
-        assetCount = await res.json();
-      }
+      if (!res.ok) throw res;
+      assetCount = await res.json();
     } catch (e) {
-      console.error('Failed to fetch asset count:', e);
+      await handleError('Failed to fetch asset count', e);
     } finally {
       loadingCount = false;
     }
   }
 
   async function startProcessing() {
+    starting = true;
     try {
       const res = await fetch('/api/start', {
         method: 'POST',
@@ -58,34 +61,38 @@
       if (res.ok && data.success) {
         // Notify parent of job start
         onupdate?.({
-          status: 'running',
+          status: JOB_STATUS.running,
           completed: 0,
           total: 0,
           message: 'Starting...',
         });
       } else {
         onupdate?.({
-          status: 'error',
+          status: JOB_STATUS.error,
           completed: 0,
           total: 0,
           message: data.message || 'Failed to start processing',
         });
       }
     } catch (e) {
+      const errorMessage = await handleError('Failed to start processing', e);
       onupdate?.({
-        status: 'error',
+        status: JOB_STATUS.error,
         completed: 0,
         total: 0,
-        message: 'Network error: ' + e.message,
+        message: errorMessage,
       });
+    } finally {
+      starting = false;
     }
   }
 
   async function cancelProcessing() {
     try {
-      await fetch('/api/cancel', { method: 'POST' });
+      const res = await fetch('/api/cancel', { method: 'POST' });
+      if (!res.ok) throw res;
     } catch (e) {
-      console.error('Cancel failed:', e);
+      await handleError('Cancel failed', e);
     }
   }
 
@@ -134,8 +141,8 @@
   </div>
 
   <div class="actions">
-    <button type="button" class="start-btn" onclick={handleStartClick}>
-      Start Processing
+    <button type="button" class="start-btn" onclick={handleStartClick} disabled={starting || isRunning}>
+      {starting ? 'Starting...' : 'Start Processing'}
     </button>
   </div>
 </div>

@@ -1,5 +1,7 @@
 <script>
   import { onMount } from 'svelte';
+  import { DEFAULT_CONFIG, TIMING } from '../constants.js';
+  import { handleError } from '../errorHandler.js';
 
   let { disabled = false } = $props();
 
@@ -54,10 +56,10 @@
     error = null;
     try {
       const res = await fetch('/api/config');
-      if (!res.ok) throw new Error('Failed to load config');
+      if (!res.ok) throw res;
       config = await res.json();
     } catch (e) {
-      error = e.message;
+      error = await handleError('Failed to load config', e);
     } finally {
       loading = false;
     }
@@ -73,58 +75,16 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || 'Failed to save config');
-      }
+      if (!res.ok) throw res;
       config = await res.json();
       saveMessage = 'Settings saved';
-      setTimeout(() => (saveMessage = null), 2000);
+      setTimeout(() => (saveMessage = null), TIMING.messageDisplayDuration);
     } catch (e) {
-      error = e.message;
+      error = await handleError('Failed to save config', e);
     } finally {
       saving = false;
     }
   }
-
-  // Default configuration values (must match backend defaults in config.rs)
-  const DEFAULT_CONFIG = {
-    processing: {
-      max_workers: 4,
-      face_resolution: {
-        enabled: true,
-        min_size: 80,
-      },
-      brightness: {
-        enabled: false,
-        min_brightness: 0.1,
-        max_brightness: 0.95,
-      },
-      head_pose: {
-        enabled: true,
-        max_yaw: 35.0,
-        max_pitch: 35.0,
-        max_roll: 25.0,
-      },
-      eye_filter: {
-        enabled: false,
-        min_ear: 0.2,
-      },
-      output: {
-        size: 512,
-        keep_intermediates: false,
-      },
-      alignment: {
-        eye_distance: 0.3,
-      },
-    },
-    video: {
-      enabled: true,
-      framerate: 15,
-      codec: 'libx264',
-      crf: 23,
-    },
-  };
 
   function resetToDefaults() {
     config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));

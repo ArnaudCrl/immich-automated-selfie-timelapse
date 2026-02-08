@@ -1,6 +1,8 @@
 //! Brightness validation step.
 //!
-//! Calculates average image brightness and skips images that are too dark or too bright.
+//! Calculates average brightness within the face region and skips images that are too
+//! dark or too bright. This step runs after cropping, analyzing the face region within
+//! the cropped image.
 
 use crate::config::Config;
 use crate::pipeline::{
@@ -18,13 +20,37 @@ use image::{DynamicImage, Rgb};
 pub struct BrightnessStep;
 
 impl BrightnessStep {
-    /// Calculate the average brightness of an image.
+    /// Calculate the average brightness of a specific region within an image.
     ///
     /// Returns a value between 0.0 (pure black) and 1.0 (pure white).
-    fn calculate_brightness(image: &DynamicImage) -> f32 {
+    ///
+    /// # Arguments
+    /// * `image` - The full image
+    /// * `x1`, `y1`, `x2`, `y2` - Bounding box coordinates (pixels, clamped to image bounds)
+    fn calculate_brightness_in_region(
+        image: &DynamicImage,
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+    ) -> f32 {
         let rgb = image.to_rgb8();
-        let pixels = rgb.pixels();
-        let pixel_count = rgb.width() as u64 * rgb.height() as u64;
+        let (img_width, img_height) = (rgb.width(), rgb.height());
+
+        // Clamp coordinates to image bounds
+        let x1 = x1.min(img_width.saturating_sub(1));
+        let y1 = y1.min(img_height.saturating_sub(1));
+        let x2 = x2.min(img_width);
+        let y2 = y2.min(img_height);
+
+        // Ensure valid region
+        if x2 <= x1 || y2 <= y1 {
+            return 0.0;
+        }
+
+        let width = x2 - x1;
+        let height = y2 - y1;
+        let pixel_count = width as u64 * height as u64;
 
         if pixel_count == 0 {
             return 0.0;
@@ -32,13 +58,14 @@ impl BrightnessStep {
 
         // Calculate average luminance using standard RGB to luminance conversion
         // Y = 0.299*R + 0.587*G + 0.114*B
-        let total_luminance: u64 = pixels
-            .map(|p| {
-                let [r, g, b] = p.0;
-                // Use integer math for speed, then convert
-                (299 * r as u64 + 587 * g as u64 + 114 * b as u64) / 1000
-            })
-            .sum();
+        let mut total_luminance: u64 = 0;
+        for y in y1..y2 {
+            for x in x1..x2 {
+                let pixel = rgb.get_pixel(x, y);
+                let [r, g, b] = pixel.0;
+                total_luminance += (299 * r as u64 + 587 * g as u64 + 114 * b as u64) / 1000;
+            }
+        }
 
         (total_luminance as f32 / pixel_count as f32) / 255.0
     }
@@ -66,7 +93,27 @@ impl ProcessingStep for BrightnessStep {
             Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
-        let brightness = Self::calculate_brightness(image);
+        let img_width = image.width();
+        let img_height = image.height();
+
+        // Use FACE_RECT if available (face region within the cropped image),
+        // otherwise analyze the entire cropped image
+        let (x1, y1, x2, y2) = if let Some(face_rect) = ctx
+            .get_computed(computed_keys::FACE_RECT)
+            .and_then(|v| v.as_face_rect())
+        {
+            // Use the face rectangle within the cropped image
+            let x1 = (face_rect.x1.max(0.0) as u32).min(img_width.saturating_sub(1));
+            let y1 = (face_rect.y1.max(0.0) as u32).min(img_height.saturating_sub(1));
+            let x2 = (face_rect.x2.max(0.0) as u32).min(img_width);
+            let y2 = (face_rect.y2.max(0.0) as u32).min(img_height);
+            (x1, y1, x2, y2)
+        } else {
+            // No face rect available, use the entire cropped image
+            (0, 0, img_width, img_height)
+        };
+
+        let brightness = Self::calculate_brightness_in_region(image, x1, y1, x2, y2);
 
         // Store computed brightness for potential use by other steps
         ctx.set_computed(computed_keys::BRIGHTNESS, ComputedValue::Float(brightness));
@@ -114,6 +161,49 @@ impl ProcessingStep for BrightnessStep {
 
         // Create a copy for visualization
         let mut debug_img = rgb.clone();
+
+        // Draw the face bounding box (FACE_RECT if available, otherwise full image)
+        let (x1, y1, x2, y2) = if let Some(face_rect) = ctx
+            .get_computed(computed_keys::FACE_RECT)
+            .and_then(|v| v.as_face_rect())
+        {
+            let x1 = (face_rect.x1.max(0.0) as u32).min(width.saturating_sub(1));
+            let y1 = (face_rect.y1.max(0.0) as u32).min(height.saturating_sub(1));
+            let x2 = (face_rect.x2.max(0.0) as u32).min(width);
+            let y2 = (face_rect.y2.max(0.0) as u32).min(height);
+            (x1, y1, x2, y2)
+        } else {
+            // No face rect, show that we analyzed the full cropped image
+            (0, 0, width, height)
+        };
+
+        // Draw rectangle outline (cyan color for visibility)
+        let rect_color = Rgb([0, 255, 255]);
+        let thickness = 2;
+
+        // Draw horizontal lines (top and bottom)
+        for t in 0..thickness {
+            for x in x1..x2 {
+                if y1 + t < height {
+                    debug_img.put_pixel(x, y1 + t, rect_color);
+                }
+                if y2 > t && y2 - t - 1 < height {
+                    debug_img.put_pixel(x, y2 - t - 1, rect_color);
+                }
+            }
+        }
+
+        // Draw vertical lines (left and right)
+        for t in 0..thickness {
+            for y in y1..y2 {
+                if x1 + t < width {
+                    debug_img.put_pixel(x1 + t, y, rect_color);
+                }
+                if x2 > t && x2 - t - 1 < width {
+                    debug_img.put_pixel(x2 - t - 1, y, rect_color);
+                }
+            }
+        }
 
         // Draw a horizontal brightness bar at the bottom
         let bar_height = 20u32;
@@ -198,21 +288,21 @@ mod tests {
     #[test]
     fn test_calculate_brightness_black() {
         let img = create_solid_image(0, 0, 0);
-        let brightness = BrightnessStep::calculate_brightness(&img);
+        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
         assert!((brightness - 0.0).abs() < 0.01);
     }
 
     #[test]
     fn test_calculate_brightness_white() {
         let img = create_solid_image(255, 255, 255);
-        let brightness = BrightnessStep::calculate_brightness(&img);
+        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
         assert!((brightness - 1.0).abs() < 0.01);
     }
 
     #[test]
     fn test_calculate_brightness_gray() {
         let img = create_solid_image(128, 128, 128);
-        let brightness = BrightnessStep::calculate_brightness(&img);
+        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
         // Should be approximately 0.5
         assert!(brightness > 0.45 && brightness < 0.55);
     }

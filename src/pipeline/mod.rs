@@ -99,7 +99,7 @@ impl Pipeline {
     /// 1. FaceResolutionStep - Validate face size from Immich metadata (if enabled)
     /// 2. DecodeImageStep - Load and orient the image (always)
     /// 3. CropAndResizeStep - Extract face region with padding and resize to output size (always)
-    /// 4. BrightnessStep - Filter by luminance on cropped face (if enabled)
+    /// 4. BrightnessStep - Filter by luminance on face region within cropped image (if enabled)
     /// 5. HeadPoseStep - Filter non-frontal faces (if enabled)
     /// 6. LandmarksStep - Detect 68 facial landmarks (always)
     /// 7. EyeFilterStep - Filter closed eyes by EAR (if enabled)
@@ -120,7 +120,7 @@ impl Pipeline {
         // Core: Always crop and resize the face
         pipeline.add_step(Box::new(CropAndResizeStep));
 
-        // Optional: Brightness validation (on cropped face region)
+        // Optional: Brightness validation (on face region within cropped image)
         if config.processing.brightness.enabled {
             pipeline.add_step(Box::new(BrightnessStep));
         }

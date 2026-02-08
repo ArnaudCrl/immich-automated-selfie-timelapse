@@ -19,9 +19,7 @@
 
   // Calculate eye height based on openness
   const eyeHeight = $derived(minEyeHeight + normalizedOpenness * (maxEyeHeight - minEyeHeight));
-
-  const irisRadius = 12;
-  const pupilRadius = 3;
+  const pupilRadius = 2;
 
   // Create almond-shaped eye outline using a path
   // The path creates a pointed eye shape (yes, this is a Skyrim reference.)
@@ -60,7 +58,7 @@
   <circle
     cx={centerX}
     cy={centerY}
-    r={Math.min(irisRadius, eyeHeight / 2 - 3)}
+    r={eyeHeight / 2}
     fill="none"
     stroke="white"
     stroke-width="2"
@@ -71,7 +69,7 @@
   <circle
     cx={centerX}
     cy={centerY}
-    r={Math.min(pupilRadius, eyeHeight / 2 - 8)}
+    r={Math.max(0, Math.min(pupilRadius, eyeHeight / 2 - 8))}
     fill="white"
     class="pupil"
   />

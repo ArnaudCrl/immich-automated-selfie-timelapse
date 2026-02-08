@@ -3,6 +3,7 @@
   import { DEFAULT_CONFIG, TIMING } from '../constants.js';
   import { handleError } from '../errorHandler.js';
   import EyeIndicator from './visual/EyeIndicator.svelte';
+  import AlignmentIndicator from './visual/AlignmentIndicator.svelte';
 
   let { disabled = false } = $props();
 
@@ -314,17 +315,12 @@
 
               <!-- Alignment Section -->
               <div class="setting-section">
-                <div class="section-header">
-                  <span class="section-title">Face Alignment</span>
-                  <span class="setting-hint" style="font-style: italic; color: var(--text-secondary);">Always enabled</span>
-                </div>
-
                 <div class="setting-row sub-setting">
                   <label for="eye-distance">
                     <span class="setting-label">Eye Distance</span>
                     <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
                   </label>
-                  <div class="setting-control">
+                  <div class="setting-control-with-visual">
                     <input
                       id="eye-distance"
                       type="range"
@@ -334,6 +330,9 @@
                       step="0.01"
                     />
                     <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
+                    <div class="inline-visual-indicator">
+                      <AlignmentIndicator eyeDistance={config.processing.alignment.eye_distance} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -740,11 +739,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem;
     background: #0f0f0f;
     border: 1px solid #333;
     border-radius: 6px;
-    min-width: 60px;
-    height: 32px;
+    width: 96px;
+    height: 96px;
   }
 </style>

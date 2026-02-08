@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { DEFAULT_CONFIG, TIMING } from '../constants.js';
   import { handleError } from '../errorHandler.js';
+  import EyeIndicator from './visual/EyeIndicator.svelte';
 
   let { disabled = false } = $props();
 
@@ -290,10 +291,10 @@
                 {#if config.processing.eye_filter.enabled}
                   <div class="setting-row sub-setting">
                     <label for="min-ear">
-                      <span class="setting-label">Min EAR</span>
-                      <span class="setting-hint">Eye Aspect Ratio threshold (lower = more closed)</span>
+                      <span class="setting-label">Minimum eye opening</span>
+                      <span class="setting-hint">Discard image if Eye Aspect Ratio is bellow this value</span>
                     </label>
-                    <div class="setting-control">
+                    <div class="setting-control-with-visual">
                       <input
                         id="min-ear"
                         type="range"
@@ -303,6 +304,9 @@
                         step="0.02"
                       />
                       <span class="value">{config.processing.eye_filter.min_ear.toFixed(2)}</span>
+                      <div class="inline-visual-indicator">
+                        <EyeIndicator ear={config.processing.eye_filter.min_ear} />
+                      </div>
                     </div>
                   </div>
                 {/if}
@@ -723,5 +727,24 @@
   .save-message {
     font-size: 0.875rem;
     color: #22c55e;
+  }
+
+  /* Visual indicator layout */
+  .setting-control-with-visual {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .inline-visual-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    border-radius: 6px;
+    min-width: 60px;
+    height: 32px;
   }
 </style>

@@ -254,7 +254,7 @@ impl ProcessingStep for BlurStep {
         }
 
         // Draw gradient magnitude text value
-        let text = format!("Grad:{:.1}", gradient_mag);
+        let text = format!("{:.1}", gradient_mag);
         draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
 
         Some(DynamicImage::ImageRgb8(debug_img))

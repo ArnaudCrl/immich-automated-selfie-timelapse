@@ -248,40 +248,38 @@ fn apply_affine_transform(
         // Map output pixel to source pixel
         let (src_x, src_y) = inv_transform.transform_point(x as f32, y as f32);
 
-        // Bilinear interpolation
-        if src_x >= 0.0 && src_x < (width - 1) as f32 && src_y >= 0.0 && src_y < (height - 1) as f32
-        {
-            let x0 = src_x.floor() as u32;
-            let y0 = src_y.floor() as u32;
-            let x1 = x0 + 1;
-            let y1 = y0 + 1;
+        // Clamp coordinates to valid range (replicate edge pixels)
+        let clamped_x = src_x.clamp(0.0, (width - 1) as f32);
+        let clamped_y = src_y.clamp(0.0, (height - 1) as f32);
 
-            let dx = src_x - x0 as f32;
-            let dy = src_y - y0 as f32;
+        // Bilinear interpolation with clamped coordinates
+        let x0 = clamped_x.floor() as u32;
+        let y0 = clamped_y.floor() as u32;
+        let x1 = (x0 + 1).min(width - 1);
+        let y1 = (y0 + 1).min(height - 1);
 
-            let p00 = rgb.get_pixel(x0, y0);
-            let p10 = rgb.get_pixel(x1, y0);
-            let p01 = rgb.get_pixel(x0, y1);
-            let p11 = rgb.get_pixel(x1, y1);
+        let dx = clamped_x - x0 as f32;
+        let dy = clamped_y - y0 as f32;
 
-            let r = (p00[0] as f32 * (1.0 - dx) * (1.0 - dy)
-                + p10[0] as f32 * dx * (1.0 - dy)
-                + p01[0] as f32 * (1.0 - dx) * dy
-                + p11[0] as f32 * dx * dy) as u8;
-            let g = (p00[1] as f32 * (1.0 - dx) * (1.0 - dy)
-                + p10[1] as f32 * dx * (1.0 - dy)
-                + p01[1] as f32 * (1.0 - dx) * dy
-                + p11[1] as f32 * dx * dy) as u8;
-            let b = (p00[2] as f32 * (1.0 - dx) * (1.0 - dy)
-                + p10[2] as f32 * dx * (1.0 - dy)
-                + p01[2] as f32 * (1.0 - dx) * dy
-                + p11[2] as f32 * dx * dy) as u8;
+        let p00 = rgb.get_pixel(x0, y0);
+        let p10 = rgb.get_pixel(x1, y0);
+        let p01 = rgb.get_pixel(x0, y1);
+        let p11 = rgb.get_pixel(x1, y1);
 
-            Rgb([r, g, b])
-        } else {
-            // Out of bounds - use black
-            Rgb([0, 0, 0])
-        }
+        let r = (p00[0] as f32 * (1.0 - dx) * (1.0 - dy)
+            + p10[0] as f32 * dx * (1.0 - dy)
+            + p01[0] as f32 * (1.0 - dx) * dy
+            + p11[0] as f32 * dx * dy) as u8;
+        let g = (p00[1] as f32 * (1.0 - dx) * (1.0 - dy)
+            + p10[1] as f32 * dx * (1.0 - dy)
+            + p01[1] as f32 * (1.0 - dx) * dy
+            + p11[1] as f32 * dx * dy) as u8;
+        let b = (p00[2] as f32 * (1.0 - dx) * (1.0 - dy)
+            + p10[2] as f32 * dx * (1.0 - dy)
+            + p01[2] as f32 * (1.0 - dx) * dy
+            + p11[2] as f32 * dx * dy) as u8;
+
+        Rgb([r, g, b])
     });
 
     DynamicImage::ImageRgb8(output)

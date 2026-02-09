@@ -9,7 +9,7 @@
   import ResultsView from './lib/components/ResultsView.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import { sanitizeFolderName } from './lib/utils.js';
-  import { STORAGE_KEYS, WS, JOB_STATUS } from './lib/constants.js';
+  import { STORAGE_KEYS, WS, JOB_STATUS, API } from './lib/constants.js';
 
   // Load persisted state from localStorage
   function loadPersistedPersonId() {
@@ -66,7 +66,7 @@
 
   async function loadOutputFolders() {
     try {
-      const res = await fetch('/api/output');
+      const res = await fetch(API.output);
       if (res.ok) {
         outputFolders = await res.json();
       }

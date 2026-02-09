@@ -1,4 +1,6 @@
 <script>
+  import { API } from '../constants.js';
+
   let { jobStatus, progress } = $props();
 
   let percentage = $derived(
@@ -96,7 +98,7 @@
 
   async function cancelProcessing() {
     try {
-      await fetch('/api/cancel', { method: 'POST' });
+      await fetch(API.cancel, { method: 'POST' });
     } catch (e) {
       console.error('Cancel failed:', e);
     }

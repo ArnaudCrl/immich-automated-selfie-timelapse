@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { handleError } from '../errorHandler.js';
+  import { API } from '../constants.js';
 
   let { onchange } = $props();
 
@@ -13,7 +14,7 @@
     error = null;
 
     try {
-      const res = await fetch('/api/connection');
+      const res = await fetch(API.connection);
       const data = await res.json();
 
       if (data.connected) {

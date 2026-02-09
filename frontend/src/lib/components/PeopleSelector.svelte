@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { handleError } from '../errorHandler.js';
+  import { API } from '../constants.js';
 
   let { disabled = false, onselect, initialSelectedId = null } = $props();
 
@@ -27,7 +28,7 @@
     error = null;
 
     try {
-      const res = await fetch('/api/people');
+      const res = await fetch(API.people);
       if (!res.ok) throw res;
       people = await res.json();
 

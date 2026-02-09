@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { DEFAULT_CONFIG, TIMING } from '../constants.js';
+  import { DEFAULT_CONFIG, TIMING, API } from '../constants.js';
   import { handleError } from '../errorHandler.js';
   import EyeIndicator from './visual/EyeIndicator.svelte';
   import AlignmentIndicator from './visual/AlignmentIndicator.svelte';
@@ -15,54 +15,14 @@
   let saveMessage = $state(null);
   let activeTab = $state('face');
 
-  // Config state - matches backend nested structure
-  let config = $state({
-    processing: {
-      max_workers: 4,
-      face_resolution: {
-        enabled: true,
-        min_size: 80,
-      },
-      brightness: {
-        enabled: false,
-        min_brightness: 0.1,
-        max_brightness: 0.95,
-      },
-      blur: {
-        enabled: false,
-        min_sharpness: 15.0,
-      },
-      head_pose: {
-        enabled: true,
-        max_yaw: 35.0,
-        max_pitch: 35.0,
-        max_roll: 25.0,
-      },
-      eye_filter: {
-        enabled: false,
-        min_ear: 0.2,
-      },
-      output: {
-        size: 512,
-        keep_intermediates: false,
-      },
-      alignment: {
-        eye_distance: 0.3,
-      },
-    },
-    video: {
-      enabled: true,
-      framerate: 15,
-      codec: 'libx264',
-      crf: 23,
-    },
-  });
+  // Config state - initialized from DEFAULT_CONFIG, then loaded from API
+  let config = $state(JSON.parse(JSON.stringify(DEFAULT_CONFIG)));
 
   async function loadConfig() {
     loading = true;
     error = null;
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch(API.config);
       if (!res.ok) throw res;
       config = await res.json();
     } catch (e) {
@@ -111,6 +71,13 @@
           alignment: {
             eye_distance: Number(config.processing.alignment.eye_distance),
           },
+          timestamp: {
+            enabled: config.processing.timestamp.enabled,
+            position: config.processing.timestamp.position,
+            year: config.processing.timestamp.year,
+            month: config.processing.timestamp.month,
+            day: config.processing.timestamp.day,
+          },
         },
         video: {
           enabled: config.video.enabled,
@@ -120,7 +87,7 @@
         },
       };
 
-      const res = await fetch('/api/config', {
+      const res = await fetch(API.config, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(configToSend),
@@ -242,7 +209,7 @@
                 {#if config.processing.brightness.enabled}
                   <div class="brightness-visual-control sub-setting">
                     <div class="brightness-hint">
-                      Drag the markers to set the acceptable brightness range
+                      Discard photos if the face is under/over exposed
                     </div>
                     <div class="brightness-indicator-container">
                       <BrightnessIndicator
@@ -439,6 +406,56 @@
                   <span class="setting-hint">Save intermediate processing visualizations</span>
                 </label>
                 <input id="keep-intermediates" type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
+              </div>
+
+              <!-- Timestamp Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Timestamp Overlay</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.timestamp.enabled}
+                  />
+                </div>
+
+                {#if config.processing.timestamp.enabled}
+                  <div class="setting-row sub-setting">
+                    <label for="timestamp-position">
+                      <span class="setting-label">Position</span>
+                      <span class="setting-hint">Where to place the timestamp</span>
+                    </label>
+                    <select id="timestamp-position" bind:value={config.processing.timestamp.position}>
+                      <option value="top_left">Top Left</option>
+                      <option value="top_right">Top Right</option>
+                      <option value="bottom_left">Bottom Left</option>
+                      <option value="bottom_right">Bottom Right</option>
+                    </select>
+                  </div>
+
+                  <div class="setting-row sub-setting checkbox-row">
+                    <label for="timestamp-year">
+                      <span class="setting-label">Show Year</span>
+                      <span class="setting-hint">Display year in timestamp</span>
+                    </label>
+                    <input id="timestamp-year" type="checkbox" bind:checked={config.processing.timestamp.year} />
+                  </div>
+
+                  <div class="setting-row sub-setting checkbox-row">
+                    <label for="timestamp-month">
+                      <span class="setting-label">Show Month</span>
+                      <span class="setting-hint">Display month in timestamp</span>
+                    </label>
+                    <input id="timestamp-month" type="checkbox" bind:checked={config.processing.timestamp.month} />
+                  </div>
+
+                  <div class="setting-row sub-setting checkbox-row">
+                    <label for="timestamp-day">
+                      <span class="setting-label">Show Day</span>
+                      <span class="setting-hint">Display day in timestamp</span>
+                    </label>
+                    <input id="timestamp-day" type="checkbox" bind:checked={config.processing.timestamp.day} />
+                  </div>
+                {/if}
               </div>
             </fieldset>
           {:else if activeTab === 'video'}

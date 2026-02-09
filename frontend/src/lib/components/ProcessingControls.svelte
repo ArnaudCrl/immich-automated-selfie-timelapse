@@ -1,6 +1,6 @@
 <script>
   import { sanitizeFolderName, formatSize } from '../utils.js';
-  import { JOB_STATUS } from '../constants.js';
+  import { JOB_STATUS, API } from '../constants.js';
   import { handleError } from '../errorHandler.js';
 
   let { personId, personName, jobStatus, outputFolders = [], onupdate } = $props();
@@ -32,7 +32,7 @@
     loadingCount = true;
     assetCount = null;
     try {
-      const res = await fetch(`/api/people/${encodeURIComponent(id)}/asset-count`);
+      const res = await fetch(`${API.people}/${encodeURIComponent(id)}/asset-count`);
       if (!res.ok) throw res;
       assetCount = await res.json();
     } catch (e) {
@@ -45,7 +45,7 @@
   async function startProcessing() {
     starting = true;
     try {
-      const res = await fetch('/api/start', {
+      const res = await fetch(API.start, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,7 +89,7 @@
 
   async function cancelProcessing() {
     try {
-      const res = await fetch('/api/cancel', { method: 'POST' });
+      const res = await fetch(API.cancel, { method: 'POST' });
       if (!res.ok) throw res;
     } catch (e) {
       await handleError('Cancel failed', e);

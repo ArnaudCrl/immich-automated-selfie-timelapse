@@ -393,6 +393,58 @@ impl AlignmentConfig {
     }
 }
 
+/// Position for timestamp text overlay.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TextPosition {
+    #[default]
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Timestamp overlay configuration.
+///
+/// Overlays date information on the processed image.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimestampConfig {
+    /// Whether timestamp overlay is enabled.
+    pub enabled: bool,
+
+    /// Position of the timestamp text.
+    pub position: TextPosition,
+
+    /// Whether to display the year.
+    pub year: bool,
+
+    /// Whether to display the month.
+    pub month: bool,
+
+    /// Whether to display the day.
+    pub day: bool,
+}
+
+impl Default for TimestampConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            position: TextPosition::BottomLeft,
+            year: true,
+            month: false,
+            day: false,
+        }
+    }
+}
+
+impl TimestampConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        // No validation needed for booleans and enum
+        Ok(())
+    }
+}
+
 // ============================================================================
 // Main Processing Configuration
 // ============================================================================
@@ -434,6 +486,10 @@ pub struct ProcessingConfig {
     /// Face alignment settings (landmark-based).
     #[serde(default)]
     pub alignment: AlignmentConfig,
+
+    /// Timestamp overlay settings.
+    #[serde(default)]
+    pub timestamp: TimestampConfig,
 }
 
 impl Default for ProcessingConfig {
@@ -447,6 +503,7 @@ impl Default for ProcessingConfig {
             eye_filter: EyeFilterConfig::default(),
             output: OutputConfig::default(),
             alignment: AlignmentConfig::default(),
+            timestamp: TimestampConfig::default(),
         }
     }
 }
@@ -461,6 +518,7 @@ impl ProcessingConfig {
         self.eye_filter.validate()?;
         self.output.validate()?;
         self.alignment.validate()?;
+        self.timestamp.validate()?;
         Ok(())
     }
 }

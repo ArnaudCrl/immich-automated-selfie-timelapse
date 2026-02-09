@@ -159,6 +159,13 @@ export const DEFAULT_CONFIG = {
     alignment: {
       eye_distance: 0.3,
     },
+    timestamp: {
+      enabled: false,
+      position: 'bottom_left',
+      year: true,
+      month: false,
+      day: false,
+    },
   },
   video: {
     enabled: true,

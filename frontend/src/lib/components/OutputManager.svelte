@@ -1,6 +1,7 @@
 <script>
   import { formatSize } from '../utils.js';
   import { showErrorAlert } from '../errorHandler.js';
+  import { API } from '../constants.js';
 
   let { disabled = false, folders = [], onOpenGallery, onFolderDeleted } = $props();
 
@@ -13,7 +14,7 @@
 
     deleting = name;
     try {
-      const res = await fetch(`/api/output/${encodeURIComponent(name)}`, {
+      const res = await fetch(`${API.output}/${encodeURIComponent(name)}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw res;
@@ -33,7 +34,7 @@
 
     deleting = '__all__';
     try {
-      const res = await fetch('/api/output', {
+      const res = await fetch(API.output, {
         method: 'DELETE',
       });
       if (!res.ok) throw res;

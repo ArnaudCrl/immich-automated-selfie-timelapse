@@ -100,10 +100,12 @@ impl Pipeline {
     /// 2. DecodeImageStep - Load and orient the image (always)
     /// 3. CropAndResizeStep - Extract face region with padding and resize to output size (always)
     /// 4. BrightnessStep - Filter by luminance on face region within cropped image (if enabled)
-    /// 5. BlurStep - Filter blurry images using gradient magnitude (if enabled)    /// 6. HeadPoseStep - Filter non-frontal faces (if enabled)
+    /// 5. BlurStep - Filter blurry images using gradient magnitude (if enabled)
+    /// 6. HeadPoseStep - Filter non-frontal faces (if enabled)
     /// 7. LandmarksStep - Detect 68 facial landmarks (always)
     /// 8. EyeFilterStep - Filter closed eyes by EAR (if enabled)
     /// 9. AlignmentStep - Align face based on eye positions and resize to final output (always)
+    /// 10. TimestampStep - Overlay date on image (if enabled)
     pub fn with_steps_from_config(config: &Config) -> Self {
         use steps::*;
 
@@ -146,6 +148,11 @@ impl Pipeline {
         // Core: Always align face based on eye positions (also performs final resize)
         pipeline.add_step(Box::new(AlignmentStep));
 
+        // Optional: Timestamp overlay
+        if config.processing.timestamp.enabled {
+            pipeline.add_step(Box::new(TimestampStep));
+        }
+
         pipeline
     }
 
@@ -164,6 +171,7 @@ impl Pipeline {
         pipeline.add_step(Box::new(LandmarksStep));
         pipeline.add_step(Box::new(EyeFilterStep));
         pipeline.add_step(Box::new(AlignmentStep));
+        pipeline.add_step(Box::new(TimestampStep));
         pipeline
     }
 
@@ -366,6 +374,7 @@ mod tests {
         assert!(ids.contains(&"landmarks"));
         assert!(ids.contains(&"eye_filter"));
         assert!(ids.contains(&"alignment"));
+        assert!(ids.contains(&"timestamp"));
     }
 
     #[test]

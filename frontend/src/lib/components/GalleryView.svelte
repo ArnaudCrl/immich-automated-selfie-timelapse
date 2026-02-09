@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { formatSize } from '../utils.js';
   import { handleError, showErrorAlert } from '../errorHandler.js';
+  import { API } from '../constants.js';
 
   let {
     folderName,
@@ -26,7 +27,7 @@
     error = null;
     cacheBust = Date.now();
     try {
-      const res = await fetch(`/api/output/${encodeURIComponent(folderName)}/images`);
+      const res = await fetch(`${API.output}/${encodeURIComponent(folderName)}/images`);
       if (!res.ok) throw res;
       const data = await res.json();
       images = data.images;
@@ -68,7 +69,7 @@
 
     deleting = true;
     try {
-      const res = await fetch(`/api/output/${encodeURIComponent(folderName)}/images`, {
+      const res = await fetch(`${API.output}/${encodeURIComponent(folderName)}/images`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filenames: Array.from(selectedImages) })
@@ -98,7 +99,7 @@
 
     compiling = true;
     try {
-      const res = await fetch(`/api/output/${encodeURIComponent(folderName)}/compile`, {
+      const res = await fetch(`${API.output}/${encodeURIComponent(folderName)}/compile`, {
         method: 'POST'
       });
 

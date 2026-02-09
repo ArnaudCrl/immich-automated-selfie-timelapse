@@ -2,7 +2,7 @@
 
 use crate::config::{
     AlignmentConfig, BlurConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig,
-    HeadPoseConfig, OutputConfig, ProcessingConfig, VideoConfig,
+    HeadPoseConfig, OutputConfig, ProcessingConfig, TimestampConfig, VideoConfig,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -45,6 +45,7 @@ pub struct ProcessingConfigUpdate {
     pub eye_filter: Option<EyeFilterConfig>,
     pub output: Option<OutputConfig>,
     pub alignment: Option<AlignmentConfig>,
+    pub timestamp: Option<TimestampConfig>,
 }
 
 /// Video configuration update fields.
@@ -265,6 +266,9 @@ pub async fn update_config(
             }
             if let Some(v) = proc.alignment {
                 config.processing.alignment = v;
+            }
+            if let Some(v) = proc.timestamp {
+                config.processing.timestamp = v;
             }
         }
 

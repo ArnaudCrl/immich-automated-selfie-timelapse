@@ -119,6 +119,40 @@ impl FaceResolutionConfig {
     }
 }
 
+/// Blur detection configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlurConfig {
+    /// Whether blur detection is enabled.
+    pub enabled: bool,
+
+    /// Minimum gradient magnitude threshold.
+    /// Images with gradient magnitude below this are considered blurry.
+    /// Uses Sobel operator for robust edge detection.
+    /// Typical values: 10-20 for strict filtering, 5-10 for moderate filtering.
+    pub min_sharpness: f32,
+}
+
+impl Default for BlurConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            min_sharpness: 15.0,
+        }
+    }
+}
+
+impl BlurConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled && self.min_sharpness < 0.0 {
+            return Err(Error::Config(
+                "Blur min_sharpness must be non-negative".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Brightness validation configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrightnessConfig {
@@ -377,6 +411,10 @@ pub struct ProcessingConfig {
     #[serde(default)]
     pub face_resolution: FaceResolutionConfig,
 
+    /// Blur detection settings.
+    #[serde(default)]
+    pub blur: BlurConfig,
+
     /// Brightness validation settings.
     #[serde(default)]
     pub brightness: BrightnessConfig,
@@ -403,6 +441,7 @@ impl Default for ProcessingConfig {
         Self {
             max_workers: num_cpus(),
             face_resolution: FaceResolutionConfig::default(),
+            blur: BlurConfig::default(),
             brightness: BrightnessConfig::default(),
             head_pose: HeadPoseConfig::default(),
             eye_filter: EyeFilterConfig::default(),
@@ -416,6 +455,7 @@ impl ProcessingConfig {
     /// Validate all step configurations.
     pub fn validate(&self) -> Result<()> {
         self.face_resolution.validate()?;
+        self.blur.validate()?;
         self.brightness.validate()?;
         self.head_pose.validate()?;
         self.eye_filter.validate()?;

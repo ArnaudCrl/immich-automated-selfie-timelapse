@@ -24,12 +24,6 @@ impl ProcessingStep for FaceResolutionStep {
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
         let step_config = &config.processing.face_resolution;
-
-        // Skip this step if disabled
-        if !step_config.enabled {
-            return StepOutcome::Continue(ctx);
-        }
-
         let face_data = &ctx.face_data;
 
         // Calculate face size in pixels from bounding box
@@ -106,17 +100,4 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_step_disabled() {
-        let step = FaceResolutionStep;
-        let ctx = make_ctx(50.0); // Would normally be too small
-
-        let mut config = Config::default();
-        config.processing.face_resolution.enabled = false;
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Should pass through when disabled
-            _ => panic!("Expected Continue when disabled"),
-        }
-    }
 }

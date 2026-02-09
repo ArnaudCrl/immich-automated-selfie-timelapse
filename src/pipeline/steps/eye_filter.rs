@@ -29,11 +29,6 @@ impl ProcessingStep for EyeFilterStep {
     }
 
     async fn execute(&self, ctx: PipelineContext, config: &Config) -> StepOutcome {
-        // Skip if eye filtering is disabled
-        if !config.processing.eye_filter.enabled {
-            return StepOutcome::Continue(ctx);
-        }
-
         // Get EAR from computed values (set by LandmarksStep)
         let avg_ear = match ctx
             .get_computed(computed_keys::EAR)
@@ -196,20 +191,6 @@ mod tests {
             image_height: 100,
         };
         PipelineContext::new("test".to_string(), "2024-01-01".to_string(), face_data)
-    }
-
-    #[tokio::test]
-    async fn test_disabled_skips_check() {
-        let step = EyeFilterStep;
-        let mut ctx = make_test_ctx();
-        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(0.1)); // Below threshold
-        let mut config = Config::default();
-        config.processing.eye_filter.enabled = false;
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Expected
-            other => panic!("Expected Continue when disabled, got {:?}", other),
-        }
     }
 
     #[tokio::test]

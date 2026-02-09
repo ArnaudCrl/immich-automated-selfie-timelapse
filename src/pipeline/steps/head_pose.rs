@@ -171,11 +171,6 @@ impl ProcessingStep for HeadPoseStep {
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        // Skip if head pose filtering is disabled
-        if !config.processing.head_pose.enabled {
-            return StepOutcome::Continue(ctx);
-        }
-
         let image: &DynamicImage = match ctx.require_image("head pose estimation") {
             Ok(img) => img,
             Err(e) => return StepOutcome::Error { ctx, error: e },
@@ -366,7 +361,6 @@ impl ProcessingStep for HeadPoseStep {
 mod tests {
     use super::*;
     use crate::immich_api::FaceData;
-    use image::RgbImage;
 
     fn make_test_ctx() -> PipelineContext {
         let face_data = FaceData {
@@ -378,23 +372,6 @@ mod tests {
             image_height: 100,
         };
         PipelineContext::new("test".to_string(), "2024-01-01".to_string(), face_data)
-    }
-
-    #[tokio::test]
-    async fn test_disabled_skips_check() {
-        let step = HeadPoseStep;
-        let ctx = make_test_ctx();
-        let mut config = Config::default();
-        config.processing.head_pose.enabled = false;
-
-        // Create a dummy image
-        let img = DynamicImage::ImageRgb8(RgbImage::new(100, 100));
-        let ctx = ctx.with_image(img);
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Continue(_) => {} // Expected
-            other => panic!("Expected Continue when disabled, got {:?}", other),
-        }
     }
 
     #[tokio::test]

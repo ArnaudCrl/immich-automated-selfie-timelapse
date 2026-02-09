@@ -17,6 +17,8 @@ use std::fmt;
 pub mod computed_keys {
     /// Brightness value (0.0 - 1.0) computed by BrightnessStep.
     pub const BRIGHTNESS: &str = "brightness";
+    /// Blur metric (gradient magnitude) computed by BlurStep.
+    pub const BLUR_METRIC: &str = "blur_metric";
     /// Face size in pixels computed by FaceResolutionStep.
     pub const FACE_SIZE: &str = "face_size";
     /// Eye Aspect Ratio computed by LandmarksStep.

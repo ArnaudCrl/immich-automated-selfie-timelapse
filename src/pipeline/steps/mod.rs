@@ -4,6 +4,7 @@
 //! operation in the image processing pipeline.
 
 mod alignment;
+mod blur;
 mod brightness;
 mod crop_and_resize;
 mod decode;
@@ -13,6 +14,7 @@ mod head_pose;
 mod landmarks;
 
 pub use alignment::AlignmentStep;
+pub use blur::BlurStep;
 pub use brightness::BrightnessStep;
 pub use crop_and_resize::CropAndResizeStep;
 pub use decode::DecodeImageStep;

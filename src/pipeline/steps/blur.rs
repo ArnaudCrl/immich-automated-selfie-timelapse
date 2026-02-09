@@ -1,8 +1,11 @@
-//! Brightness validation step.
+//! Blur detection step.
 //!
-//! Calculates average brightness within the face region and skips images that are too
-//! dark or too bright. This step runs after cropping, analyzing the face region within
-//! the cropped image.
+//! Detects blurry faces using gradient magnitude analysis within the face region:
+//! 1. Convert image to grayscale
+//! 2. Apply Sobel operator (Sobel-X and Sobel-Y) within the face bounding box
+//! 3. Compute gradient magnitude for each pixel: sqrt(gx² + gy²)
+//! 4. Calculate mean gradient magnitude
+//! 5. Low gradient magnitude → blurry face (weak, spread-out edges)
 
 use crate::config::Config;
 use crate::pipeline::{
@@ -11,31 +14,35 @@ use crate::pipeline::{
 use async_trait::async_trait;
 use image::{DynamicImage, Rgb};
 
-/// Validates image brightness and skips images outside acceptable range.
-///
-/// This is a validation step that computes the average luminance of the image
-/// and skips if it falls below `min_brightness` or above `max_brightness`.
-///
-/// Brightness is normalized to 0.0-1.0 range.
-pub struct BrightnessStep;
+pub struct BlurStep;
 
-impl BrightnessStep {
-    /// Calculate the average brightness of a specific region within an image.
+impl BlurStep {
+    /// Calculate the mean gradient magnitude of a specific region within an image.
     ///
-    /// Returns a value between 0.0 (pure black) and 1.0 (pure white).
+    /// This method:
+    /// 1. Converts the image to grayscale
+    /// 2. Applies Sobel-X and Sobel-Y kernels within the specified region:
+    ///    Sobel-X: [-1  0  1]    Sobel-Y: [-1 -2 -1]
+    ///    [-2  0  2]             [ 0  0  0]
+    ///    [-1  0  1]             [ 1  2  1]
+    /// 3. Computes gradient magnitude for each pixel: sqrt(gx² + gy²)
+    /// 4. Returns the mean gradient magnitude
+    ///
+    /// Higher gradient magnitude = sharper image (strong, concentrated edges)
+    /// Lower gradient magnitude = blurrier image (weak, spread-out edges)
     ///
     /// # Arguments
     /// * `image` - The full image
     /// * `x1`, `y1`, `x2`, `y2` - Bounding box coordinates (pixels, clamped to image bounds)
-    fn calculate_brightness_in_region(
+    fn calculate_gradient_magnitude_in_region(
         image: &DynamicImage,
         x1: u32,
         y1: u32,
         x2: u32,
         y2: u32,
     ) -> f32 {
-        let rgb = image.to_rgb8();
-        let (img_width, img_height) = (rgb.width(), rgb.height());
+        let gray = image.to_luma8();
+        let (img_width, img_height) = gray.dimensions();
 
         // Clamp coordinates to image bounds
         let x1 = x1.min(img_width.saturating_sub(1));
@@ -43,52 +50,67 @@ impl BrightnessStep {
         let x2 = x2.min(img_width);
         let y2 = y2.min(img_height);
 
-        // Ensure valid region
-        if x2 <= x1 || y2 <= y1 {
+        // Ensure valid region with space for 3x3 kernel
+        if x2 <= x1 + 2 || y2 <= y1 + 2 {
             return 0.0;
         }
 
-        let width = x2 - x1;
-        let height = y2 - y1;
-        let pixel_count = width as u64 * height as u64;
+        // Apply Sobel filter within the region and compute gradient magnitudes
+        let mut sum_magnitude = 0.0f32;
+        let mut count = 0usize;
 
-        if pixel_count == 0 {
-            return 0.0;
-        }
+        for y in (y1 + 1)..(y2 - 1) {
+            for x in (x1 + 1)..(x2 - 1) {
+                // Get the 3x3 neighborhood
+                let p00 = gray.get_pixel(x - 1, y - 1)[0] as i32;
+                let p01 = gray.get_pixel(x, y - 1)[0] as i32;
+                let p02 = gray.get_pixel(x + 1, y - 1)[0] as i32;
+                let p10 = gray.get_pixel(x - 1, y)[0] as i32;
+                let p12 = gray.get_pixel(x + 1, y)[0] as i32;
+                let p20 = gray.get_pixel(x - 1, y + 1)[0] as i32;
+                let p21 = gray.get_pixel(x, y + 1)[0] as i32;
+                let p22 = gray.get_pixel(x + 1, y + 1)[0] as i32;
 
-        // Calculate average luminance using standard RGB to luminance conversion
-        // Y = 0.299*R + 0.587*G + 0.114*B
-        let mut total_luminance: u64 = 0;
-        for y in y1..y2 {
-            for x in x1..x2 {
-                let pixel = rgb.get_pixel(x, y);
-                let [r, g, b] = pixel.0;
-                total_luminance += (299 * r as u64 + 587 * g as u64 + 114 * b as u64) / 1000;
+                // Apply Sobel-X kernel: [-1 0 1; -2 0 2; -1 0 1]
+                let gx = -p00 + p02 - 2 * p10 + 2 * p12 - p20 + p22;
+
+                // Apply Sobel-Y kernel: [-1 -2 -1; 0 0 0; 1 2 1]
+                let gy = -p00 - 2 * p01 - p02 + p20 + 2 * p21 + p22;
+
+                // Compute gradient magnitude: sqrt(gx² + gy²)
+                let magnitude = ((gx * gx + gy * gy) as f32).sqrt();
+                sum_magnitude += magnitude;
+                count += 1;
             }
         }
 
-        (total_luminance as f32 / pixel_count as f32) / 255.0
+        if count == 0 {
+            return 0.0;
+        }
+
+        // Return mean gradient magnitude
+        sum_magnitude / count as f32
     }
 }
 
 #[async_trait]
-impl ProcessingStep for BrightnessStep {
+impl ProcessingStep for BlurStep {
     fn id(&self) -> &'static str {
-        "brightness"
+        "blur"
     }
 
     fn name(&self) -> &'static str {
-        "Brightness Check"
+        "Blur Detection"
     }
 
     fn provides(&self) -> Vec<&'static str> {
-        vec![computed_keys::BRIGHTNESS]
+        vec![computed_keys::BLUR_METRIC]
     }
 
     async fn execute(&self, mut ctx: PipelineContext, config: &Config) -> StepOutcome {
-        let step_config = &config.processing.brightness;
+        let step_config = &config.processing.blur;
 
-        let image = match ctx.require_image("brightness check") {
+        let image = match ctx.require_image("blur detection") {
             Ok(img) => img,
             Err(e) => return StepOutcome::Error { ctx, error: e },
         };
@@ -113,29 +135,22 @@ impl ProcessingStep for BrightnessStep {
             (0, 0, img_width, img_height)
         };
 
-        let brightness = Self::calculate_brightness_in_region(image, x1, y1, x2, y2);
+        let gradient_magnitude =
+            Self::calculate_gradient_magnitude_in_region(image, x1, y1, x2, y2);
 
-        // Store computed brightness for potential use by other steps
-        ctx.set_computed(computed_keys::BRIGHTNESS, ComputedValue::Float(brightness));
+        // Store computed gradient magnitude for potential use by other steps
+        ctx.set_computed(
+            computed_keys::BLUR_METRIC,
+            ComputedValue::Float(gradient_magnitude),
+        );
 
-        if brightness < step_config.min_brightness {
+        if gradient_magnitude < step_config.min_sharpness {
             return StepOutcome::Skip {
                 ctx,
-                reason: "too_dark".to_string(),
+                reason: "too_blurry".to_string(),
                 detail: Some(format!(
-                    "{:.2} (min: {:.2})",
-                    brightness, step_config.min_brightness
-                )),
-            };
-        }
-
-        if brightness > step_config.max_brightness {
-            return StepOutcome::Skip {
-                ctx,
-                reason: "too_bright".to_string(),
-                detail: Some(format!(
-                    "{:.2} (max: {:.2})",
-                    brightness, step_config.max_brightness
+                    "gradient: {:.1} (min: {:.1})",
+                    gradient_magnitude, step_config.min_sharpness
                 )),
             };
         }
@@ -144,9 +159,9 @@ impl ProcessingStep for BrightnessStep {
     }
 
     fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
-        // Get brightness from computed values
-        let brightness = ctx
-            .get_computed(computed_keys::BRIGHTNESS)
+        // Get blur metric (gradient magnitude) from computed values
+        let gradient_mag = ctx
+            .get_computed(computed_keys::BLUR_METRIC)
             .and_then(|v| v.as_float())?;
 
         // Get the current image to draw on
@@ -200,7 +215,7 @@ impl ProcessingStep for BrightnessStep {
             }
         }
 
-        // Draw a horizontal brightness bar at the bottom
+        // Draw a horizontal gradient magnitude bar at the bottom
         let bar_height = 20u32;
         let bar_y = height.saturating_sub(bar_height);
         let bar_width = (width as f32 * 0.8) as u32;
@@ -225,9 +240,11 @@ impl ProcessingStep for BrightnessStep {
             debug_img.put_pixel(bar_x + bar_width - 1, y, Rgb([200, 200, 200]));
         }
 
-        // Fill the bar based on brightness value
-        let fill_width = ((bar_width - 4) as f32 * brightness.clamp(0.0, 1.0)) as u32;
-        let fill_color = brightness_to_color(brightness);
+        // Fill the bar based on gradient magnitude value (scale: 0-50 maps to 0-100% bar)
+        let max_gradient = 50.0;
+        let normalized = (gradient_mag / max_gradient).clamp(0.0, 1.0);
+        let fill_width = ((bar_width - 4) as f32 * normalized) as u32;
+        let fill_color = gradient_to_color(gradient_mag);
         for y in (outline_y + 2)..(outline_y + outline_height - 2) {
             for x in (bar_x + 2)..(bar_x + 2 + fill_width) {
                 if x < width {
@@ -236,20 +253,22 @@ impl ProcessingStep for BrightnessStep {
             }
         }
 
-        // Draw brightness text value
-        let text = format!("B:{:.2}", brightness);
+        // Draw gradient magnitude text value
+        let text = format!("Grad:{:.1}", gradient_mag);
         draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
 
         Some(DynamicImage::ImageRgb8(debug_img))
     }
 }
 
-/// Convert brightness value to a color (red for dark/bright, green for good)
-fn brightness_to_color(brightness: f32) -> Rgb<u8> {
-    // Very dark or very bright = red, middle range = green
-    if !(0.15..=0.85).contains(&brightness) {
+/// Convert gradient magnitude value to a color (red for blurry, green for sharp)
+fn gradient_to_color(gradient_mag: f32) -> Rgb<u8> {
+    // Very low gradient (< 10) = red (blurry)
+    // Medium gradient (10-20) = yellow/orange
+    // High gradient (> 20) = green (sharp)
+    if gradient_mag < 10.0 {
         Rgb([255, 80, 80]) // Red
-    } else if !(0.25..=0.75).contains(&brightness) {
+    } else if gradient_mag < 20.0 {
         Rgb([255, 200, 80]) // Yellow/orange
     } else {
         Rgb([80, 255, 80]) // Green
@@ -266,94 +285,86 @@ mod tests {
         let face_data = FaceData {
             bounding_box_x1: 0.0,
             bounding_box_y1: 0.0,
-            bounding_box_x2: 10.0,
-            bounding_box_y2: 10.0,
-            image_width: 10,
-            image_height: 10,
+            bounding_box_x2: 100.0,
+            bounding_box_y2: 100.0,
+            image_width: 100,
+            image_height: 100,
         };
         PipelineContext::new("test".to_string(), "2024-01-01".to_string(), face_data)
             .with_image(image)
     }
 
     fn create_solid_image(r: u8, g: u8, b: u8) -> DynamicImage {
-        let img = RgbImage::from_fn(10, 10, |_, _| Rgb([r, g, b]));
+        let img = RgbImage::from_fn(100, 100, |_, _| Rgb([r, g, b]));
+        DynamicImage::ImageRgb8(img)
+    }
+
+    fn create_checkerboard_image() -> DynamicImage {
+        // Create a sharp checkerboard pattern (high variance)
+        let img = RgbImage::from_fn(100, 100, |x, y| {
+            if (x / 10 + y / 10) % 2 == 0 {
+                Rgb([255, 255, 255])
+            } else {
+                Rgb([0, 0, 0])
+            }
+        });
         DynamicImage::ImageRgb8(img)
     }
 
     #[test]
-    fn test_calculate_brightness_black() {
-        let img = create_solid_image(0, 0, 0);
-        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
-        assert!((brightness - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_calculate_brightness_white() {
-        let img = create_solid_image(255, 255, 255);
-        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
-        assert!((brightness - 1.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_calculate_brightness_gray() {
+    fn test_calculate_gradient_magnitude_uniform() {
+        // Uniform image should have very low gradient magnitude (no edges)
         let img = create_solid_image(128, 128, 128);
-        let brightness = BrightnessStep::calculate_brightness_in_region(&img, 0, 0, 10, 10);
-        // Should be approximately 0.5
-        assert!(brightness > 0.45 && brightness < 0.55);
+        let gradient_mag = BlurStep::calculate_gradient_magnitude_in_region(&img, 0, 0, 100, 100);
+        assert!(
+            gradient_mag < 1.0,
+            "Uniform image should have near-zero gradient magnitude"
+        );
+    }
+
+    #[test]
+    fn test_calculate_gradient_magnitude_sharp() {
+        // Checkerboard should have high gradient magnitude (many edges)
+        let img = create_checkerboard_image();
+        let gradient_mag = BlurStep::calculate_gradient_magnitude_in_region(&img, 0, 0, 100, 100);
+        assert!(
+            gradient_mag > 15.0,
+            "Sharp checkerboard should have high gradient magnitude, got {}",
+            gradient_mag
+        );
     }
 
     #[tokio::test]
-    async fn test_brightness_too_dark() {
-        let step = BrightnessStep;
-        let img = create_solid_image(10, 10, 10); // Very dark
+    async fn test_blur_too_blurry() {
+        let step = BlurStep;
+        let img = create_solid_image(128, 128, 128); // Very low gradient magnitude
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.brightness.enabled = true;
-        config.processing.brightness.min_brightness = 0.2;
-        config.processing.brightness.max_brightness = 0.9;
+        config.processing.blur.enabled = true;
+        config.processing.blur.min_sharpness = 15.0;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Skip { reason, .. } => {
-                assert_eq!(reason, "too_dark");
+                assert_eq!(reason, "too_blurry");
             }
-            _ => panic!("Expected Skip"),
+            _ => panic!("Expected Skip for blurry image"),
         }
     }
 
     #[tokio::test]
-    async fn test_brightness_too_bright() {
-        let step = BrightnessStep;
-        let img = create_solid_image(250, 250, 250); // Very bright
+    async fn test_blur_sharp_image() {
+        let step = BlurStep;
+        let img = create_checkerboard_image(); // High gradient magnitude
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
-        config.processing.brightness.enabled = true;
-        config.processing.brightness.min_brightness = 0.1;
-        config.processing.brightness.max_brightness = 0.9;
-
-        match step.execute(ctx, &config).await {
-            StepOutcome::Skip { reason, .. } => {
-                assert_eq!(reason, "too_bright");
-            }
-            _ => panic!("Expected Skip"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_brightness_within_range() {
-        let step = BrightnessStep;
-        let img = create_solid_image(128, 128, 128); // Mid-gray
-        let ctx = make_ctx_with_image(img);
-
-        let mut config = Config::default();
-        config.processing.brightness.enabled = true;
-        config.processing.brightness.min_brightness = 0.1;
-        config.processing.brightness.max_brightness = 0.9;
+        config.processing.blur.enabled = true;
+        config.processing.blur.min_sharpness = 15.0;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(_) => {} // Should pass
-            _ => panic!("Expected Continue for mid-range brightness"),
+            _ => panic!("Expected Continue for sharp image"),
         }
     }
 }

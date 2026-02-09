@@ -8,6 +8,7 @@
 
 mod processing;
 
+use crate::config::{PhotoLimitConfig, TimeRange};
 use crate::error::{Error, Result};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::pipeline::Pipeline;
@@ -17,11 +18,84 @@ use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress, SkipStats};
 
 use processing::{process_single_asset, AssetProcessResult, DebugDirs, OutputDirs};
 
+use chrono::NaiveDate;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
+
+/// Tracks per-time-bucket photo counts for limiting.
+///
+/// Thread-safe: uses atomic counters with fetch_add + undo pattern
+/// so concurrent workers can claim slots without races.
+pub struct PhotoLimitTracker {
+    max_photos: u32,
+    time_range: TimeRange,
+    buckets: RwLock<HashMap<String, Arc<AtomicU32>>>,
+}
+
+impl PhotoLimitTracker {
+    /// Create a tracker if photo limiting is enabled, otherwise return None.
+    pub fn new(config: &PhotoLimitConfig) -> Option<Self> {
+        if !config.enabled {
+            return None;
+        }
+        Some(Self {
+            max_photos: config.max_photos,
+            time_range: config.time_range,
+            buckets: RwLock::new(HashMap::new()),
+        })
+    }
+
+    /// Try to claim a slot for the given timestamp.
+    /// Returns true if the slot was claimed, false if the bucket is full.
+    pub fn try_claim(&self, timestamp: &str) -> bool {
+        let key = self.bucket_key(timestamp);
+
+        // Get or create the atomic counter for this bucket
+        let counter = {
+            // Try read lock first
+            let buckets = self.buckets.read().unwrap();
+            if let Some(counter) = buckets.get(&key) {
+                counter.clone()
+            } else {
+                drop(buckets);
+                let mut buckets = self.buckets.write().unwrap();
+                buckets
+                    .entry(key)
+                    .or_insert_with(|| Arc::new(AtomicU32::new(0)))
+                    .clone()
+            }
+        };
+
+        // Atomically try to claim: increment, check, undo if over limit
+        let prev = counter.fetch_add(1, Ordering::SeqCst);
+        if prev < self.max_photos {
+            true
+        } else {
+            counter.fetch_sub(1, Ordering::SeqCst);
+            false
+        }
+    }
+
+    /// Compute the bucket key from a timestamp string.
+    fn bucket_key(&self, timestamp: &str) -> String {
+        // Parse date from ISO 8601 timestamp (e.g. "2024-01-15" or "2024-01-15T12:34:56Z")
+        let date_str = &timestamp[..timestamp.len().min(10)];
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap_or_default();
+
+        match self.time_range {
+            TimeRange::Day => date.format("%Y-%m-%d").to_string(),
+            TimeRange::Week => {
+                use chrono::Datelike;
+                format!("{}-W{:02}", date.iso_week().year(), date.iso_week().week())
+            }
+            TimeRange::Month => date.format("%Y-%m").to_string(),
+        }
+    }
+}
 
 /// Parameters for starting a processing job.
 #[derive(Debug, Clone)]
@@ -202,6 +276,9 @@ async fn run_job_inner(
     let pipeline = Arc::new(Pipeline::with_steps_from_config(&config));
     tracing::debug!("Pipeline steps: {:?}", pipeline.step_ids());
 
+    // Create photo limit tracker if enabled
+    let photo_limit_tracker = PhotoLimitTracker::new(&config.processing.photo_limit).map(Arc::new);
+
     // Process images in parallel with concurrency limit
     let completed = Arc::new(AtomicU32::new(0));
     let semaphore = Arc::new(Semaphore::new(config.processing.max_workers));
@@ -239,6 +316,9 @@ async fn run_job_inner(
         // Clone skip stats for this task
         let skip_stats = skip_stats.clone();
 
+        // Clone photo limit tracker for this task
+        let photo_limit_tracker = photo_limit_tracker.clone();
+
         // Clone person info for this task
         let person_id = task_person_id.clone();
         let person_name = task_person_name.clone();
@@ -261,6 +341,7 @@ async fn run_job_inner(
                 &task_cancel_token,
                 &skip_stats,
                 &pipeline,
+                photo_limit_tracker.as_ref(),
             )
             .await;
 

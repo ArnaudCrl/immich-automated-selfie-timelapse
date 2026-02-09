@@ -78,6 +78,11 @@
             month: config.processing.timestamp.month,
             day: config.processing.timestamp.day,
           },
+          photo_limit: {
+            enabled: config.processing.photo_limit.enabled,
+            max_photos: Number(config.processing.photo_limit.max_photos),
+            time_range: config.processing.photo_limit.time_range,
+          },
         },
         video: {
           enabled: config.video.enabled,
@@ -406,6 +411,49 @@
                   <span class="setting-hint">Save intermediate processing visualizations</span>
                 </label>
                 <input id="keep-intermediates" type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
+              </div>
+
+              <!-- Photo Limit Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Photo Limit</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.photo_limit.enabled}
+                  />
+                </div>
+
+                {#if config.processing.photo_limit.enabled}
+                  <div class="setting-row sub-setting">
+                    <label for="max-photos">
+                      <span class="setting-label">Max Photos</span>
+                      <span class="setting-hint">Maximum photos per time range</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        id="max-photos"
+                        type="range"
+                        bind:value={config.processing.photo_limit.max_photos}
+                        min="1"
+                        max="10"
+                        step="1"
+                      />
+                      <span class="value">{config.processing.photo_limit.max_photos}</span>
+                    </div>
+                  </div>
+
+                  <div class="setting-row sub-setting">
+                    <label for="time-range">
+                      <span class="setting-label">Time Range</span>
+                      <span class="setting-hint">Group photos by this period</span>
+                    </label>
+                    <select id="time-range" bind:value={config.processing.photo_limit.time_range}>
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                    </select>
+                  </div>
+                {/if}
               </div>
 
               <!-- Timestamp Section -->

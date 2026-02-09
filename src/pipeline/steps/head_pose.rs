@@ -252,13 +252,6 @@ impl ProcessingStep for HeadPoseStep {
         // Check against thresholds
         let head_pose_config = &config.processing.head_pose;
 
-        tracing::debug!(
-            "Head pose detected: yaw={:.1}°, pitch={:.1}°, roll={:.1}°",
-            pose.yaw,
-            pose.pitch,
-            pose.roll
-        );
-
         if pose.yaw.abs() > head_pose_config.max_yaw {
             return StepOutcome::Skip {
                 ctx,

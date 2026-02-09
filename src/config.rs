@@ -445,6 +445,59 @@ impl TimestampConfig {
     }
 }
 
+/// Time range granularity for photo limiting.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeRange {
+    #[default]
+    Day,
+    Week,
+    Month,
+}
+
+/// Photo limit configuration.
+///
+/// Limits the number of successfully processed photos per time range
+/// (day/week/month) to avoid over-representation of busy periods.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhotoLimitConfig {
+    /// Whether photo limiting is enabled.
+    pub enabled: bool,
+
+    /// Maximum number of photos per time range.
+    pub max_photos: u32,
+
+    /// Time range granularity.
+    pub time_range: TimeRange,
+}
+
+impl Default for PhotoLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_photos: 1,
+            time_range: TimeRange::Day,
+        }
+    }
+}
+
+impl PhotoLimitConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled && self.max_photos == 0 {
+            return Err(Error::Config(
+                "Photo limit max_photos must be greater than 0".to_string(),
+            ));
+        }
+        if self.enabled && self.max_photos > 100 {
+            return Err(Error::Config(
+                "Photo limit max_photos must be at most 100".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 // ============================================================================
 // Main Processing Configuration
 // ============================================================================
@@ -490,6 +543,10 @@ pub struct ProcessingConfig {
     /// Timestamp overlay settings.
     #[serde(default)]
     pub timestamp: TimestampConfig,
+
+    /// Photo limit settings.
+    #[serde(default)]
+    pub photo_limit: PhotoLimitConfig,
 }
 
 impl Default for ProcessingConfig {
@@ -504,6 +561,7 @@ impl Default for ProcessingConfig {
             output: OutputConfig::default(),
             alignment: AlignmentConfig::default(),
             timestamp: TimestampConfig::default(),
+            photo_limit: PhotoLimitConfig::default(),
         }
     }
 }
@@ -519,6 +577,7 @@ impl ProcessingConfig {
         self.output.validate()?;
         self.alignment.validate()?;
         self.timestamp.validate()?;
+        self.photo_limit.validate()?;
         Ok(())
     }
 }

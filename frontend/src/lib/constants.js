@@ -166,6 +166,11 @@ export const DEFAULT_CONFIG = {
       month: false,
       day: false,
     },
+    photo_limit: {
+      enabled: false,
+      max_photos: 1,
+      time_range: 'day',
+    },
   },
   video: {
     enabled: true,

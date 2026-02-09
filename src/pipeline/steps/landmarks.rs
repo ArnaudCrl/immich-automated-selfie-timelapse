@@ -15,9 +15,6 @@ use tokio::task;
 /// This step:
 /// 1. Uses dlib to detect faces and 68 landmarks
 /// 2. Stores Landmarks in ctx.computed["landmarks"]
-/// 3. Computes EAR and stores in ctx.computed["ear"]
-///
-/// Eye filtering (skipping closed eyes) is handled by EyeFilterStep.
 pub struct LandmarksStep;
 
 #[async_trait]
@@ -86,23 +83,13 @@ impl ProcessingStep for LandmarksStep {
             }
         };
 
-        // Compute and store EAR
-        let ear = landmarks.eye_aspect_ratio();
-        let avg_ear = (ear.left + ear.right) / 2.0;
-        ctx.set_computed(computed_keys::EAR, ComputedValue::Float(avg_ear));
-
         // Store landmarks
         ctx.set_computed(
             computed_keys::LANDMARKS,
             ComputedValue::Landmarks(Box::new(landmarks)),
         );
 
-        tracing::trace!(
-            "Landmarks detected: EAR left={:.3}, right={:.3}, avg={:.3}",
-            ear.left,
-            ear.right,
-            avg_ear
-        );
+        tracing::trace!("Landmarks detected successfully");
 
         StepOutcome::Continue(ctx)
     }

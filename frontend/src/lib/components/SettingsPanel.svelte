@@ -28,6 +28,10 @@
         min_brightness: 0.1,
         max_brightness: 0.95,
       },
+      blur: {
+        enabled: false,
+        min_sharpness: 15.0,
+      },
       head_pose: {
         enabled: true,
         max_yaw: 35.0,
@@ -73,10 +77,53 @@
     error = null;
     saveMessage = null;
     try {
+      // Ensure all numeric values are proper numbers (not strings from range inputs)
+      const configToSend = {
+        processing: {
+          max_workers: Number(config.processing.max_workers),
+          face_resolution: {
+            enabled: config.processing.face_resolution.enabled,
+            min_size: Number(config.processing.face_resolution.min_size),
+          },
+          brightness: {
+            enabled: config.processing.brightness.enabled,
+            min_brightness: Number(config.processing.brightness.min_brightness),
+            max_brightness: Number(config.processing.brightness.max_brightness),
+          },
+          blur: {
+            enabled: config.processing.blur.enabled,
+            min_sharpness: Number(config.processing.blur.min_sharpness),
+          },
+          head_pose: {
+            enabled: config.processing.head_pose.enabled,
+            max_yaw: Number(config.processing.head_pose.max_yaw),
+            max_pitch: Number(config.processing.head_pose.max_pitch),
+            max_roll: Number(config.processing.head_pose.max_roll),
+          },
+          eye_filter: {
+            enabled: config.processing.eye_filter.enabled,
+            min_ear: Number(config.processing.eye_filter.min_ear),
+          },
+          output: {
+            size: Number(config.processing.output.size),
+            keep_intermediates: config.processing.output.keep_intermediates,
+          },
+          alignment: {
+            eye_distance: Number(config.processing.alignment.eye_distance),
+          },
+        },
+        video: {
+          enabled: config.video.enabled,
+          framerate: Number(config.video.framerate),
+          codec: config.video.codec,
+          crf: Number(config.video.crf),
+        },
+      };
+
       const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify(configToSend),
       });
       if (!res.ok) throw res;
       config = await res.json();
@@ -202,6 +249,37 @@
                         bind:minBrightness={config.processing.brightness.min_brightness}
                         bind:maxBrightness={config.processing.brightness.max_brightness}
                       />
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Blur Detection Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Blur Filter</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.blur.enabled}
+                  />
+                </div>
+
+                {#if config.processing.blur.enabled}
+                  <div class="setting-row sub-setting">
+                    <label for="min-sharpness">
+                      <span class="setting-label">Min Sharpness</span>
+                      <span class="setting-hint">Discard blurry faces</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        id="min-sharpness"
+                        type="range"
+                        bind:value={config.processing.blur.min_sharpness}
+                        min="10"
+                        max="50"
+                        step="1"
+                      />
+                      <span class="value">{Number(config.processing.blur.min_sharpness).toFixed(0)}</span>
                     </div>
                   </div>
                 {/if}

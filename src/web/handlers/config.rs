@@ -1,8 +1,8 @@
 //! Configuration endpoints.
 
 use crate::config::{
-    AlignmentConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig, HeadPoseConfig,
-    OutputConfig, ProcessingConfig, VideoConfig,
+    AlignmentConfig, BlurConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig,
+    HeadPoseConfig, OutputConfig, ProcessingConfig, VideoConfig,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -39,6 +39,7 @@ pub struct ConfigUpdateRequest {
 pub struct ProcessingConfigUpdate {
     pub max_workers: Option<usize>,
     pub face_resolution: Option<FaceResolutionConfig>,
+    pub blur: Option<BlurConfig>,
     pub brightness: Option<BrightnessConfig>,
     pub head_pose: Option<HeadPoseConfig>,
     pub eye_filter: Option<EyeFilterConfig>,
@@ -92,6 +93,15 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
             return Err(ValidationError::new(
                 "processing.face_resolution.min_size",
                 format!("must be at most 1000, got {}", fr.min_size),
+            ));
+        }
+    }
+
+    if let Some(ref bl) = proc.blur {
+        if bl.enabled && bl.min_sharpness < 0.0 {
+            return Err(ValidationError::new(
+                "processing.blur.min_sharpness",
+                format!("must be non-negative, got {}", bl.min_sharpness),
             ));
         }
     }
@@ -237,6 +247,9 @@ pub async fn update_config(
             }
             if let Some(v) = proc.face_resolution {
                 config.processing.face_resolution = v;
+            }
+            if let Some(v) = proc.blur {
+                config.processing.blur = v;
             }
             if let Some(v) = proc.brightness {
                 config.processing.brightness = v;

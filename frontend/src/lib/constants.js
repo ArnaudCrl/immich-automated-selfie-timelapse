@@ -133,6 +133,10 @@ export const DEFAULT_CONFIG = {
       enabled: true,
       min_size: 80,
     },
+    blur: {
+      enabled: false,
+      min_sharpness: 15.0,
+    },
     brightness: {
       enabled: false,
       min_brightness: 0.1,

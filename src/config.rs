@@ -455,12 +455,12 @@ pub enum TimeRange {
     Month,
 }
 
-/// Photo limit configuration.
+/// Time interval configuration.
 ///
 /// Limits the number of successfully processed photos per time range
 /// (day/week/month) to avoid over-representation of busy periods.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PhotoLimitConfig {
+pub struct TimeIntervalConfig {
     /// Whether photo limiting is enabled.
     pub enabled: bool,
 
@@ -471,7 +471,7 @@ pub struct PhotoLimitConfig {
     pub time_range: TimeRange,
 }
 
-impl Default for PhotoLimitConfig {
+impl Default for TimeIntervalConfig {
     fn default() -> Self {
         Self {
             enabled: false,
@@ -481,17 +481,17 @@ impl Default for PhotoLimitConfig {
     }
 }
 
-impl PhotoLimitConfig {
+impl TimeIntervalConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
         if self.enabled && self.max_photos == 0 {
             return Err(Error::Config(
-                "Photo limit max_photos must be greater than 0".to_string(),
+                "Time interval max_photos must be greater than 0".to_string(),
             ));
         }
         if self.enabled && self.max_photos > 100 {
             return Err(Error::Config(
-                "Photo limit max_photos must be at most 100".to_string(),
+                "Time interval max_photos must be at most 100".to_string(),
             ));
         }
         Ok(())
@@ -544,9 +544,9 @@ pub struct ProcessingConfig {
     #[serde(default)]
     pub timestamp: TimestampConfig,
 
-    /// Photo limit settings.
+    /// Time interval settings.
     #[serde(default)]
-    pub photo_limit: PhotoLimitConfig,
+    pub time_interval: TimeIntervalConfig,
 }
 
 impl Default for ProcessingConfig {
@@ -561,7 +561,7 @@ impl Default for ProcessingConfig {
             output: OutputConfig::default(),
             alignment: AlignmentConfig::default(),
             timestamp: TimestampConfig::default(),
-            photo_limit: PhotoLimitConfig::default(),
+            time_interval: TimeIntervalConfig::default(),
         }
     }
 }
@@ -577,7 +577,7 @@ impl ProcessingConfig {
         self.output.validate()?;
         self.alignment.validate()?;
         self.timestamp.validate()?;
-        self.photo_limit.validate()?;
+        self.time_interval.validate()?;
         Ok(())
     }
 }

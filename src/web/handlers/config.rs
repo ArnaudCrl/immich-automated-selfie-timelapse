@@ -2,7 +2,7 @@
 
 use crate::config::{
     AlignmentConfig, BlurConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig,
-    HeadPoseConfig, OutputConfig, PhotoLimitConfig, ProcessingConfig, TimestampConfig, VideoConfig,
+    HeadPoseConfig, OutputConfig, TimeIntervalConfig, ProcessingConfig, TimestampConfig, VideoConfig,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -46,7 +46,7 @@ pub struct ProcessingConfigUpdate {
     pub output: Option<OutputConfig>,
     pub alignment: Option<AlignmentConfig>,
     pub timestamp: Option<TimestampConfig>,
-    pub photo_limit: Option<PhotoLimitConfig>,
+    pub time_interval: Option<TimeIntervalConfig>,
 }
 
 /// Video configuration update fields.
@@ -178,16 +178,16 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
         }
     }
 
-    if let Some(ref pl) = proc.photo_limit {
+    if let Some(ref pl) = proc.time_interval {
         if pl.enabled && pl.max_photos == 0 {
             return Err(ValidationError::new(
-                "processing.photo_limit.max_photos",
+                "processing.time_interval.max_photos",
                 "must be greater than 0 when enabled",
             ));
         }
         if pl.enabled && pl.max_photos > 100 {
             return Err(ValidationError::new(
-                "processing.photo_limit.max_photos",
+                "processing.time_interval.max_photos",
                 format!("must be at most 100, got {}", pl.max_photos),
             ));
         }
@@ -286,8 +286,8 @@ pub async fn update_config(
             if let Some(v) = proc.timestamp {
                 config.processing.timestamp = v;
             }
-            if let Some(v) = proc.photo_limit {
-                config.processing.photo_limit = v;
+            if let Some(v) = proc.time_interval {
+                config.processing.time_interval = v;
             }
         }
 

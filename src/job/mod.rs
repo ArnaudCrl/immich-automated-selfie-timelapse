@@ -8,7 +8,7 @@
 
 mod processing;
 
-use crate::config::{PhotoLimitConfig, TimeRange};
+use crate::config::{TimeIntervalConfig, TimeRange};
 use crate::error::{Error, Result};
 use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::pipeline::Pipeline;
@@ -30,15 +30,15 @@ use tokio_util::sync::CancellationToken;
 ///
 /// Thread-safe: uses atomic counters with fetch_add + undo pattern
 /// so concurrent workers can claim slots without races.
-pub struct PhotoLimitTracker {
+pub struct TimeIntervalTracker {
     max_photos: u32,
     time_range: TimeRange,
     buckets: RwLock<HashMap<String, Arc<AtomicU32>>>,
 }
 
-impl PhotoLimitTracker {
+impl TimeIntervalTracker {
     /// Create a tracker if photo limiting is enabled, otherwise return None.
-    pub fn new(config: &PhotoLimitConfig) -> Option<Self> {
+    pub fn new(config: &TimeIntervalConfig) -> Option<Self> {
         if !config.enabled {
             return None;
         }
@@ -277,7 +277,7 @@ async fn run_job_inner(
     tracing::debug!("Pipeline steps: {:?}", pipeline.step_ids());
 
     // Create photo limit tracker if enabled
-    let photo_limit_tracker = PhotoLimitTracker::new(&config.processing.photo_limit).map(Arc::new);
+    let time_interval_tracker = TimeIntervalTracker::new(&config.processing.time_interval).map(Arc::new);
 
     // Process images in parallel with concurrency limit
     let completed = Arc::new(AtomicU32::new(0));
@@ -317,7 +317,7 @@ async fn run_job_inner(
         let skip_stats = skip_stats.clone();
 
         // Clone photo limit tracker for this task
-        let photo_limit_tracker = photo_limit_tracker.clone();
+        let time_interval_tracker = time_interval_tracker.clone();
 
         // Clone person info for this task
         let person_id = task_person_id.clone();
@@ -341,7 +341,7 @@ async fn run_job_inner(
                 &task_cancel_token,
                 &skip_stats,
                 &pipeline,
-                photo_limit_tracker.as_ref(),
+                time_interval_tracker.as_ref(),
             )
             .await;
 

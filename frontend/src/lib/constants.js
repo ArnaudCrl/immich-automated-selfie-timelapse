@@ -166,7 +166,7 @@ export const DEFAULT_CONFIG = {
       month: false,
       day: false,
     },
-    photo_limit: {
+    time_interval: {
       enabled: false,
       max_photos: 1,
       time_range: 'day',

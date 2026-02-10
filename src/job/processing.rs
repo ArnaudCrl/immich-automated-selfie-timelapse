@@ -8,7 +8,7 @@ use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::pipeline::{Pipeline, PipelineContext, PipelineResult};
 use crate::web::AtomicSkipStats;
 
-use super::PhotoLimitTracker;
+use super::TimeIntervalTracker;
 
 use bytes::Bytes;
 use image::ImageFormat;
@@ -70,7 +70,7 @@ pub async fn process_single_asset(
     cancel_token: &CancellationToken,
     skip_stats: &Arc<AtomicSkipStats>,
     pipeline: &Pipeline,
-    photo_limit: Option<&Arc<PhotoLimitTracker>>,
+    time_interval: Option<&Arc<TimeIntervalTracker>>,
 ) -> AssetProcessResult {
     let asset_id = &asset.id;
 
@@ -123,12 +123,13 @@ pub async fn process_single_asset(
             ..
         } => {
             // Check photo limit before saving
-            if let Some(tracker) = photo_limit {
+            if let Some(tracker) = time_interval {
                 if !tracker.try_claim(&timestamp) {
-                    skip_stats.increment("photo_limit");
+                    tracing::debug!("Asset {} skipped: time interval too short (timestamp: {})", asset_id, timestamp);
+                    skip_stats.increment("time_interval");
                     return AssetProcessResult::Skipped {
                         asset_id,
-                        reason: "Photo limit reached for time range".to_string(),
+                        reason: "Time interval too short".to_string(),
                     };
                 }
             }

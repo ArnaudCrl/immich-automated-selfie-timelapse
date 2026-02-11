@@ -80,6 +80,18 @@ impl TimeIntervalTracker {
         }
     }
 
+    /// Check if the bucket for the given timestamp is already full.
+    /// This is a non-mutating check used to skip processing early.
+    pub fn is_full(&self, timestamp: &str) -> bool {
+        let key = self.bucket_key(timestamp);
+        let buckets = self.buckets.read().unwrap();
+        if let Some(counter) = buckets.get(&key) {
+            counter.load(Ordering::SeqCst) >= self.max_photos
+        } else {
+            false
+        }
+    }
+
     /// Compute the bucket key from a timestamp string.
     fn bucket_key(&self, timestamp: &str) -> String {
         // Parse date from ISO 8601 timestamp (e.g. "2024-01-15" or "2024-01-15T12:34:56Z")

@@ -85,6 +85,18 @@ pub async fn process_single_asset(
     // Create pipeline context
     let mut ctx = PipelineContext::new(asset_id.clone(), timestamp.clone(), face_data.clone());
 
+    // Early check: skip if the time slot is already full (avoids wasting processing time)
+    if let Some(tracker) = time_interval {
+        if tracker.is_full(&timestamp) {
+            tracing::debug!("Asset {} skipped early: time slot already full (timestamp: {})", asset_id, timestamp);
+            skip_stats.increment("time_interval");
+            return AssetProcessResult::Skipped {
+                asset_id: asset_id.clone(),
+                reason: "Time interval too short".to_string(),
+            };
+        }
+    }
+
     // Check before download (potentially slow)
     if cancel_token.is_cancelled() {
         return AssetProcessResult::Cancelled {

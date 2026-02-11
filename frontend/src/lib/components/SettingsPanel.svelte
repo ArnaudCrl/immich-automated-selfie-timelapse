@@ -340,77 +340,53 @@
                 {/if}
               </div>
 
-              <!-- Alignment Section -->
-              <div class="setting-section">
-                <div class="section-header">
-                  <span class="section-title">Final Image Composition</span>
-                </div>
-                <div class="setting-row sub-setting">
-                  <label for="eye-distance">
-                    <span class="setting-label">Eye Distance</span>
-                    <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
-                  </label>
-                  <div class="setting-control-with-visual">
-                    <input
-                      id="eye-distance"
-                      type="range"
-                      bind:value={config.processing.alignment.eye_distance}
-                      min="0.1"
-                      max="0.5"
-                      step="0.01"
-                    />
-                    <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
-                    <div class="inline-visual-indicator">
-                      <AlignmentIndicator eyeDistance={config.processing.alignment.eye_distance} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </fieldset>
-          {:else if activeTab === 'output'}
-            <fieldset disabled={disabled || saving}>
-              <div class="setting-row">
-                <label for="output-size">
-                  <span class="setting-label">Output Size</span>
-                  <span class="setting-hint">Final image dimensions (square)</span>
-                </label>
-                <div class="setting-control">
-                  <input
-                    id="output-size"
-                    type="range"
-                    bind:value={config.processing.output.size}
-                    min="128"
-                    max="1024"
-                    step="64"
-                  />
-                  <span class="value">{config.processing.output.size}px</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <label for="max-workers">
-                  <span class="setting-label">Parallel Workers</span>
-                  <span class="setting-hint">Concurrent image processing tasks</span>
-                </label>
-                <div class="setting-control">
-                  <input
-                    id="max-workers"
-                    type="range"
-                    bind:value={config.processing.max_workers}
-                    min="1"
-                    max="16"
-                    step="1"
-                  />
-                  <span class="value">{config.processing.max_workers}</span>
-                </div>
-              </div>
-
               <div class="setting-row checkbox-row">
                 <label for="keep-intermediates">
                   <span class="setting-label">Keep Debug Images</span>
                   <span class="setting-hint">Save intermediate processing visualizations</span>
                 </label>
                 <input id="keep-intermediates" type="checkbox" bind:checked={config.processing.output.keep_intermediates} />
+              </div>
+
+            </fieldset>
+          {:else if activeTab === 'output'}
+            <fieldset disabled={disabled || saving}>
+              <div class="setting-section">
+                <div class="setting-row">
+                  <label for="output-size">
+                    <span class="setting-label">Output Size</span>
+                    <span class="setting-hint">Final image dimensions (square)</span>
+                  </label>
+                  <div class="setting-control">
+                    <input
+                      id="output-size"
+                      type="range"
+                      bind:value={config.processing.output.size}
+                      min="128"
+                      max="1024"
+                      step="64"
+                    />
+                    <span class="value">{config.processing.output.size}px</span>
+                  </div>
+                </div>
+
+                <div class="setting-row">
+                  <label for="max-workers">
+                    <span class="setting-label">Parallel Workers</span>
+                    <span class="setting-hint">Concurrent image processing tasks</span>
+                  </label>
+                  <div class="setting-control">
+                    <input
+                      id="max-workers"
+                      type="range"
+                      bind:value={config.processing.max_workers}
+                      min="1"
+                      max="16"
+                      step="1"
+                    />
+                    <span class="value">{config.processing.max_workers}</span>
+                  </div>
+                </div>
               </div>
 
               <!-- Time Interval Section -->
@@ -499,6 +475,33 @@
                     </div>
                   </div>
                 {/if}
+              </div>
+
+              <!-- Alignment Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Final Image Composition</span>
+                </div>
+                <div class="setting-row sub-setting">
+                  <label for="eye-distance">
+                    <span class="setting-label">Eye Distance</span>
+                    <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
+                  </label>
+                  <div class="setting-control-with-visual">
+                    <input
+                      id="eye-distance"
+                      type="range"
+                      bind:value={config.processing.alignment.eye_distance}
+                      min="0.05"
+                      max="0.4"
+                      step="0.01"
+                    />
+                    <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
+                    <div class="inline-visual-indicator">
+                      <AlignmentIndicator eyeDistance={config.processing.alignment.eye_distance} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </fieldset>
           {:else if activeTab === 'video'}

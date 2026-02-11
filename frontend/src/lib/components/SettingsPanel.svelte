@@ -114,9 +114,6 @@
 
   function toggle() {
     isOpen = !isOpen;
-    if (isOpen && loading) {
-      loadConfig();
-    }
   }
 
   onMount(() => {
@@ -303,6 +300,24 @@
                       <span class="value">{config.processing.head_pose.max_pitch.toFixed(0)}°</span>
                     </div>
                   </div>
+
+                  <div class="setting-row sub-setting">
+                    <label for="max-roll">
+                      <span class="setting-label">Max Roll</span>
+                      <span class="setting-hint">Maximum head tilt angle</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        id="max-roll"
+                        type="range"
+                        bind:value={config.processing.head_pose.max_roll}
+                        min="5"
+                        max="90"
+                        step="5"
+                      />
+                      <span class="value">{config.processing.head_pose.max_roll.toFixed(0)}°</span>
+                    </div>
+                  </div>
                 {/if}
               </div>
 
@@ -320,7 +335,7 @@
                   <div class="setting-row sub-setting">
                     <label for="min-ear">
                       <span class="setting-label">Minimum eye opening</span>
-                      <span class="setting-hint">Discard image if Eye Aspect Ratio is bellow this value</span>
+                      <span class="setting-hint">Discard image if Eye Aspect Ratio is below this value</span>
                     </label>
                     <div class="setting-control-with-visual">
                       <input
@@ -411,7 +426,7 @@
                         min="1"
                         max="10"
                       />
-                      <span class="setting-label">per</span>
+                      <span class="setting-label">photos per</span>
                       <div class="toggle-group">
                         {#each [['day', 'day'], ['week', 'week'], ['month', 'month']] as [value, label]}
                           <button

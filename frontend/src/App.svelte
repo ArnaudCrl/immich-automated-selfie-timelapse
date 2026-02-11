@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
   import GalleryView from './lib/components/GalleryView.svelte';
   import OutputManager from './lib/components/OutputManager.svelte';
@@ -42,8 +42,8 @@
   let initialSelectedPersonId = $state(loadPersistedPersonId());
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
-  let ws = $state(null);
-  let wsReconnectTimeout = $state(null);
+  let ws = null;
+  let wsReconnectTimeout = null;
 
   // View state management for gallery
   let currentView = $state('main'); // 'main' | 'gallery'
@@ -99,7 +99,7 @@
     galleryFolder = null;
     currentView = 'main';
     // Check for any running job (e.g., video compilation started from gallery)
-    checkAndPollProgress();
+    connectWebSocket();
     // Restore scroll position after DOM updates
     requestAnimationFrame(() => {
       window.scrollTo(0, savedScrollPosition);
@@ -110,7 +110,7 @@
     connectionOk = data.connected;
     // Check for running job when connection is established
     if (data.connected) {
-      checkAndPollProgress();
+      connectWebSocket();
     }
   }
 
@@ -122,11 +122,6 @@
   function handleJobUpdate(data) {
     jobStatus = data.status;
     progress = data;
-  }
-
-  async function checkAndPollProgress() {
-    // Connect WebSocket if not already connected
-    connectWebSocket();
   }
 
   function connectWebSocket() {
@@ -197,14 +192,6 @@
       ws = null;
     }
   }
-
-  onMount(() => {
-    // Initial check will happen when connection is established
-    // Load output folders initially and when connection is established
-    if (connectionOk) {
-      loadOutputFolders();
-    }
-  });
 
   // Reload folders when connection is established
   $effect(() => {

@@ -96,6 +96,7 @@
             <button
               type="button"
               class="delete-btn"
+              aria-label="Delete folder {folder.name}"
               onclick={() => deleteFolder(folder.name)}
               disabled={disabled || deleting !== null}
             >

@@ -59,8 +59,8 @@
       if (progress.completed > savedCompleted) {
         savedCompleted = progress.completed;
       }
-    } else if (jobStatus === 'idle') {
-      // Clear saved stats when starting a new job
+    } else if (jobStatus === 'idle' || jobStatus === 'error') {
+      // Clear saved stats when returning to idle or on error
       savedSkipStats = {};
       savedCompleted = 0;
     }

@@ -80,13 +80,13 @@
   }
 
   .indicator.error {
-    background: #ef4444;
+    background: #dc2626;
   }
 
   .retry {
     background: none;
     border: none;
-    color: #ef4444;
+    color: #dc2626;
     cursor: pointer;
     font-size: inherit;
   }

@@ -11,6 +11,13 @@ output/
 
 # Configuration with secrets
 config.toml
+.env
+
+# ONNX models (large binaries)
+models/
 
 # OS
 .DS_Store
+
+# Debug/temp artifacts
+*.dot

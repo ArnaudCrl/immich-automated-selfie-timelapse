@@ -1,89 +1,10 @@
 /**
  * Application constants and magic values.
- * Single source of truth for colors, spacing, timing, etc.
  */
-
-// ===== Colors =====
-export const COLORS = {
-  // Backgrounds
-  bgPrimary: '#0f0f0f',
-  bgSecondary: '#1a1a1a',
-  bgTertiary: '#252525',
-  bgHover: '#333',
-  bgHoverLight: '#444',
-
-  // Text
-  textPrimary: '#fff',
-  textSecondary: '#e0e0e0',
-  textTertiary: '#888',
-  textQuaternary: '#666',
-
-  // Borders
-  border: '#333',
-  borderLight: '#252525',
-
-  // Brand/Accent
-  primary: '#4f46e5',
-  primaryHover: '#4338ca',
-
-  // Status colors
-  success: '#22c55e',
-  error: '#dc2626',
-  warning: '#f59e0b',
-  info: '#3b82f6',
-};
-
-// ===== Spacing =====
-export const SPACING = {
-  xs: '0.25rem',
-  sm: '0.5rem',
-  md: '0.75rem',
-  lg: '1rem',
-  xl: '1.5rem',
-  xxl: '2rem',
-  xxxl: '3rem',
-};
-
-// ===== Border Radius =====
-export const RADIUS = {
-  sm: '4px',
-  md: '6px',
-  lg: '8px',
-};
-
-// ===== Transitions =====
-export const TRANSITIONS = {
-  default: 'all 0.15s ease',
-  fast: 'all 0.1s ease',
-  slow: 'all 0.3s ease',
-};
-
-// ===== Font Sizes =====
-export const FONT_SIZES = {
-  xs: '0.625rem',
-  sm: '0.75rem',
-  md: '0.875rem',
-  base: '1rem',
-  lg: '1.125rem',
-  xl: '1.5rem',
-};
-
-// ===== Z-Index Layers =====
-export const Z_INDEX = {
-  base: 0,
-  dropdown: 10,
-  overlay: 100,
-  modal: 1000,
-  toast: 10000,
-};
 
 // ===== Timing (milliseconds) =====
 export const TIMING = {
   messageDisplayDuration: 2000,
-  wsReconnectDelay: 1000,
-  debounceDefault: 300,
-  animationFast: 150,
-  animationDefault: 300,
 };
 
 // ===== Local Storage Keys =====

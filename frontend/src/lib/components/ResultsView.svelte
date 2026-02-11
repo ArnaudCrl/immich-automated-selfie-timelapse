@@ -32,6 +32,7 @@
       <video
         controls
         autoplay
+        muted
         loop
         src={videoUrl}
         onerror={handleVideoError}

@@ -220,7 +220,7 @@
   }
 
   .error {
-    color: #ef4444;
+    color: #dc2626;
   }
 
   .error button {

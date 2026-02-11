@@ -1,6 +1,5 @@
 <script>
   import { onMount } from 'svelte';
-  import { formatSize } from '../utils.js';
   import { handleError, showErrorAlert } from '../errorHandler.js';
   import { API } from '../constants.js';
 
@@ -207,11 +206,14 @@
           class="image-card"
           class:selected={selectedImages.has(image.filename)}
         >
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="checkbox-overlay" onclick={(e) => { e.stopPropagation(); toggleSelect(image.filename); }}>
+          <button
+            type="button"
+            class="checkbox-overlay"
+            aria-label={selectedImages.has(image.filename) ? `Deselect ${image.filename}` : `Select ${image.filename}`}
+            onclick={(e) => { e.stopPropagation(); toggleSelect(image.filename); }}
+          >
             <span class="checkbox">{selectedImages.has(image.filename) ? '✓' : ''}</span>
-          </div>
+          </button>
           <button
             type="button"
             class="image-button"
@@ -255,29 +257,27 @@
 
 {#if lightboxImage}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="lightbox-overlay" onclick={closeLightbox} onkeydown={handleLightboxKeydown}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="lightbox-overlay" onclick={closeLightbox} role="presentation">
     <button type="button" class="lightbox-close" onclick={closeLightbox}>&times;</button>
 
     {#if lightboxIndex > 0}
       <button type="button" class="lightbox-nav lightbox-prev" onclick={(e) => { e.stopPropagation(); lightboxPrev(); }}>&lsaquo;</button>
     {/if}
 
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <img
-      class="lightbox-img"
-      src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(lightboxImage.filename)}?v={cacheBust}"
-      alt={lightboxImage.filename}
-      onclick={(e) => e.stopPropagation()}
-    />
+    <div class="lightbox-img-wrapper" role="presentation" onclick={(e) => e.stopPropagation()}>
+      <img
+        class="lightbox-img"
+        src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(lightboxImage.filename)}?v={cacheBust}"
+        alt={lightboxImage.filename}
+      />
+    </div>
 
     {#if lightboxIndex < images.length - 1}
       <button type="button" class="lightbox-nav lightbox-next" onclick={(e) => { e.stopPropagation(); lightboxNext(); }}>&rsaquo;</button>
     {/if}
 
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="lightbox-info" onclick={(e) => e.stopPropagation()}>
+    <div class="lightbox-info" role="presentation" onclick={(e) => e.stopPropagation()}>
       <span>{lightboxImage.filename}</span>
       <span class="lightbox-counter">{lightboxIndex + 1} / {images.length}</span>
     </div>
@@ -431,6 +431,7 @@
   }
 
   .checkbox-overlay {
+    all: unset;
     position: absolute;
     top: 0.25rem;
     left: 0.25rem;
@@ -442,6 +443,7 @@
     align-items: center;
     justify-content: center;
     z-index: 1;
+    cursor: pointer;
   }
 
   .image-card.selected .checkbox-overlay {
@@ -597,6 +599,12 @@
 
   .lightbox-next {
     right: 1rem;
+  }
+
+  .lightbox-img-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .lightbox-img {

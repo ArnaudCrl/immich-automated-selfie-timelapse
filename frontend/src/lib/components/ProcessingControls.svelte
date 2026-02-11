@@ -87,15 +87,6 @@
     }
   }
 
-  async function cancelProcessing() {
-    try {
-      const res = await fetch(API.cancel, { method: 'POST' });
-      if (!res.ok) throw res;
-    } catch (e) {
-      await handleError('Cancel failed', e);
-    }
-  }
-
   function handleStartClick() {
     if (existingFolder) {
       const folder = existingFolder;

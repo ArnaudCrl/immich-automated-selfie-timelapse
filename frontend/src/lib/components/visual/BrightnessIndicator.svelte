@@ -17,6 +17,9 @@
   const minX = $derived(minBrightness * width);
   const maxX = $derived(maxBrightness * width);
 
+  // Unique ID for SVG gradient to avoid collision with multiple instances
+  const gradientId = `brightness-gradient-${Math.random().toString(36).slice(2, 9)}`;
+
   let dragging = $state(null); // 'min' | 'max' | null
   let svgElement = $state(null);
 
@@ -70,7 +73,7 @@
 >
   <!-- Define gradient from black to white -->
   <defs>
-    <linearGradient id="brightness-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+    <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" style="stop-color:rgb(0,0,0);stop-opacity:1" />
       <stop offset="100%" style="stop-color:rgb(255,255,255);stop-opacity:1" />
     </linearGradient>
@@ -82,7 +85,7 @@
     y={gradientBarY}
     width={width}
     height={gradientBarHeight}
-    fill="url(#brightness-gradient)"
+    fill="url(#{gradientId})"
     stroke="white"
     stroke-width="1.5"
     rx="3"

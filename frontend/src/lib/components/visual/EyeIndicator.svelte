@@ -23,7 +23,7 @@
 
   // Create almond-shaped eye outline using a path
   // The path creates a pointed eye shape (yes, this is a Skyrim reference.)
-  const eyePath = $derived(() => {
+  const eyePath = $derived.by(() => {
     const halfWidth = eyeWidth / 2;
     const halfHeight = eyeHeight / 2;
 
@@ -45,7 +45,7 @@
 >
   <!-- Eye outline (almond shape) -->
   <path
-    d={eyePath()}
+    d={eyePath}
     fill="none"
     stroke="white"
     stroke-width="2.5"

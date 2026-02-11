@@ -65,7 +65,7 @@
             min_ear: Number(config.processing.eye_filter.min_ear),
           },
           output: {
-            size: Number(config.processing.output.size),
+            size: Math.max(64, Math.min(4096, Number(config.processing.output.size) || 512)),
             keep_intermediates: config.processing.output.keep_intermediates,
           },
           alignment: {
@@ -360,13 +360,13 @@
                   <div class="setting-control">
                     <input
                       id="output-size"
-                      type="range"
+                      type="number"
+                      class="inline-number"
                       bind:value={config.processing.output.size}
-                      min="128"
-                      max="1024"
-                      step="64"
+                      min="64"
+                      max="4096"
                     />
-                    <span class="value">{config.processing.output.size}px</span>
+                    <span class="setting-label">px</span>
                   </div>
                 </div>
 

@@ -425,33 +425,28 @@
 
                 {#if config.processing.time_interval.enabled}
                   <div class="setting-row sub-setting">
-                    <label for="max-photos">
-                      <span class="setting-label">Max Photos</span>
-                      <span class="setting-hint">Maximum photos per time range</span>
-                    </label>
+                    <span class="setting-label">Keep at most</span>
                     <div class="setting-control">
                       <input
                         id="max-photos"
-                        type="range"
+                        type="number"
+                        class="inline-number"
                         bind:value={config.processing.time_interval.max_photos}
                         min="1"
                         max="10"
-                        step="1"
                       />
-                      <span class="value">{config.processing.time_interval.max_photos}</span>
+                      <span class="setting-label">per</span>
+                      <div class="toggle-group">
+                        {#each [['day', 'day'], ['week', 'week'], ['month', 'month']] as [value, label]}
+                          <button
+                            type="button"
+                            class="toggle-btn-option"
+                            class:active={config.processing.time_interval.time_range === value}
+                            onclick={() => config.processing.time_interval.time_range = value}
+                          >{label}</button>
+                        {/each}
+                      </div>
                     </div>
-                  </div>
-
-                  <div class="setting-row sub-setting">
-                    <label for="time-range">
-                      <span class="setting-label">Time Range</span>
-                      <span class="setting-hint">Group photos by this period</span>
-                    </label>
-                    <select id="time-range" bind:value={config.processing.time_interval.time_range}>
-                      <option value="day">Day</option>
-                      <option value="week">Week</option>
-                      <option value="month">Month</option>
-                    </select>
                   </div>
                 {/if}
               </div>
@@ -480,28 +475,28 @@
                     </select>
                   </div>
 
-                  <div class="setting-row sub-setting checkbox-row">
-                    <label for="timestamp-year">
-                      <span class="setting-label">Show Year</span>
-                      <span class="setting-hint">Display year in timestamp</span>
-                    </label>
-                    <input id="timestamp-year" type="checkbox" bind:checked={config.processing.timestamp.year} />
-                  </div>
-
-                  <div class="setting-row sub-setting checkbox-row">
-                    <label for="timestamp-month">
-                      <span class="setting-label">Show Month</span>
-                      <span class="setting-hint">Display month in timestamp</span>
-                    </label>
-                    <input id="timestamp-month" type="checkbox" bind:checked={config.processing.timestamp.month} />
-                  </div>
-
-                  <div class="setting-row sub-setting checkbox-row">
-                    <label for="timestamp-day">
-                      <span class="setting-label">Show Day</span>
-                      <span class="setting-hint">Display day in timestamp</span>
-                    </label>
-                    <input id="timestamp-day" type="checkbox" bind:checked={config.processing.timestamp.day} />
+                  <div class="setting-row sub-setting">
+                    <span class="setting-label">Date Components</span>
+                    <div class="toggle-group">
+                      <button
+                        type="button"
+                        class="toggle-btn-option"
+                        class:active={config.processing.timestamp.year}
+                        onclick={() => config.processing.timestamp.year = !config.processing.timestamp.year}
+                      >Year</button>
+                      <button
+                        type="button"
+                        class="toggle-btn-option"
+                        class:active={config.processing.timestamp.month}
+                        onclick={() => config.processing.timestamp.month = !config.processing.timestamp.month}
+                      >Month</button>
+                      <button
+                        type="button"
+                        class="toggle-btn-option"
+                        class:active={config.processing.timestamp.day}
+                        onclick={() => config.processing.timestamp.day = !config.processing.timestamp.day}
+                      >Day</button>
+                    </div>
                   </div>
                 {/if}
               </div>
@@ -792,9 +787,9 @@
   }
 
   .sub-setting {
-    padding-left: 1rem;
+    padding-left: 1.5rem;
     border-left: 2px solid #333;
-    margin-left: 0.5rem;
+    margin-left: 0.75rem;
   }
 
   .actions {
@@ -868,6 +863,64 @@
     border-radius: 6px;
     width: 96px;
     height: 96px;
+  }
+
+  .inline-number {
+    width: 3rem;
+    padding: 0.3rem 0.4rem;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.875rem;
+    text-align: center;
+    -moz-appearance: textfield;
+  }
+
+  .inline-number::-webkit-inner-spin-button,
+  .inline-number::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .inline-number:focus {
+    outline: none;
+    border-color: #4f46e5;
+  }
+
+  /* Toggle button group */
+  .toggle-group {
+    display: flex;
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #333;
+  }
+
+  .toggle-btn-option {
+    padding: 0.4rem 0.75rem;
+    background: #0f0f0f;
+    border: none;
+    border-right: 1px solid #333;
+    color: #888;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .toggle-btn-option:last-child {
+    border-right: none;
+  }
+
+  .toggle-btn-option:hover {
+    background: #252525;
+    color: #e0e0e0;
+  }
+
+  .toggle-btn-option.active {
+    background: #4f46e5;
+    color: #fff;
+    font-weight: 600;
   }
 
   /* Brightness visual control */

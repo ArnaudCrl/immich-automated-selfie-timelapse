@@ -81,68 +81,99 @@ impl ProcessingStep for EyeFilterStep {
         // Get the current image to draw on
         let image = ctx.image.as_ref()?;
         let rgb = image.to_rgb8();
-        let (width, height) = (rgb.width(), rgb.height());
+        let (img_w, img_h) = (rgb.width(), rgb.height());
 
-        // Create a copy for visualization
-        let mut debug_img = rgb.clone();
-
-        // Draw eye landmarks (points 36-47)
-        let points = landmarks.points();
-
-        // Left eye (points 36-41) - yellow or red depending on EAR
-        let left_color = if ear.left >= 0.2 {
-            Rgb([0, 255, 0]) // Green - open
-        } else {
-            Rgb([255, 0, 0]) // Red - closed
-        };
-
-        for point in points.iter().skip(36).take(6) {
-            draw_cross(&mut debug_img, point.x as u32, point.y as u32, left_color);
-        }
-
-        // Right eye (points 42-47)
-        let right_color = if ear.right >= 0.2 {
-            Rgb([0, 255, 0]) // Green - open
-        } else {
-            Rgb([255, 0, 0]) // Red - closed
-        };
-
-        for point in points.iter().skip(42).take(6) {
-            draw_cross(&mut debug_img, point.x as u32, point.y as u32, right_color);
-        }
-
-        // Draw eye centers
+        // Compute eye centers and bounding box for cropping
         let left_eye = landmarks.left_eye_center();
         let right_eye = landmarks.right_eye_center();
-        draw_marker(
-            &mut debug_img,
-            left_eye.x as u32,
-            left_eye.y as u32,
-            Rgb([0, 255, 255]),
-        );
-        draw_marker(
-            &mut debug_img,
-            right_eye.x as u32,
-            right_eye.y as u32,
-            Rgb([0, 255, 255]),
-        );
+        let eye_dist =
+            ((right_eye.x - left_eye.x).powi(2) + (right_eye.y - left_eye.y).powi(2)).sqrt();
+        let padding = eye_dist * 0.8;
+        let center_x = (left_eye.x + right_eye.x) / 2.0;
+        let center_y = (left_eye.y + right_eye.y) / 2.0;
+
+        let crop_x = (center_x - eye_dist / 2.0 - padding).max(0.0) as u32;
+        let crop_y = (center_y - padding).max(0.0) as u32;
+        let crop_w = ((eye_dist + padding * 2.0) as u32).min(img_w.saturating_sub(crop_x));
+        let crop_h = ((padding * 2.0) as u32).min(img_h.saturating_sub(crop_y));
+
+        if crop_w == 0 || crop_h == 0 {
+            return Some(DynamicImage::ImageRgb8(rgb));
+        }
+
+        // Crop first, then scale up
+        let cropped = DynamicImage::ImageRgb8(rgb).crop_imm(crop_x, crop_y, crop_w, crop_h);
+
+        let scale = img_w as f64 / crop_w as f64;
+        let scaled_w = img_w;
+        let scaled_h = (crop_h as f64 * scale) as u32;
+        let mut zoomed = cropped
+            .resize_exact(scaled_w, scaled_h, image::imageops::FilterType::Lanczos3)
+            .to_rgb8();
+
+        // Draw landmarks on the zoomed image (coordinates transformed to zoomed space)
+        let points = landmarks.points();
+
+        let left_color = if ear.left >= 0.2 {
+            Rgb([0, 255, 0])
+        } else {
+            Rgb([255, 0, 0])
+        };
+        let right_color = if ear.right >= 0.2 {
+            Rgb([0, 255, 0])
+        } else {
+            Rgb([255, 0, 0])
+        };
+
+        // Left eye landmarks (points 36-41)
+        for point in points.iter().skip(36).take(6) {
+            let x = ((point.x as f64 - crop_x as f64) * scale) as u32;
+            let y = ((point.y as f64 - crop_y as f64) * scale) as u32;
+            draw_cross(&mut zoomed, x, y, left_color);
+        }
+
+        // Right eye landmarks (points 42-47)
+        for point in points.iter().skip(42).take(6) {
+            let x = ((point.x as f64 - crop_x as f64) * scale) as u32;
+            let y = ((point.y as f64 - crop_y as f64) * scale) as u32;
+            draw_cross(&mut zoomed, x, y, right_color);
+        }
+
+        // Eye centers
+        let lx = ((left_eye.x as f64 - crop_x as f64) * scale) as u32;
+        let ly = ((left_eye.y as f64 - crop_y as f64) * scale) as u32;
+        let rx = ((right_eye.x as f64 - crop_x as f64) * scale) as u32;
+        let ry = ((right_eye.y as f64 - crop_y as f64) * scale) as u32;
+        draw_marker(&mut zoomed, lx, ly, Rgb([0, 255, 255]));
+        draw_marker(&mut zoomed, rx, ry, Rgb([0, 255, 255]));
 
         // Draw info bar at bottom
         let bar_height = 20u32;
-        let bar_y = height.saturating_sub(bar_height);
+        let total_h = scaled_h + bar_height;
+        let mut final_img = RgbImage::new(scaled_w, total_h);
 
-        // Draw background
-        for y in bar_y..height {
-            for x in 0..width {
-                debug_img.put_pixel(x, y, Rgb([0, 0, 0]));
+        // Copy zoomed image
+        for y in 0..scaled_h {
+            for x in 0..scaled_w {
+                final_img.put_pixel(x, y, *zoomed.get_pixel(x, y));
+            }
+        }
+
+        // Draw black bar
+        for y in scaled_h..total_h {
+            for x in 0..scaled_w {
+                final_img.put_pixel(x, y, Rgb([0, 0, 0]));
             }
         }
 
         // Draw EAR values
-        let text = format!("L:{:.2} R:{:.2} Avg:{:.2}", ear.left, ear.right, avg_ear);
-        draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
+        let text = format!(
+            "Left:{:.2} Right:{:.2} Average:{:.2}",
+            ear.left, ear.right, avg_ear
+        );
+        draw_simple_text(&mut final_img, 5, scaled_h + 6, &text, Rgb([255, 255, 255]));
 
-        Some(DynamicImage::ImageRgb8(debug_img))
+        Some(DynamicImage::ImageRgb8(final_img))
     }
 }
 

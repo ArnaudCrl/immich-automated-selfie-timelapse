@@ -19,8 +19,34 @@
   let videoExists = $state(false);
   let cacheBust = $state(Date.now());
 
+  let lightboxIndex = $state(null);
+  let lightboxImage = $derived(lightboxIndex !== null ? images[lightboxIndex] : null);
+
   let selectedCount = $derived(selectedImages.size);
   let allSelected = $derived(images.length > 0 && selectedImages.size === images.length);
+
+  function openLightbox(index) {
+    lightboxIndex = index;
+  }
+
+  function closeLightbox() {
+    lightboxIndex = null;
+  }
+
+  function lightboxPrev() {
+    if (lightboxIndex > 0) lightboxIndex--;
+  }
+
+  function lightboxNext() {
+    if (lightboxIndex < images.length - 1) lightboxIndex++;
+  }
+
+  function handleLightboxKeydown(e) {
+    if (lightboxIndex === null) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') lightboxPrev();
+    else if (e.key === 'ArrowRight') lightboxNext();
+  }
 
   async function loadImages() {
     loading = true;
@@ -93,7 +119,10 @@
   }
 
   async function compileVideo() {
-    if (!confirm('Compile video from these images?')) {
+    const message = videoExists
+      ? 'Compile video from these images? This will overwrite the previous video.'
+      : 'Compile video from these images?';
+    if (!confirm(message)) {
       return;
     }
 
@@ -173,24 +202,27 @@
     </div>
 
     <div class="image-grid">
-      {#each images as image}
+      {#each images as image, i}
         <div
           class="image-card"
           class:selected={selectedImages.has(image.filename)}
-          onclick={() => toggleSelect(image.filename)}
-          role="checkbox"
-          aria-checked={selectedImages.has(image.filename)}
-          tabindex="0"
-          onkeydown={(e) => e.key === 'Enter' && toggleSelect(image.filename)}
         >
-          <div class="checkbox-overlay">
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div class="checkbox-overlay" onclick={(e) => { e.stopPropagation(); toggleSelect(image.filename); }}>
             <span class="checkbox">{selectedImages.has(image.filename) ? '✓' : ''}</span>
           </div>
-          <img
-            src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(image.filename)}?v={cacheBust}"
-            alt={image.filename}
-            loading="lazy"
-          />
+          <button
+            type="button"
+            class="image-button"
+            onclick={() => openLightbox(i)}
+          >
+            <img
+              src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(image.filename)}?v={cacheBust}"
+              alt={image.filename}
+              loading="lazy"
+            />
+          </button>
           <div class="image-info">
             <span class="image-date">{image.filename.split('_')[0]}</span>
           </div>
@@ -220,6 +252,39 @@
     </footer>
   {/if}
 </div>
+
+{#if lightboxImage}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="lightbox-overlay" onclick={closeLightbox} onkeydown={handleLightboxKeydown}>
+    <button type="button" class="lightbox-close" onclick={closeLightbox}>&times;</button>
+
+    {#if lightboxIndex > 0}
+      <button type="button" class="lightbox-nav lightbox-prev" onclick={(e) => { e.stopPropagation(); lightboxPrev(); }}>&lsaquo;</button>
+    {/if}
+
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <img
+      class="lightbox-img"
+      src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(lightboxImage.filename)}?v={cacheBust}"
+      alt={lightboxImage.filename}
+      onclick={(e) => e.stopPropagation()}
+    />
+
+    {#if lightboxIndex < images.length - 1}
+      <button type="button" class="lightbox-nav lightbox-next" onclick={(e) => { e.stopPropagation(); lightboxNext(); }}>&rsaquo;</button>
+    {/if}
+
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="lightbox-info" onclick={(e) => e.stopPropagation()}>
+      <span>{lightboxImage.filename}</span>
+      <span class="lightbox-counter">{lightboxIndex + 1} / {images.length}</span>
+    </div>
+  </div>
+{/if}
+
+<svelte:window onkeydown={handleLightboxKeydown} />
 
 <style>
   .gallery-view {
@@ -455,5 +520,107 @@
   .compile-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .image-button {
+    all: unset;
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+
+  .image-button img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 2rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    line-height: 1;
+    z-index: 1001;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+  }
+
+  .lightbox-close:hover {
+    opacity: 1;
+  }
+
+  .lightbox-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    font-size: 3rem;
+    cursor: pointer;
+    padding: 0.5rem 1rem;
+    line-height: 1;
+    z-index: 1001;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    border-radius: 4px;
+  }
+
+  .lightbox-nav:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .lightbox-prev {
+    left: 1rem;
+  }
+
+  .lightbox-next {
+    right: 1rem;
+  }
+
+  .lightbox-img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+
+  .lightbox-info {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #ccc;
+    font-size: 0.875rem;
+    display: flex;
+    gap: 1rem;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+  }
+
+  .lightbox-counter {
+    color: #888;
   }
 </style>

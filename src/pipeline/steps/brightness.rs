@@ -10,7 +10,7 @@ use crate::pipeline::{
     ProcessingStep, StepOutcome,
 };
 use async_trait::async_trait;
-use image::{DynamicImage, Rgb};
+use image::{DynamicImage, GenericImageView, Rgb};
 
 /// Validates image brightness and skips images outside acceptable range.
 ///
@@ -35,8 +35,7 @@ impl BrightnessStep {
         x2: u32,
         y2: u32,
     ) -> f32 {
-        let luma = image.to_luma8();
-        let (img_width, img_height) = luma.dimensions();
+        let (img_width, img_height) = image.dimensions();
 
         // Clamp coordinates to image bounds
         let x1 = x1.min(img_width.saturating_sub(1));
@@ -44,26 +43,25 @@ impl BrightnessStep {
         let x2 = x2.min(img_width);
         let y2 = y2.min(img_height);
 
-        // Ensure valid region
         if x2 <= x1 || y2 <= y1 {
             return 0.0;
         }
 
-        let width = x2 - x1;
-        let height = y2 - y1;
-        let pixel_count = width as u64 * height as u64;
-
+        let pixel_count = (x2 - x1) as u64 * (y2 - y1) as u64;
         if pixel_count == 0 {
             return 0.0;
         }
 
-        // Sum luminance values from the pre-computed luma image
-        // (to_luma8 uses the standard Y = 0.299*R + 0.587*G + 0.114*B conversion)
+        // Convert only the face region to RGB (avoids converting the full image).
+        // to_rgb8() on an already-RGB8 image is a cheap clone.
+        let rgb = image.crop_imm(x1, y1, x2 - x1, y2 - y1).to_rgb8();
+
+        // Sum luminance using standard Y = 0.299*R + 0.587*G + 0.114*B.
+        // Iterate over raw bytes directly to avoid per-pixel get_pixel overhead.
         let mut total_luminance: u64 = 0;
-        for y in y1..y2 {
-            for x in x1..x2 {
-                total_luminance += luma.get_pixel(x, y)[0] as u64;
-            }
+        for chunk in rgb.as_raw().chunks_exact(3) {
+            total_luminance +=
+                (299 * chunk[0] as u64 + 587 * chunk[1] as u64 + 114 * chunk[2] as u64) / 1000;
         }
 
         (total_luminance as f32 / pixel_count as f32) / 255.0

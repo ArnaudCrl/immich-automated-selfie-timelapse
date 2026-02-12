@@ -280,21 +280,15 @@ fn apply_affine_transform(
         let r = (p00[0] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[0] as f32 * dx * (1.0 - dy)
             + p01[0] as f32 * (1.0 - dx) * dy
-            + p11[0] as f32 * dx * dy)
-            .round()
-            .clamp(0.0, 255.0) as u8;
+            + p11[0] as f32 * dx * dy) as u8;
         let g = (p00[1] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[1] as f32 * dx * (1.0 - dy)
             + p01[1] as f32 * (1.0 - dx) * dy
-            + p11[1] as f32 * dx * dy)
-            .round()
-            .clamp(0.0, 255.0) as u8;
+            + p11[1] as f32 * dx * dy) as u8;
         let b = (p00[2] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[2] as f32 * dx * (1.0 - dy)
             + p01[2] as f32 * (1.0 - dx) * dy
-            + p11[2] as f32 * dx * dy)
-            .round()
-            .clamp(0.0, 255.0) as u8;
+            + p11[2] as f32 * dx * dy) as u8;
 
         Rgb([r, g, b])
     });

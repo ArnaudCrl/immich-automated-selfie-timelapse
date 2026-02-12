@@ -88,7 +88,11 @@ pub async fn process_single_asset(
     // Early check: skip if the time slot is already full (avoids wasting processing time)
     if let Some(tracker) = time_interval {
         if tracker.is_full(&timestamp) {
-            tracing::debug!("Asset {} skipped early: time slot already full (timestamp: {})", asset_id, timestamp);
+            tracing::debug!(
+                "Asset {} skipped early: time slot already full (timestamp: {})",
+                asset_id,
+                timestamp
+            );
             skip_stats.increment("time_interval");
             return AssetProcessResult::Skipped {
                 asset_id: asset_id.clone(),
@@ -137,7 +141,11 @@ pub async fn process_single_asset(
             // Check photo limit before saving
             if let Some(tracker) = time_interval {
                 if !tracker.try_claim(&timestamp) {
-                    tracing::debug!("Asset {} skipped: time interval too short (timestamp: {})", asset_id, timestamp);
+                    tracing::debug!(
+                        "Asset {} skipped: time interval too short (timestamp: {})",
+                        asset_id,
+                        timestamp
+                    );
                     skip_stats.increment("time_interval");
                     return AssetProcessResult::Skipped {
                         asset_id,
@@ -161,16 +169,32 @@ pub async fn process_single_asset(
             let filename = format!("{}_{}.jpg", safe_timestamp, asset_id);
             let output_path = output_dirs.images.join(&filename);
 
-            // Encode and save final image
-            let mut buffer = Cursor::new(Vec::new());
-            if let Err(e) = image.write_to(&mut buffer, ImageFormat::Jpeg) {
-                return AssetProcessResult::Error {
-                    asset_id,
-                    error: format!("Failed to encode image: {}", e),
-                };
-            }
+            // Encode image in a blocking task (CPU-bound JPEG compression)
+            let encoded = tokio::task::spawn_blocking(move || {
+                let mut buffer = Cursor::new(Vec::new());
+                image
+                    .write_to(&mut buffer, ImageFormat::Jpeg)
+                    .map(|_| buffer.into_inner())
+            })
+            .await;
 
-            if let Err(e) = tokio::fs::write(&output_path, buffer.into_inner()).await {
+            let jpeg_bytes = match encoded {
+                Ok(Ok(bytes)) => bytes,
+                Ok(Err(e)) => {
+                    return AssetProcessResult::Error {
+                        asset_id,
+                        error: format!("Failed to encode image: {}", e),
+                    };
+                }
+                Err(e) => {
+                    return AssetProcessResult::Error {
+                        asset_id,
+                        error: format!("Image encoding task panicked: {}", e),
+                    };
+                }
+            };
+
+            if let Err(e) = tokio::fs::write(&output_path, jpeg_bytes).await {
                 return AssetProcessResult::Error {
                     asset_id,
                     error: format!("Failed to save image: {}", e),

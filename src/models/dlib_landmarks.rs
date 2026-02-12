@@ -24,7 +24,9 @@ pub struct DlibLandmarks {
     predictor: Mutex<LandmarkPredictor>,
 }
 
-// Safety: The Mutex ensures thread-safe access to the inner types
+// Safety: The Mutex ensures exclusive access to the inner dlib types (FaceDetector and
+// LandmarkPredictor), which are not Send/Sync themselves. All access goes through
+// Mutex::lock(), guaranteeing only one thread uses them at a time.
 unsafe impl Send for DlibLandmarks {}
 unsafe impl Sync for DlibLandmarks {}
 
@@ -81,7 +83,19 @@ impl DlibLandmarks {
         pixels: &[u8],
         face_rect: Option<(i64, i64, i64, i64)>,
     ) -> Result<Landmarks> {
+        // Verify buffer is large enough for the given dimensions
+        assert!(
+            pixels.len() >= width * height * 3,
+            "pixel buffer too small: need {} bytes for {}x{} RGB, got {}",
+            width * height * 3,
+            width,
+            height,
+            pixels.len()
+        );
+
         // Create image matrix for dlib
+        // Safety: We verified above that `pixels` has at least width*height*3 bytes,
+        // matching the RGB layout that ImageMatrix::new expects.
         let matrix = unsafe { ImageMatrix::new(width, height, pixels.as_ptr()) };
 
         // Lock detector and predictor
@@ -129,8 +143,7 @@ impl DlibLandmarks {
             .map(|p| Point::new(p.x() as f32, p.y() as f32))
             .collect();
 
-        Landmarks::new(points)
-            .ok_or_else(|| Error::Model("Could not detect 68 facial landmarks".to_string()))
+        Landmarks::new(points).map_err(Error::Model)
     }
 }
 

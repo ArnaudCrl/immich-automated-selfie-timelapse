@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio_util::sync::CancellationToken;
 
 /// Compile images into a timelapse video.
 ///
@@ -13,11 +14,13 @@ use tokio::process::Command;
 /// * `input_dir` - Directory containing JPEG images (sorted alphabetically for order)
 /// * `output_path` - Path for the output video file
 /// * `config` - Video configuration
+/// * `cancel_token` - Optional cancellation token to kill the ffmpeg process
 /// * `progress_callback` - Called with (current_frame, total_frames)
 pub async fn compile_timelapse<F>(
     input_dir: &Path,
     output_path: &Path,
     config: &VideoConfig,
+    cancel_token: Option<&CancellationToken>,
     mut progress_callback: F,
 ) -> Result<()>
 where
@@ -73,6 +76,35 @@ where
     file.write_all(concat_content.as_bytes()).await?;
     file.flush().await?;
 
+    // Use a closure to ensure concat file is cleaned up on all paths
+    let result = run_ffmpeg(
+        &concat_path,
+        output_path,
+        config,
+        cancel_token,
+        image_count,
+        &mut progress_callback,
+    )
+    .await;
+
+    // Always clean up concat file, even on error
+    let _ = tokio::fs::remove_file(&concat_path).await;
+
+    result
+}
+
+/// Run the ffmpeg process and handle progress/cancellation.
+async fn run_ffmpeg<F>(
+    concat_path: &Path,
+    output_path: &Path,
+    config: &VideoConfig,
+    cancel_token: Option<&CancellationToken>,
+    image_count: u32,
+    progress_callback: &mut F,
+) -> Result<()>
+where
+    F: FnMut(u32, u32),
+{
     // Build ffmpeg command using concat demuxer
     let mut cmd = Command::new("ffmpeg");
     cmd.arg("-y") // Overwrite output
@@ -81,7 +113,7 @@ where
         .arg("-safe")
         .arg("0") // Allow absolute paths
         .arg("-i")
-        .arg(&concat_path)
+        .arg(concat_path)
         .arg("-c:v")
         .arg(&config.codec)
         .arg("-crf")
@@ -119,15 +151,33 @@ where
         stderr_output
     });
 
-    // Parse progress from stdout
+    // Parse progress from stdout, with cancellation support
     let mut reader = BufReader::new(stdout).lines();
-    while let Some(line) = reader.next_line().await? {
-        if line.starts_with("frame=") {
-            if let Some(frame_str) = line.strip_prefix("frame=") {
-                if let Ok(frame) = frame_str.trim().parse::<u32>() {
-                    // Clamp to image_count - ffmpeg can report higher values internally
-                    let clamped_frame = frame.min(image_count);
-                    progress_callback(clamped_frame, image_count);
+
+    // Create a dummy token for when no cancel_token is provided
+    let owned_token = CancellationToken::new();
+    let token = cancel_token.unwrap_or(&owned_token);
+
+    loop {
+        tokio::select! {
+            _ = token.cancelled() => {
+                // Kill the ffmpeg process on cancellation
+                let _ = child.kill().await;
+                return Err(Error::Cancelled);
+            }
+            line = reader.next_line() => {
+                match line? {
+                    Some(line) => {
+                        if line.starts_with("frame=") {
+                            if let Some(frame_str) = line.strip_prefix("frame=") {
+                                if let Ok(frame) = frame_str.trim().parse::<u32>() {
+                                    let clamped_frame = frame.min(image_count);
+                                    progress_callback(clamped_frame, image_count);
+                                }
+                            }
+                        }
+                    }
+                    None => break, // EOF
                 }
             }
         }
@@ -135,9 +185,6 @@ where
 
     let status = child.wait().await?;
     let stderr_output = stderr_handle.await.unwrap_or_default();
-
-    // Clean up concat file
-    let _ = tokio::fs::remove_file(&concat_path).await;
 
     if !status.success() {
         // Get last few lines of stderr for the error message

@@ -259,7 +259,7 @@ pub trait ProcessingStep: Send + Sync {
     /// Computed value keys that this step depends on (must be present in `ctx.computed`).
     ///
     /// Return a list of keys from `computed_keys` that must be available for this step.
-    /// The pipeline will verify these dependencies are satisfied before execution.
+    /// These are informational only; the pipeline does not currently enforce them.
     fn dependencies(&self) -> Vec<&'static str> {
         vec![]
     }
@@ -267,7 +267,7 @@ pub trait ProcessingStep: Send + Sync {
     /// Computed value keys that this step provides (sets in `ctx.computed`).
     ///
     /// Return a list of keys from `computed_keys` that this step will set.
-    /// This is used for documentation and dependency verification.
+    /// These are informational only; the pipeline does not currently enforce them.
     fn provides(&self) -> Vec<&'static str> {
         vec![]
     }

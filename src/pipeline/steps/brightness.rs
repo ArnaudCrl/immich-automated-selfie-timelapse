@@ -6,7 +6,8 @@
 
 use crate::config::Config;
 use crate::pipeline::{
-    computed_keys, draw_simple_text, ComputedValue, PipelineContext, ProcessingStep, StepOutcome,
+    computed_keys, draw_simple_text, face_rect_pixels, ComputedValue, PipelineContext,
+    ProcessingStep, StepOutcome,
 };
 use async_trait::async_trait;
 use image::{DynamicImage, Rgb};
@@ -34,8 +35,8 @@ impl BrightnessStep {
         x2: u32,
         y2: u32,
     ) -> f32 {
-        let rgb = image.to_rgb8();
-        let (img_width, img_height) = (rgb.width(), rgb.height());
+        let luma = image.to_luma8();
+        let (img_width, img_height) = luma.dimensions();
 
         // Clamp coordinates to image bounds
         let x1 = x1.min(img_width.saturating_sub(1));
@@ -56,14 +57,12 @@ impl BrightnessStep {
             return 0.0;
         }
 
-        // Calculate average luminance using standard RGB to luminance conversion
-        // Y = 0.299*R + 0.587*G + 0.114*B
+        // Sum luminance values from the pre-computed luma image
+        // (to_luma8 uses the standard Y = 0.299*R + 0.587*G + 0.114*B conversion)
         let mut total_luminance: u64 = 0;
         for y in y1..y2 {
             for x in x1..x2 {
-                let pixel = rgb.get_pixel(x, y);
-                let [r, g, b] = pixel.0;
-                total_luminance += (299 * r as u64 + 587 * g as u64 + 114 * b as u64) / 1000;
+                total_luminance += luma.get_pixel(x, y)[0] as u64;
             }
         }
 
@@ -93,25 +92,8 @@ impl ProcessingStep for BrightnessStep {
             Err(e) => return StepOutcome::Error { ctx, error: e },
         };
 
-        let img_width = image.width();
-        let img_height = image.height();
-
-        // Use FACE_RECT if available (face region within the cropped image),
-        // otherwise analyze the entire cropped image
-        let (x1, y1, x2, y2) = if let Some(face_rect) = ctx
-            .get_computed(computed_keys::FACE_RECT)
-            .and_then(|v| v.as_face_rect())
-        {
-            // Use the face rectangle within the cropped image
-            let x1 = (face_rect.x1.max(0.0) as u32).min(img_width.saturating_sub(1));
-            let y1 = (face_rect.y1.max(0.0) as u32).min(img_height.saturating_sub(1));
-            let x2 = (face_rect.x2.max(0.0) as u32).min(img_width);
-            let y2 = (face_rect.y2.max(0.0) as u32).min(img_height);
-            (x1, y1, x2, y2)
-        } else {
-            // No face rect available, use the entire cropped image
-            (0, 0, img_width, img_height)
-        };
+        let (img_width, img_height) = (image.width(), image.height());
+        let (x1, y1, x2, y2) = face_rect_pixels(&ctx, img_width, img_height);
 
         let brightness = Self::calculate_brightness_in_region(image, x1, y1, x2, y2);
 
@@ -157,20 +139,7 @@ impl ProcessingStep for BrightnessStep {
         // Create a copy for visualization
         let mut debug_img = rgb.clone();
 
-        // Draw the face bounding box (FACE_RECT if available, otherwise full image)
-        let (x1, y1, x2, y2) = if let Some(face_rect) = ctx
-            .get_computed(computed_keys::FACE_RECT)
-            .and_then(|v| v.as_face_rect())
-        {
-            let x1 = (face_rect.x1.max(0.0) as u32).min(width.saturating_sub(1));
-            let y1 = (face_rect.y1.max(0.0) as u32).min(height.saturating_sub(1));
-            let x2 = (face_rect.x2.max(0.0) as u32).min(width);
-            let y2 = (face_rect.y2.max(0.0) as u32).min(height);
-            (x1, y1, x2, y2)
-        } else {
-            // No face rect, show that we analyzed the full cropped image
-            (0, 0, width, height)
-        };
+        let (x1, y1, x2, y2) = face_rect_pixels(ctx, width, height);
 
         // Draw rectangle outline (cyan color for visibility)
         let rect_color = Rgb([0, 255, 255]);

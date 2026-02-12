@@ -60,6 +60,17 @@ impl ProcessingStep for AlignmentStep {
         let left_eye = landmarks.left_eye_center();
         let right_eye = landmarks.right_eye_center();
 
+        // Guard against coincident eyes (would cause division by zero in transform)
+        let eye_distance =
+            ((right_eye.x - left_eye.x).powi(2) + (right_eye.y - left_eye.y).powi(2)).sqrt();
+        if eye_distance < 1e-6 {
+            return StepOutcome::Skip {
+                ctx,
+                reason: "alignment".to_string(),
+                detail: Some("Eye positions are too close together for alignment".to_string()),
+            };
+        }
+
         // Calculate the transformation matrix
         let transform = calculate_eye_alignment_transform(
             left_eye,
@@ -269,15 +280,21 @@ fn apply_affine_transform(
         let r = (p00[0] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[0] as f32 * dx * (1.0 - dy)
             + p01[0] as f32 * (1.0 - dx) * dy
-            + p11[0] as f32 * dx * dy) as u8;
+            + p11[0] as f32 * dx * dy)
+            .round()
+            .clamp(0.0, 255.0) as u8;
         let g = (p00[1] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[1] as f32 * dx * (1.0 - dy)
             + p01[1] as f32 * (1.0 - dx) * dy
-            + p11[1] as f32 * dx * dy) as u8;
+            + p11[1] as f32 * dx * dy)
+            .round()
+            .clamp(0.0, 255.0) as u8;
         let b = (p00[2] as f32 * (1.0 - dx) * (1.0 - dy)
             + p10[2] as f32 * dx * (1.0 - dy)
             + p01[2] as f32 * (1.0 - dx) * dy
-            + p11[2] as f32 * dx * dy) as u8;
+            + p11[2] as f32 * dx * dy)
+            .round()
+            .clamp(0.0, 255.0) as u8;
 
         Rgb([r, g, b])
     });

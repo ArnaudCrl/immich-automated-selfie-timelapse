@@ -28,6 +28,25 @@ impl JobStatus {
             JobStatus::Completed | JobStatus::Cancelled | JobStatus::Error(_)
         )
     }
+
+    /// Get the status as a string identifier for API responses.
+    pub fn as_str(&self) -> &str {
+        match self {
+            JobStatus::Idle => "idle",
+            JobStatus::Running => "running",
+            JobStatus::Cancelling => "cancelling",
+            JobStatus::CompilingVideo => "compiling_video",
+            JobStatus::Completed => "completed",
+            JobStatus::Cancelled => "cancelled",
+            JobStatus::Error(_) => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 /// Detailed statistics for skipped images.

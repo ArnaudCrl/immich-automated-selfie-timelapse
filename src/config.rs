@@ -56,7 +56,7 @@ impl Default for Config {
 }
 
 /// Immich API connection settings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
     /// API key for authentication.
     pub api_key: String,
@@ -67,6 +67,16 @@ pub struct ApiConfig {
     /// Request timeout in seconds.
     #[serde(default = "default_timeout")]
     pub timeout_secs: u64,
+}
+
+impl std::fmt::Debug for ApiConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiConfig")
+            .field("api_key", &"[REDACTED]")
+            .field("base_url", &self.base_url)
+            .field("timeout_secs", &self.timeout_secs)
+            .finish()
+    }
 }
 
 fn default_timeout() -> u64 {
@@ -371,11 +381,6 @@ impl AlignmentConfig {
                 "Alignment eye_distance must be between 0.0 and 1.0 (exclusive)".to_string(),
             ));
         }
-        if self.eye_distance < 0.05 || self.eye_distance > 0.4 {
-            return Err(Error::Config(
-                "Alignment eye_distance should be between 0.05 and 0.4 for best results".to_string(),
-            ));
-        }
         Ok(())
     }
 
@@ -569,6 +574,11 @@ impl Default for ProcessingConfig {
 impl ProcessingConfig {
     /// Validate all step configurations.
     pub fn validate(&self) -> Result<()> {
+        if self.max_workers == 0 {
+            return Err(Error::Config(
+                "max_workers must be greater than 0".to_string(),
+            ));
+        }
         self.face_resolution.validate()?;
         self.blur.validate()?;
         self.brightness.validate()?;
@@ -620,6 +630,9 @@ impl Default for VideoConfig {
     }
 }
 
+/// Valid video codecs that can be used with FFmpeg.
+const VALID_CODECS: &[&str] = &["libx264", "libx265", "libvpx", "libvpx-vp9", "libaom-av1"];
+
 impl VideoConfig {
     /// Validate the configuration values.
     pub fn validate(&self) -> Result<()> {
@@ -637,6 +650,13 @@ impl VideoConfig {
             return Err(Error::Config(
                 "Video CRF must be between 0 and 51".to_string(),
             ));
+        }
+        if !VALID_CODECS.contains(&self.codec.as_str()) {
+            return Err(Error::Config(format!(
+                "Video codec must be one of: {}, got '{}'",
+                VALID_CODECS.join(", "),
+                self.codec
+            )));
         }
         Ok(())
     }
@@ -769,10 +789,15 @@ impl Config {
     /// Only saves `processing` and `video` sections - API credentials are
     /// intentionally excluded as they should come from environment variables.
     pub fn save_to_file(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        let path = path.as_ref();
         let persistable = PersistableConfig::from(self);
         let content = toml::to_string_pretty(&persistable)
             .map_err(|e| Error::Config(format!("Failed to serialize config: {}", e)))?;
-        std::fs::write(path, content)?;
+
+        // Write to a temp file then atomically rename to avoid partial writes
+        let tmp_path = path.with_extension("toml.tmp");
+        std::fs::write(&tmp_path, content)?;
+        std::fs::rename(&tmp_path, path)?;
         Ok(())
     }
 }

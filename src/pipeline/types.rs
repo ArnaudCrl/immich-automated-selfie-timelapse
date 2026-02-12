@@ -25,6 +25,16 @@ pub struct BoundingBox {
 }
 
 impl BoundingBox {
+    /// Create a new bounding box, ensuring x1 <= x2 and y1 <= y2.
+    pub fn new(x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
+        Self {
+            x1: x1.min(x2),
+            y1: y1.min(y2),
+            x2: x1.max(x2),
+            y2: y1.max(y2),
+        }
+    }
+
     pub fn width(&self) -> f32 {
         self.x2 - self.x1
     }
@@ -55,10 +65,16 @@ pub const LANDMARK_COUNT: usize = 68;
 impl Landmarks {
     /// Create a new Landmarks from a vector of points.
     ///
-    /// Returns `None` if the vector doesn't contain exactly 68 points.
-    pub fn new(points: Vec<Point>) -> Option<Self> {
-        let points: [Point; LANDMARK_COUNT] = points.try_into().ok()?;
-        Some(Self { points })
+    /// Returns an error if the vector doesn't contain exactly 68 points.
+    pub fn new(points: Vec<Point>) -> Result<Self, String> {
+        let len = points.len();
+        let points: [Point; LANDMARK_COUNT] = points.try_into().map_err(|_| {
+            format!(
+                "Expected exactly {} landmark points, got {}",
+                LANDMARK_COUNT, len
+            )
+        })?;
+        Ok(Self { points })
     }
 
     /// Get all landmark points.
@@ -191,62 +207,4 @@ impl EyeAspectRatio {
     pub fn eyes_open(&self, threshold: f32) -> bool {
         self.left >= threshold && self.right >= threshold
     }
-}
-
-/// Result of processing a single face.
-#[derive(Debug)]
-pub struct ProcessedFace {
-    /// The aligned and cropped face image data.
-    pub image_data: Vec<u8>,
-    /// Original asset ID.
-    pub asset_id: String,
-    /// Timestamp for sorting/naming.
-    pub timestamp: String,
-}
-
-/// Reason why an image was skipped during processing.
-#[derive(Debug, Clone, PartialEq)]
-pub enum SkipReason {
-    FaceTooSmall,
-    EyesClosed,
-    HeadTurned,
-    TooDark,
-    TooBright,
-    NoFaceDetected,
-    DownloadFailed,
-    DecodeFailed,
-    CropFailed,
-    Cancelled,
-}
-
-impl std::fmt::Display for SkipReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SkipReason::FaceTooSmall => write!(f, "Face too small"),
-            SkipReason::EyesClosed => write!(f, "Eyes closed"),
-            SkipReason::HeadTurned => write!(f, "Head turned"),
-            SkipReason::TooDark => write!(f, "Too dark"),
-            SkipReason::TooBright => write!(f, "Too bright"),
-            SkipReason::NoFaceDetected => write!(f, "No face detected"),
-            SkipReason::DownloadFailed => write!(f, "Download failed"),
-            SkipReason::DecodeFailed => write!(f, "Decode failed"),
-            SkipReason::CropFailed => write!(f, "Crop failed"),
-            SkipReason::Cancelled => write!(f, "Cancelled"),
-        }
-    }
-}
-
-/// Processing result for a single asset.
-#[derive(Debug)]
-pub enum AssetResult {
-    /// Successfully processed.
-    Success(ProcessedFace),
-    /// Skipped (face too small, bad pose, etc.).
-    Skipped {
-        asset_id: String,
-        reason: SkipReason,
-        detail: Option<String>,
-    },
-    /// Error during processing.
-    Error { asset_id: String, error: String },
 }

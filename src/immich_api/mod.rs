@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use urlencoding::encode as urlencode;
 
 /// Client for interacting with the Immich API.
 #[derive(Clone)]
@@ -190,15 +191,23 @@ impl ImmichClient {
                 break;
             }
             page += 1;
+            if page > 1000 {
+                tracing::warn!("Pagination limit reached (1000 pages), stopping asset fetch");
+                break;
+            }
         }
 
         tracing::info!("Found {} assets for person {}", all_assets.len(), person_id);
         Ok(all_assets)
     }
 
+    /// Maximum download size for a single asset (100 MB).
+    const MAX_DOWNLOAD_SIZE: u64 = 100 * 1024 * 1024;
+
     /// Download an asset's original image.
     pub async fn download_asset(&self, asset_id: &str) -> Result<bytes::Bytes> {
-        let url = format!("{}/assets/{}/original", self.base_url, asset_id);
+        let encoded_id = urlencode(asset_id);
+        let url = format!("{}/assets/{}/original", self.base_url, encoded_id);
 
         let response = self
             .client
@@ -213,6 +222,18 @@ impl ImmichClient {
                 asset_id,
                 response.status()
             )));
+        }
+
+        // Check Content-Length before downloading to reject unexpectedly large files
+        if let Some(content_length) = response.content_length() {
+            if content_length > Self::MAX_DOWNLOAD_SIZE {
+                return Err(Error::ImmichApi(format!(
+                    "Asset {} is too large ({} bytes, max {} bytes)",
+                    asset_id,
+                    content_length,
+                    Self::MAX_DOWNLOAD_SIZE
+                )));
+            }
         }
 
         let bytes = response.bytes().await?;
@@ -249,7 +270,8 @@ impl ImmichClient {
     /// Get a person's thumbnail image.
     /// Returns the image bytes and content-type.
     pub async fn get_person_thumbnail(&self, person_id: &str) -> Result<(bytes::Bytes, String)> {
-        let url = format!("{}/people/{}/thumbnail", self.base_url, person_id);
+        let encoded_id = urlencode(person_id);
+        let url = format!("{}/people/{}/thumbnail", self.base_url, encoded_id);
         // tracing::debug!("Fetching thumbnail from: {}", url);
 
         let response = self

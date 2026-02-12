@@ -50,6 +50,19 @@ pub struct BulkDeleteResponse {
     pub remaining_images: u32,
 }
 
+/// Check if a path exists asynchronously.
+async fn path_exists(path: &std::path::Path) -> bool {
+    tokio::fs::metadata(path).await.is_ok()
+}
+
+/// Check if a path is a directory asynchronously.
+async fn path_is_dir(path: &std::path::Path) -> bool {
+    tokio::fs::metadata(path)
+        .await
+        .map(|m| m.is_dir())
+        .unwrap_or(false)
+}
+
 /// List all output folders with their stats.
 pub async fn list_output_folders(
     State(state): State<AppState>,
@@ -59,7 +72,7 @@ pub async fn list_output_folders(
 
     let mut folders = Vec::new();
 
-    if output_dir.exists() {
+    if path_exists(output_dir).await {
         let mut entries = tokio::fs::read_dir(output_dir).await.map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -74,7 +87,7 @@ pub async fn list_output_folders(
             )
         })? {
             let path = entry.path();
-            if path.is_dir() {
+            if path_is_dir(&path).await {
                 let name = entry.file_name().to_string_lossy().to_string();
 
                 // Count images in the images subfolder
@@ -82,7 +95,7 @@ pub async fn list_output_folders(
                 let mut image_count = 0u32;
                 let mut size_bytes = 0u64;
 
-                if images_dir.exists() {
+                if path_exists(&images_dir).await {
                     if let Ok(mut img_entries) = tokio::fs::read_dir(&images_dir).await {
                         while let Ok(Some(img_entry)) = img_entries.next_entry().await {
                             let img_path = img_entry.path();
@@ -98,7 +111,7 @@ pub async fn list_output_folders(
 
                 // Check for video file (named after the folder/person)
                 let video_filename = format!("{}.mp4", name);
-                let has_video = path.join(&video_filename).exists();
+                let has_video = path_exists(&path.join(&video_filename)).await;
 
                 folders.push(OutputFolderInfo {
                     name,
@@ -129,7 +142,7 @@ pub async fn cleanup_all_output(
     let output_dir = &config.output_dir;
 
     // Remove all contents of output directory
-    if output_dir.exists() {
+    if path_exists(output_dir).await {
         let mut entries = tokio::fs::read_dir(output_dir).await.map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -145,7 +158,7 @@ pub async fn cleanup_all_output(
             )
         })? {
             let path = entry.path();
-            if path.is_dir() {
+            if path_is_dir(&path).await {
                 tokio::fs::remove_dir_all(&path).await.map_err(|e| {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -187,14 +200,14 @@ pub async fn cleanup_output_folder(
 
     let folder_path = config.output_dir.join(&folder_name);
 
-    if !folder_path.exists() {
-        return Err((
+    let folder_meta = tokio::fs::metadata(&folder_path).await.map_err(|_| {
+        (
             StatusCode::NOT_FOUND,
             format!("Folder '{}' not found", folder_name),
-        ));
-    }
+        )
+    })?;
 
-    if !folder_path.is_dir() {
+    if !folder_meta.is_dir() {
         return Err((
             StatusCode::BAD_REQUEST,
             format!("'{}' is not a directory", folder_name),
@@ -228,7 +241,7 @@ pub async fn list_folder_images(
 
     let images_dir = config.output_dir.join(&folder_name).join("images");
 
-    if !images_dir.exists() {
+    if !path_exists(&images_dir).await {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Folder '{}' not found or has no images", folder_name),
@@ -275,11 +288,8 @@ pub async fn list_folder_images(
 
     let total_count = images.len() as u32;
     let video_filename = format!("{}.mp4", folder_name);
-    let video_exists = config
-        .output_dir
-        .join(&folder_name)
-        .join(&video_filename)
-        .exists();
+    let video_exists =
+        path_exists(&config.output_dir.join(&folder_name).join(&video_filename)).await;
 
     Ok(Json(FolderImagesResponse {
         folder_name,
@@ -319,7 +329,7 @@ pub async fn delete_single_image(
         .join("images")
         .join(&filename);
 
-    if !file_path.exists() {
+    if !path_exists(&file_path).await {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Image '{}' not found in folder '{}'", filename, folder_name),
@@ -359,7 +369,7 @@ pub async fn delete_images_bulk(
 
     let images_dir = config.output_dir.join(&folder_name).join("images");
 
-    if !images_dir.exists() {
+    if !path_exists(&images_dir).await {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Folder '{}' not found or has no images", folder_name),
@@ -381,13 +391,9 @@ pub async fn delete_images_bulk(
         }
 
         let file_path = images_dir.join(filename);
-        if file_path.exists() {
-            match tokio::fs::remove_file(&file_path).await {
-                Ok(_) => deleted_count += 1,
-                Err(_) => failed_count += 1,
-            }
-        } else {
-            failed_count += 1;
+        match tokio::fs::remove_file(&file_path).await {
+            Ok(_) => deleted_count += 1,
+            Err(_) => failed_count += 1,
         }
     }
 
@@ -420,11 +426,6 @@ pub async fn compile_folder_video(
     State(state): State<AppState>,
     Path(folder_name): Path<String>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
-    state
-        .ensure_no_job_running()
-        .await
-        .map_err(|e| (StatusCode::CONFLICT, e.to_string()))?;
-
     validate_path_component(&folder_name, "folder name")
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -433,7 +434,7 @@ pub async fn compile_folder_video(
     let folder_path = config.output_dir.join(&folder_name);
     let images_dir = folder_path.join("images");
 
-    if !images_dir.exists() {
+    if !path_exists(&images_dir).await {
         return Err((
             StatusCode::NOT_FOUND,
             format!("Folder '{}' not found or has no images", folder_name),
@@ -457,9 +458,14 @@ pub async fn compile_folder_video(
         ));
     }
 
-    // Set status to compiling video (bypasses terminal state check)
-    state
-        .reset_progress(Progress {
+    // Atomically check-and-set: hold write lock across both check and status update
+    // to prevent TOCTOU race conditions between concurrent requests.
+    {
+        let mut progress = state.progress.write().await;
+        if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
+            return Err((StatusCode::CONFLICT, "A job is already running".to_string()));
+        }
+        let new_progress = Progress {
             status: JobStatus::CompilingVideo,
             completed: 0,
             total: image_count,
@@ -467,8 +473,10 @@ pub async fn compile_folder_video(
             skip_stats: SkipStats::default(),
             person_id: None,
             person_name: Some(folder_name.clone()),
-        })
-        .await;
+        };
+        *progress = new_progress.clone();
+        let _ = state.progress_tx.send(new_progress);
+    }
 
     // Create cancellation token
     let cancel_token = state.create_cancel_token().await;
@@ -486,6 +494,7 @@ pub async fn compile_folder_video(
             &images_dir,
             &output_path,
             &video_config,
+            Some(&cancel_token),
             |current, total| {
                 // Check for cancellation
                 if cancel_token.is_cancelled() {

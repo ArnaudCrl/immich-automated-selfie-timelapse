@@ -57,12 +57,12 @@ impl TimeIntervalTracker {
         // Get or create the atomic counter for this bucket
         let counter = {
             // Try read lock first
-            let buckets = self.buckets.read().unwrap();
+            let buckets = self.buckets.read().expect("bucket lock poisoned");
             if let Some(counter) = buckets.get(&key) {
                 counter.clone()
             } else {
                 drop(buckets);
-                let mut buckets = self.buckets.write().unwrap();
+                let mut buckets = self.buckets.write().expect("bucket lock poisoned");
                 buckets
                     .entry(key)
                     .or_insert_with(|| Arc::new(AtomicU32::new(0)))
@@ -84,7 +84,7 @@ impl TimeIntervalTracker {
     /// This is a non-mutating check used to skip processing early.
     pub fn is_full(&self, timestamp: &str) -> bool {
         let key = self.bucket_key(timestamp);
-        let buckets = self.buckets.read().unwrap();
+        let buckets = self.buckets.read().expect("bucket lock poisoned");
         if let Some(counter) = buckets.get(&key) {
             counter.load(Ordering::SeqCst) >= self.max_photos
         } else {
@@ -95,7 +95,7 @@ impl TimeIntervalTracker {
     /// Compute the bucket key from a timestamp string.
     fn bucket_key(&self, timestamp: &str) -> String {
         // Parse date from ISO 8601 timestamp (e.g. "2024-01-15" or "2024-01-15T12:34:56Z")
-        let date_str = &timestamp[..timestamp.len().min(10)];
+        let date_str = timestamp.get(..10).unwrap_or(timestamp);
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").unwrap_or_default();
 
         match self.time_range {
@@ -289,7 +289,8 @@ async fn run_job_inner(
     tracing::debug!("Pipeline steps: {:?}", pipeline.step_ids());
 
     // Create photo limit tracker if enabled
-    let time_interval_tracker = TimeIntervalTracker::new(&config.processing.time_interval).map(Arc::new);
+    let time_interval_tracker =
+        TimeIntervalTracker::new(&config.processing.time_interval).map(Arc::new);
 
     // Process images in parallel with concurrency limit
     let completed = Arc::new(AtomicU32::new(0));
@@ -460,6 +461,7 @@ async fn run_job_inner(
             &output_dirs.images,
             &output_dirs.video,
             &config.video,
+            Some(&cancel_token),
             |frame, total| {
                 // Sync callback - just log progress. State updates would require
                 // async context or channels, which adds complexity for minimal benefit

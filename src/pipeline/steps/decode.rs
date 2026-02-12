@@ -38,6 +38,7 @@ impl ProcessingStep for DecodeImageStep {
         match load_image_with_orientation(raw_bytes) {
             Ok(image) => {
                 ctx.image = Some(image);
+                ctx.raw_bytes = None; // Free raw bytes after successful decode
                 StepOutcome::Continue(ctx)
             }
             Err(e) => StepOutcome::Skip {

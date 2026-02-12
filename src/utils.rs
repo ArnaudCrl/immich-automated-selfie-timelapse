@@ -34,13 +34,9 @@ pub fn sanitize_folder_name(name: Option<&str>, id: &str) -> String {
         })
         .collect();
 
-    // Trim whitespace/underscores and limit length
+    // Trim whitespace/underscores and limit length (char-based to avoid UTF-8 boundary panics)
     let trimmed = sanitized.trim_matches(|c: char| c.is_whitespace() || c == '_');
-    if trimmed.len() > 50 {
-        trimmed[..50].to_string()
-    } else {
-        trimmed.to_string()
-    }
+    trimmed.chars().take(50).collect()
 }
 
 #[cfg(test)]
@@ -75,7 +71,15 @@ mod tests {
     fn test_sanitize_folder_name_limits_length() {
         let long_name = "A".repeat(100);
         let result = sanitize_folder_name(Some(&long_name), "id");
-        assert_eq!(result.len(), 50);
+        assert_eq!(result.chars().count(), 50);
+    }
+
+    #[test]
+    fn test_sanitize_folder_name_limits_length_multibyte() {
+        // CJK characters are multi-byte in UTF-8 but pass is_alphanumeric()
+        let long_name = "\u{4e2d}".repeat(100); // 100 CJK characters
+        let result = sanitize_folder_name(Some(&long_name), "id");
+        assert_eq!(result.chars().count(), 50);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! WebSocket handler for real-time progress updates.
 
 use crate::web::handlers::ProgressResponse;
-use crate::web::state::{AppState, JobStatus};
+use crate::web::state::AppState;
 use axum::{
     extract::{
         ws::{Message, WebSocket},
@@ -47,15 +47,24 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     // Send progress updates to the client
     let mut send_task = tokio::spawn(async move {
-        while let Ok(progress) = progress_rx.recv().await {
-            let response = progress_to_response(&progress);
-            match serde_json::to_string(&response) {
-                Ok(json) => {
-                    if sender.send(Message::Text(json.into())).await.is_err() {
-                        break;
+        loop {
+            match progress_rx.recv().await {
+                Ok(progress) => {
+                    let response = progress_to_response(&progress);
+                    match serde_json::to_string(&response) {
+                        Ok(json) => {
+                            if sender.send(Message::Text(json.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
                     }
                 }
-                Err(_) => break,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::debug!("WebSocket client lagged, skipped {} messages", n);
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
         }
     });
@@ -75,18 +84,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 fn progress_to_response(progress: &crate::web::state::Progress) -> ProgressResponse {
     use crate::web::handlers::SkipStatsResponse;
 
-    let status_str = match &progress.status {
-        JobStatus::Idle => "idle",
-        JobStatus::Running => "running",
-        JobStatus::Cancelling => "cancelling",
-        JobStatus::CompilingVideo => "compiling_video",
-        JobStatus::Completed => "completed",
-        JobStatus::Cancelled => "cancelled",
-        JobStatus::Error(_) => "error",
-    };
-
     ProgressResponse {
-        status: status_str.to_string(),
+        status: progress.status.as_str().to_string(),
         completed: progress.completed,
         total: progress.total,
         message: progress.message.clone(),

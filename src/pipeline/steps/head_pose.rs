@@ -235,13 +235,19 @@ impl ProcessingStep for HeadPoseStep {
             image.clone()
         };
 
-        // Run inference on the face crop
-        let pose = match model.estimate(&face_image) {
-            Ok(p) => p,
-            Err(e) => {
+        // Run inference on the face crop (blocking CPU work offloaded from async runtime)
+        let pose = match tokio::task::spawn_blocking(move || model.estimate(&face_image)).await {
+            Ok(Ok(p)) => p,
+            Ok(Err(e)) => {
                 return StepOutcome::Error {
                     ctx,
                     error: format!("Head pose estimation failed: {}", e),
+                };
+            }
+            Err(e) => {
+                return StepOutcome::Error {
+                    ctx,
+                    error: format!("Head pose inference task panicked: {}", e),
                 };
             }
         };

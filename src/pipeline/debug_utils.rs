@@ -2,7 +2,33 @@
 //!
 //! Shared functions for generating debug visualizations in pipeline steps.
 
+use super::traits::{computed_keys, PipelineContext};
 use image::{Rgb, RgbImage};
+
+/// Extract the face region pixel coordinates from the pipeline context.
+///
+/// Uses the FACE_RECT computed value if available (face region within the cropped image),
+/// otherwise falls back to the full image dimensions.
+///
+/// Returns `(x1, y1, x2, y2)` clamped to valid image bounds.
+pub fn face_rect_pixels(
+    ctx: &PipelineContext,
+    img_width: u32,
+    img_height: u32,
+) -> (u32, u32, u32, u32) {
+    if let Some(face_rect) = ctx
+        .get_computed(computed_keys::FACE_RECT)
+        .and_then(|v| v.as_face_rect())
+    {
+        let x1 = (face_rect.x1.max(0.0) as u32).min(img_width.saturating_sub(1));
+        let y1 = (face_rect.y1.max(0.0) as u32).min(img_height.saturating_sub(1));
+        let x2 = (face_rect.x2.max(0.0) as u32).min(img_width);
+        let y2 = (face_rect.y2.max(0.0) as u32).min(img_height);
+        (x1, y1, x2, y2)
+    } else {
+        (0, 0, img_width, img_height)
+    }
+}
 
 /// Draw simple text using a basic 5x7 pixel font.
 ///

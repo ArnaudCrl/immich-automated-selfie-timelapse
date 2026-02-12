@@ -7,6 +7,7 @@ use crate::immich_api::FaceData;
 use crate::pipeline::BoundingBox;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbImage};
+use std::borrow::Cow;
 
 /// Result of cropping a face from an image.
 pub struct CropResult {
@@ -101,7 +102,11 @@ fn crop_with_replicate_fill(
     y_offset: i32,
     size: u32,
 ) -> DynamicImage {
-    let rgb = img.to_rgb8();
+    // Avoid allocation if the image is already RGB8
+    let rgb: Cow<'_, RgbImage> = match img.as_rgb8() {
+        Some(r) => Cow::Borrowed(r),
+        None => Cow::Owned(img.to_rgb8()),
+    };
     let (w, h) = (rgb.width() as i32, rgb.height() as i32);
 
     let out = RgbImage::from_fn(size, size, |px, py| {

@@ -65,7 +65,7 @@ impl ProcessingStep for EyeFilterStep {
         StepOutcome::Continue(ctx)
     }
 
-    fn debug_visualize(&self, ctx: &PipelineContext, _config: &Config) -> Option<DynamicImage> {
+    fn debug_visualize(&self, ctx: &PipelineContext, config: &Config) -> Option<DynamicImage> {
         // Get landmarks for eye visualization
         let landmarks: &Landmarks = ctx
             .get_computed(computed_keys::LANDMARKS)
@@ -114,12 +114,13 @@ impl ProcessingStep for EyeFilterStep {
         // Draw landmarks on the zoomed image (coordinates transformed to zoomed space)
         let points = landmarks.points();
 
-        let left_color = if ear.left >= 0.2 {
+        let min_ear = config.processing.eye_filter.min_ear;
+        let left_color = if ear.left >= min_ear {
             Rgb([0, 255, 0])
         } else {
             Rgb([255, 0, 0])
         };
-        let right_color = if ear.right >= 0.2 {
+        let right_color = if ear.right >= min_ear {
             Rgb([0, 255, 0])
         } else {
             Rgb([255, 0, 0])

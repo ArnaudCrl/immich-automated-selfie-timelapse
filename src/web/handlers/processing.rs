@@ -45,18 +45,8 @@ pub struct ProgressResponse {
 pub async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
     let progress = state.progress.read().await;
 
-    let status_str = match &progress.status {
-        JobStatus::Idle => "idle",
-        JobStatus::Running => "running",
-        JobStatus::Cancelling => "cancelling",
-        JobStatus::CompilingVideo => "compiling_video",
-        JobStatus::Completed => "completed",
-        JobStatus::Cancelled => "cancelled",
-        JobStatus::Error(_) => "error",
-    };
-
     Json(ProgressResponse {
-        status: status_str.to_string(),
+        status: progress.status.as_str().to_string(),
         completed: progress.completed,
         total: progress.total,
         message: progress.message.clone(),
@@ -75,22 +65,48 @@ pub struct StartRequest {
     pub date_to: Option<String>,
 }
 
+/// Validate that a person_id looks reasonable (non-empty, reasonable length, safe characters).
+fn validate_person_id(person_id: &str) -> Result<(), (StatusCode, String)> {
+    if person_id.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "person_id must not be empty".to_string(),
+        ));
+    }
+    if person_id.len() > 128 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "person_id is too long (max 128 characters)".to_string(),
+        ));
+    }
+    if !person_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "person_id contains invalid characters (only alphanumeric, hyphens, underscores allowed)"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Start processing for a person.
 pub async fn start_processing(
     State(state): State<AppState>,
     Json(request): Json<StartRequest>,
 ) -> Result<Json<StartResponse>, (StatusCode, String)> {
-    // Check if already running
+    validate_person_id(&request.person_id)?;
+
+    // Atomically check-and-set: hold write lock across both check and status update
+    // to prevent TOCTOU race conditions between concurrent requests.
     {
-        let progress = state.progress.read().await;
+        let mut progress = state.progress.write().await;
         if progress.status == JobStatus::Running || progress.status == JobStatus::CompilingVideo {
             return Err((StatusCode::CONFLICT, "A job is already running".to_string()));
         }
-    }
-
-    // Reset progress with person info (bypasses terminal state check)
-    state
-        .reset_progress(Progress {
+        let new_progress = Progress {
             status: JobStatus::Running,
             completed: 0,
             total: 0,
@@ -98,8 +114,10 @@ pub async fn start_processing(
             skip_stats: SkipStats::default(),
             person_id: Some(request.person_id.clone()),
             person_name: request.person_name.clone(),
-        })
-        .await;
+        };
+        *progress = new_progress.clone();
+        let _ = state.progress_tx.send(new_progress);
+    }
 
     // Create cancellation token
     let cancel_token = state.create_cancel_token().await;

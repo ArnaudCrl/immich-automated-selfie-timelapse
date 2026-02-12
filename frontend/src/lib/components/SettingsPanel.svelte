@@ -58,7 +58,6 @@
             enabled: config.processing.head_pose.enabled,
             max_yaw: Number(config.processing.head_pose.max_yaw),
             max_pitch: Number(config.processing.head_pose.max_pitch),
-            max_roll: Number(config.processing.head_pose.max_roll),
           },
           eye_filter: {
             enabled: config.processing.eye_filter.enabled,
@@ -301,23 +300,6 @@
                     </div>
                   </div>
 
-                  <div class="setting-row sub-setting">
-                    <label for="max-roll">
-                      <span class="setting-label">Max Roll</span>
-                      <span class="setting-hint">Maximum head tilt angle</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="max-roll"
-                        type="range"
-                        bind:value={config.processing.head_pose.max_roll}
-                        min="5"
-                        max="90"
-                        step="5"
-                      />
-                      <span class="value">{config.processing.head_pose.max_roll.toFixed(0)}°</span>
-                    </div>
-                  </div>
                 {/if}
               </div>
 

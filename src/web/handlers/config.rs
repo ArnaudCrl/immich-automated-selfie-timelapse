@@ -146,12 +146,6 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
                     format!("must be between 0 and 90, got {}", hp.max_pitch),
                 ));
             }
-            if hp.max_roll < 0.0 || hp.max_roll > 90.0 {
-                return Err(ValidationError::new(
-                    "processing.head_pose.max_roll",
-                    format!("must be between 0 and 90, got {}", hp.max_roll),
-                ));
-            }
         }
     }
 

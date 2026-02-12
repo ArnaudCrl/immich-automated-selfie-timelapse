@@ -484,7 +484,7 @@ fn find_face_for_person(asset: &Asset, person_id: &str) -> Option<FaceData> {
     for person in people {
         if person.id == person_id {
             if let Some(faces) = &person.faces {
-                // Return the first face (usually there's only one per person per image)
+                // Return the first face (Immich shouldn't detect the same person more than once per image)
                 return faces.first().cloned();
             }
         }

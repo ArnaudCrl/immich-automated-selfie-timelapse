@@ -70,7 +70,8 @@ fn load_config() -> anyhow::Result<Config> {
         Config::from_env()
     };
 
-    // Validation is optional at startup - API key might be set via web UI later
+    // Warn but don't abort if config is incomplete - the server can still start
+    // but jobs will fail until IMMICH_API_KEY and IMMICH_BASE_URL are set
     if let Err(e) = config.validate() {
         tracing::warn!(
             "Configuration incomplete: {} - some features may not work",

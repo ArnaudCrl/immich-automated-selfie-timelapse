@@ -4,20 +4,6 @@
 //! 1. TOML file (config.toml)
 //! 2. Environment variables (prefixed with IMMICH_)
 //! 3. Programmatic overrides
-//!
-//! ## Step Configuration Pattern
-//!
-//! Each pipeline step has its own optional sub-config with an `enabled` flag:
-//! ```ignore
-//! processing:
-//!   face_resolution:
-//!     enabled: true
-//!     min_size: 80
-//!   brightness:
-//!     enabled: false
-//!     min_brightness: 0.1
-//!     max_brightness: 0.95
-//! ```
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -129,40 +115,6 @@ impl FaceResolutionConfig {
     }
 }
 
-/// Blur detection configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BlurConfig {
-    /// Whether blur detection is enabled.
-    pub enabled: bool,
-
-    /// Minimum gradient magnitude threshold.
-    /// Images with gradient magnitude below this are considered blurry.
-    /// Uses Sobel operator for robust edge detection.
-    /// Typical values: 10-20 for strict filtering, 5-10 for moderate filtering.
-    pub min_sharpness: f32,
-}
-
-impl Default for BlurConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            min_sharpness: 15.0,
-        }
-    }
-}
-
-impl BlurConfig {
-    /// Validate the configuration values.
-    pub fn validate(&self) -> Result<()> {
-        if self.enabled && self.min_sharpness < 0.0 {
-            return Err(Error::Config(
-                "Blur min_sharpness must be non-negative".to_string(),
-            ));
-        }
-        Ok(())
-    }
-}
-
 /// Brightness validation configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrightnessConfig {
@@ -207,6 +159,39 @@ impl BrightnessConfig {
         if self.min_brightness >= self.max_brightness {
             return Err(Error::Config(
                 "Brightness min_brightness must be less than max_brightness".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Blur detection configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlurConfig {
+    /// Whether blur detection is enabled.
+    pub enabled: bool,
+
+    /// Minimum gradient magnitude threshold.
+    /// Images with gradient magnitude below this are considered blurry.
+    /// Uses Sobel operator for robust edge detection.
+    pub min_sharpness: f32,
+}
+
+impl Default for BlurConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            min_sharpness: 25.0,
+        }
+    }
+}
+
+impl BlurConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled && self.min_sharpness < 0.0 {
+            return Err(Error::Config(
+                "Blur min_sharpness must be non-negative".to_string(),
             ));
         }
         Ok(())
@@ -263,9 +248,6 @@ pub struct HeadPoseConfig {
 
     /// Maximum allowed pitch angle (up/down tilt) in degrees.
     pub max_pitch: f32,
-
-    /// Maximum allowed roll angle (head tilt) in degrees.
-    pub max_roll: f32,
 }
 
 impl Default for HeadPoseConfig {
@@ -274,7 +256,6 @@ impl Default for HeadPoseConfig {
             enabled: true,
             max_yaw: 35.0,
             max_pitch: 35.0,
-            max_roll: 25.0,
         }
     }
 }
@@ -291,11 +272,6 @@ impl HeadPoseConfig {
             if self.max_pitch < 0.0 || self.max_pitch > 90.0 {
                 return Err(Error::Config(
                     "Head pose max_pitch must be between 0 and 90 degrees".to_string(),
-                ));
-            }
-            if self.max_roll < 0.0 || self.max_roll > 90.0 {
-                return Err(Error::Config(
-                    "Head pose max_roll must be between 0 and 90 degrees".to_string(),
                 ));
             }
         }
@@ -343,16 +319,16 @@ impl EyeFilterConfig {
 /// Aligns faces based on eye positions detected from facial landmarks,
 /// ensuring consistent eye placement across all images for smoother timelapses.
 ///
-/// Uses a single `eye_distance` parameter to control framing. Eye positions
-/// are derived by estimating the visual face center (approximately at the nose
-/// tip) from standard face proportions, then placing that point at the image
-/// center with a small downward offset to show more neck.
+/// Uses a single `eye_distance` parameter to control framing. Eye positions are derived by
+/// estimating the visual face center (see `FACE_CENTER_OFFSET_IN_IPD`) from standard face
+/// proportions, then placing that point at the image center with a small downward offset to
+/// show more neck.
 ///
 /// Note: Face alignment is always enabled and is a core part of the pipeline.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlignmentConfig {
     /// Distance between left and right eye centers as a fraction of output
-    /// image width (0.0-1.0). Default 0.3 means the eyes span 30% of the
+    /// image width (0.0-1.0). Default 0.15 means the eyes span 15% of the
     /// output width. Larger values zoom in (bigger face), smaller values
     /// zoom out (more background).
     pub eye_distance: f32,
@@ -360,18 +336,20 @@ pub struct AlignmentConfig {
 
 impl Default for AlignmentConfig {
     fn default() -> Self {
-        Self { eye_distance: 0.3 }
+        Self { eye_distance: 0.15 }
     }
 }
 
 impl AlignmentConfig {
-    /// Offset from the eye line to the approximate visual face center
-    /// (with a slight neck bias), expressed as a multiple of the inter-eye
-    /// distance. The visible face center (hairline-to-chin midpoint) is
-    /// about 0.4× IPD below the eyes; adding a small neck offset brings
-    /// this to 0.5× IPD. This matches the standard used by dlib and OpenCV
-    /// face alignment (desiredLeftEye = (0.35, 0.35) with IPD = 0.3).
-    /// This point is placed at the image center (0.5, 0.5).
+    /// How far below the eye line the face center sits, in units of
+    /// inter-pupillary distance (IPD). Value of 0.5 means the face center
+    /// is 0.5 × IPD below the eyes.
+    ///
+    /// From face proportions: the vertical midpoint between hairline and chin
+    /// is ~0.4× IPD below the eyes; adding a small neck bias brings it to
+    /// 0.5× IPD. The alignment formula places this point at image center (y=0.5):
+    ///
+    ///   eye_y = 0.5 - eye_distance * FACE_CENTER_OFFSET_IN_IPD
     const FACE_CENTER_BELOW_EYES: f32 = 0.5;
 
     /// Validate the configuration values.
@@ -702,68 +680,18 @@ impl Config {
     /// Recognized variables:
     /// - IMMICH_API_KEY - API key for Immich
     /// - IMMICH_BASE_URL - Base URL of Immich instance
-    /// - OUTPUT_DIR - Output directory for processed images/video
-    /// - RESIZE_SIZE - Output image size in pixels
-    /// - FACE_RESOLUTION_THRESHOLD - Minimum face size in pixels
-    /// - MAX_WORKERS - Number of parallel processing workers
-    /// - VIDEO_FRAMERATE - Output video framerate
-    /// - VIDEO_ENABLED - Whether to compile video (true/false)
-    /// - KEEP_INTERMEDIATES - Keep debug images (true/false)
     pub fn from_env() -> Self {
         Config::default().with_env()
     }
 
     /// Merge environment variables into an existing config.
     pub fn with_env(mut self) -> Self {
-        // API settings
         if let Ok(key) = std::env::var("IMMICH_API_KEY") {
             self.api.api_key = key;
         }
         if let Ok(url) = std::env::var("IMMICH_BASE_URL") {
             self.api.base_url = url;
         }
-
-        // Output directory
-        if let Ok(dir) = std::env::var("OUTPUT_DIR") {
-            self.output_dir = PathBuf::from(dir);
-        }
-
-        // Processing settings
-        if let Ok(val) = std::env::var("RESIZE_SIZE") {
-            if let Ok(size) = val.parse() {
-                self.processing.output.size = size;
-            }
-        }
-        if let Ok(val) = std::env::var("FACE_RESOLUTION_THRESHOLD") {
-            if let Ok(threshold) = val.parse() {
-                self.processing.face_resolution.min_size = threshold;
-            }
-        }
-        if let Ok(val) = std::env::var("MAX_WORKERS") {
-            if let Ok(workers) = val.parse() {
-                self.processing.max_workers = workers;
-            }
-        }
-        if let Ok(val) = std::env::var("KEEP_INTERMEDIATES") {
-            self.processing.output.keep_intermediates =
-                val.eq_ignore_ascii_case("true") || val == "1";
-        }
-
-        // Video settings
-        if let Ok(val) = std::env::var("VIDEO_FRAMERATE") {
-            if let Ok(fps) = val.parse() {
-                self.video.framerate = fps;
-            }
-        }
-        if let Ok(val) = std::env::var("VIDEO_ENABLED") {
-            self.video.enabled = val.eq_ignore_ascii_case("true") || val == "1";
-        }
-        if let Ok(val) = std::env::var("VIDEO_CRF") {
-            if let Ok(crf) = val.parse() {
-                self.video.crf = crf;
-            }
-        }
-
         self
     }
 

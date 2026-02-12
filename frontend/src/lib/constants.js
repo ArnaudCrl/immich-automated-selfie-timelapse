@@ -67,7 +67,6 @@ export const DEFAULT_CONFIG = {
       enabled: true,
       max_yaw: 35.0,
       max_pitch: 35.0,
-      max_roll: 25.0,
     },
     eye_filter: {
       enabled: false,

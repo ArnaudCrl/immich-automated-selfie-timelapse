@@ -50,6 +50,7 @@ export const JOB_STATUS = {
 export const DEFAULT_CONFIG = {
   processing: {
     max_workers: 4,
+    use_preview: true,
     face_resolution: {
       enabled: true,
       min_size: 80,

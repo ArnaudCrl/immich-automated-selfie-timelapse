@@ -108,8 +108,13 @@ pub async fn process_single_asset(
         };
     }
 
-    // Download image
-    let image_bytes: Bytes = match client.download_asset(asset_id).await {
+    // Download image (preview or original based on config)
+    let download_result = if config.processing.use_preview {
+        client.download_asset_preview(asset_id).await
+    } else {
+        client.download_asset(asset_id).await
+    };
+    let image_bytes: Bytes = match download_result {
         Ok(bytes) => bytes,
         Err(e) => {
             skip_stats.increment("download_failed");

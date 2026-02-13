@@ -495,6 +495,12 @@ pub struct ProcessingConfig {
     /// Number of parallel workers for processing.
     pub max_workers: usize,
 
+    /// Whether to download Immich preview images (1440p JPEG) instead of originals.
+    /// Preview images are much faster to decode and sufficient for most use cases.
+    /// Disable only if you need full original resolution (e.g., very small faces in high-res photos).
+    #[serde(default = "default_true")]
+    pub use_preview: bool,
+
     /// Face resolution validation settings.
     #[serde(default)]
     pub face_resolution: FaceResolutionConfig,
@@ -536,6 +542,7 @@ impl Default for ProcessingConfig {
     fn default() -> Self {
         Self {
             max_workers: num_cpus(),
+            use_preview: true,
             face_resolution: FaceResolutionConfig::default(),
             blur: BlurConfig::default(),
             brightness: BrightnessConfig::default(),
@@ -568,6 +575,10 @@ impl ProcessingConfig {
         self.time_interval.validate()?;
         Ok(())
     }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn num_cpus() -> usize {

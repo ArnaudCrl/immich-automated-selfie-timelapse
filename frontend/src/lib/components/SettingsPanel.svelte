@@ -41,6 +41,7 @@
       const configToSend = {
         processing: {
           max_workers: Number(config.processing.max_workers),
+          use_preview: config.processing.use_preview,
           face_resolution: {
             enabled: config.processing.face_resolution.enabled,
             min_size: Number(config.processing.face_resolution.min_size),
@@ -383,6 +384,14 @@
                     />
                     <span class="value">{config.processing.max_workers}</span>
                   </div>
+                </div>
+
+                <div class="setting-row checkbox-row">
+                  <label for="use-preview">
+                    <span class="setting-label">Use Preview Images</span>
+                    <span class="setting-hint">Download Immich 1440p previews instead of originals (much faster)</span>
+                  </label>
+                  <input id="use-preview" type="checkbox" bind:checked={config.processing.use_preview} />
                 </div>
               </div>
 

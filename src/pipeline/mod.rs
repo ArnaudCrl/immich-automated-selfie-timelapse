@@ -386,6 +386,7 @@ mod tests {
         config.processing.brightness.enabled = false;
         config.processing.head_pose.enabled = false;
         config.processing.eye_filter.enabled = false;
+        config.processing.timestamp.enabled = false;
 
         let pipeline = Pipeline::with_steps_from_config(&config);
         let ids = pipeline.step_ids();

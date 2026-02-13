@@ -133,9 +133,9 @@ pub struct BrightnessConfig {
 impl Default for BrightnessConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             min_brightness: 0.1,
-            max_brightness: 0.95,
+            max_brightness: 0.9,
         }
     }
 }
@@ -180,8 +180,8 @@ pub struct BlurConfig {
 impl Default for BlurConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            min_sharpness: 25.0,
+            enabled: true,
+            min_sharpness: 20.0,
         }
     }
 }
@@ -212,7 +212,7 @@ impl Default for OutputConfig {
     fn default() -> Self {
         Self {
             size: 512,
-            keep_intermediates: false,
+            keep_intermediates: true,
         }
     }
 }
@@ -254,8 +254,8 @@ impl Default for HeadPoseConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_yaw: 35.0,
-            max_pitch: 35.0,
+            max_yaw: 20.0,
+            max_pitch: 20.0,
         }
     }
 }
@@ -296,8 +296,8 @@ pub struct EyeFilterConfig {
 impl Default for EyeFilterConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            min_ear: 0.2,
+            enabled: true,
+            min_ear: 0.22,
         }
     }
 }
@@ -411,11 +411,11 @@ pub struct TimestampConfig {
 impl Default for TimestampConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             position: TextPosition::BottomLeft,
             year: true,
-            month: false,
-            day: false,
+            month: true,
+            day: true,
         }
     }
 }
@@ -457,8 +457,8 @@ pub struct TimeIntervalConfig {
 impl Default for TimeIntervalConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            max_photos: 1,
+            enabled: true,
+            max_photos: 5,
             time_range: TimeRange::Day,
         }
     }
@@ -612,7 +612,7 @@ impl Default for VideoConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            framerate: 15,
+            framerate: 20,
             codec: "libx264".to_string(),
             crf: 23,
         }
@@ -754,7 +754,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.processing.output.size, 512);
         assert_eq!(config.processing.face_resolution.min_size, 80);
-        assert_eq!(config.video.framerate, 15);
+        assert_eq!(config.video.framerate, 20);
     }
 
     #[test]

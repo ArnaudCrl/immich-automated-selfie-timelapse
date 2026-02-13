@@ -30,7 +30,7 @@ kamadak-exif = "0.5"
 
 # ML models
 ort = "2.0.0-rc.11"
-dlib-face-recognition = { version = "0.3", features = ["embed-all"] }
+dlib-face-recognition = { version = "0.3" }
 ndarray = "0.16"
 
 # Error handling

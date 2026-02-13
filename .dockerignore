@@ -1,0 +1,13 @@
+target/
+.git/
+output/
+node_modules/
+frontend/dist/
+.env
+config.toml
+models/
+*.md
+.idea/
+.vscode/
+*.dot
+.DS_Store

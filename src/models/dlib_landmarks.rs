@@ -31,12 +31,19 @@ unsafe impl Send for DlibLandmarks {}
 unsafe impl Sync for DlibLandmarks {}
 
 impl DlibLandmarks {
-    /// Load the landmark predictor model.
-    ///
-    /// This will download/check the model file (shape_predictor_68_face_landmarks.dat).
+    /// Load the landmark predictor model from the given path.
     fn load() -> Result<Self> {
+        let model_path = std::path::Path::new("models/shape_predictor_68_face_landmarks.dat");
+        if !model_path.exists() {
+            return Err(Error::Model(format!(
+                "Landmark model not found at {}. \
+                 Download from: http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2",
+                model_path.display()
+            )));
+        }
+
         let detector = FaceDetector::default();
-        let predictor = LandmarkPredictor::default()
+        let predictor = LandmarkPredictor::open(model_path)
             .map_err(|e| Error::Model(format!("Failed to load landmark predictor: {}", e)))?;
 
         Ok(Self {

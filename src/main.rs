@@ -2,7 +2,7 @@
 //!
 //! Web server for creating selfie timelapses from Immich.
 
-use immich_timelapse::{config::Config, models::DlibLandmarks, web};
+use immich_timelapse::{config::{Config, CONFIG_PATH}, models::DlibLandmarks, web};
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -61,13 +61,34 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn load_config() -> anyhow::Result<Config> {
-    // Try loading from config.toml first
-    let config = if std::path::Path::new("config.toml").exists() {
-        tracing::info!("Loading configuration from config.toml");
-        Config::from_file("config.toml")?.with_env()
+    let config_path = std::path::Path::new(CONFIG_PATH);
+
+    // Try loading from config/config.toml, or create a default one
+    let config = if config_path.exists() {
+        tracing::info!("Loading configuration from {}", CONFIG_PATH);
+        Config::from_file(config_path)?.with_env()
     } else {
-        tracing::info!("No config.toml found, using environment variables");
-        Config::from_env()
+        tracing::info!("No {} found, creating default config file", CONFIG_PATH);
+        let default_config = Config::from_env();
+        // Write default config so it can be customized via volume mount
+        match default_config.save_to_file(config_path) {
+            Ok(()) => tracing::info!("Default config written to {}", CONFIG_PATH),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("permission denied") || msg.contains("Permission denied") {
+                    tracing::warn!(
+                        "Could not write default config to {}: permission denied. \
+                        If running in Docker, ensure the config directory is writable \
+                        (e.g. mount a volume with the correct permissions: \
+                        -v /host/config:/app/config). Continuing with in-memory defaults.",
+                        CONFIG_PATH
+                    );
+                } else {
+                    tracing::warn!("Could not write default config to {}: {}", CONFIG_PATH, e);
+                }
+            }
+        }
+        default_config
     };
 
     // Warn but don't abort if config is incomplete - the server can still start

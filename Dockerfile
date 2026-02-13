@@ -60,7 +60,7 @@ COPY --from=frontend-build /app/frontend/dist/ ./frontend/dist/
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash timelapse && \
-    mkdir -p output && \
+    mkdir -p output config && \
     chown -R timelapse:timelapse /app
 
 USER timelapse

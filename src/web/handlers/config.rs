@@ -3,7 +3,7 @@
 use crate::config::{
     AlignmentConfig, BlurConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig,
     HeadPoseConfig, OutputConfig, ProcessingConfig, TimeIntervalConfig, TimestampConfig,
-    VideoConfig,
+    VideoConfig, CONFIG_PATH,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -314,10 +314,10 @@ pub async fn update_config(
 
     // Persist to file outside the lock using spawn_blocking for the fs write
     let save_result =
-        tokio::task::spawn_blocking(move || config_snapshot.save_to_file("config.toml")).await;
+        tokio::task::spawn_blocking(move || config_snapshot.save_to_file(CONFIG_PATH)).await;
 
     match save_result {
-        Ok(Ok(())) => tracing::info!("Configuration updated and persisted to config.toml"),
+        Ok(Ok(())) => tracing::info!("Configuration updated and persisted to {}", CONFIG_PATH),
         Ok(Err(e)) => tracing::warn!("Failed to persist config to file: {}", e),
         Err(e) => tracing::warn!("Config save task panicked: {}", e),
     }

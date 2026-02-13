@@ -10,6 +10,9 @@ use std::path::PathBuf;
 
 use crate::error::{Error, Result};
 
+/// Default path to the config file, relative to the working directory.
+pub const CONFIG_PATH: &str = "config/config.toml";
+
 /// Main configuration struct.
 ///
 /// This is the single source of truth for all configuration.
@@ -735,8 +738,30 @@ impl Config {
 
         // Write to a temp file then atomically rename to avoid partial writes
         let tmp_path = path.with_extension("toml.tmp");
-        std::fs::write(&tmp_path, content)?;
-        std::fs::rename(&tmp_path, path)?;
+        std::fs::write(&tmp_path, &content).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                Error::Config(format!(
+                    "Permission denied writing config to '{}'. \
+                    If running in Docker, mount a writable volume at the config directory \
+                    (e.g. -v /host/config:/app/config).",
+                    tmp_path.display()
+                ))
+            } else {
+                Error::Io(e)
+            }
+        })?;
+        std::fs::rename(&tmp_path, path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                Error::Config(format!(
+                    "Permission denied saving config to '{}'. \
+                    If running in Docker, mount a writable volume at the config directory \
+                    (e.g. -v /host/config:/app/config).",
+                    path.display()
+                ))
+            } else {
+                Error::Io(e)
+            }
+        })?;
         Ok(())
     }
 }

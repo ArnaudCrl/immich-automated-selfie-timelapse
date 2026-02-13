@@ -26,6 +26,14 @@ pub async fn get_config(State(state): State<AppState>) -> Json<ConfigResponse> {
     })
 }
 
+/// Get default configuration values.
+pub async fn get_config_defaults() -> Json<ConfigResponse> {
+    Json(ConfigResponse {
+        processing: ProcessingConfig::default(),
+        video: VideoConfig::default(),
+    })
+}
+
 /// Configuration update request.
 ///
 /// Uses the same nested structure as the config itself for consistency.

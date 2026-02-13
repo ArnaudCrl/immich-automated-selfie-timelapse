@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { DEFAULT_CONFIG, TIMING, API } from '../constants.js';
+  import { TIMING, API } from '../constants.js';
   import { handleError } from '../errorHandler.js';
   import EyeIndicator from './visual/EyeIndicator.svelte';
   import AlignmentIndicator from './visual/AlignmentIndicator.svelte';
@@ -15,8 +15,7 @@
   let saveMessage = $state(null);
   let activeTab = $state('face');
 
-  // Config state - initialized from DEFAULT_CONFIG, then loaded from API
-  let config = $state(JSON.parse(JSON.stringify(DEFAULT_CONFIG)));
+  let config = $state(null);
 
   async function loadConfig() {
     loading = true;
@@ -108,8 +107,14 @@
     }
   }
 
-  function resetToDefaults() {
-    config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  async function resetToDefaults() {
+    try {
+      const res = await fetch(API.configDefaults);
+      if (!res.ok) throw res;
+      config = await res.json();
+    } catch (e) {
+      error = await handleError('Failed to load defaults', e);
+    }
   }
 
   function toggle() {

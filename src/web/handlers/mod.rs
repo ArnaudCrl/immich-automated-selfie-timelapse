@@ -27,7 +27,7 @@ use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 // Re-export handler functions for use in router
-use config::{get_config, update_config};
+use config::{get_config, get_config_defaults, update_config};
 use health::{check_connection, health_check};
 use output::{
     cleanup_all_output, cleanup_output_folder, compile_folder_video, delete_images_bulk,
@@ -95,6 +95,7 @@ pub fn create_router(state: AppState) -> Router {
         )
         .route("/api/config", get(get_config))
         .route("/api/config", put(update_config))
+        .route("/api/config/defaults", get(get_config_defaults))
         // Serve output files (video, images) — no-cache so browsers revalidate
         // after reprocessing (filenames stay the same across runs)
         .nest_service(

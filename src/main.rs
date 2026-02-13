@@ -2,7 +2,11 @@
 //!
 //! Web server for creating selfie timelapses from Immich.
 
-use immich_timelapse::{config::{Config, CONFIG_PATH}, models::DlibLandmarks, web};
+use immich_timelapse::{
+    config::{Config, CONFIG_PATH},
+    models::DlibLandmarks,
+    web,
+};
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

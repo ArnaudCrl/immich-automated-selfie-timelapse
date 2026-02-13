@@ -246,7 +246,10 @@ impl ImmichClient {
     /// Falls back to the original if the preview is unavailable.
     pub async fn download_asset_preview(&self, asset_id: &str) -> Result<bytes::Bytes> {
         let encoded_id = urlencode(asset_id);
-        let url = format!("{}/assets/{}/thumbnail?size=preview", self.base_url, encoded_id);
+        let url = format!(
+            "{}/assets/{}/thumbnail?size=preview",
+            self.base_url, encoded_id
+        );
 
         let response = self
             .client

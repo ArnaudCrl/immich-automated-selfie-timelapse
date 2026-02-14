@@ -136,7 +136,7 @@ pub struct BrightnessConfig {
 impl Default for BrightnessConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             min_brightness: 0.1,
             max_brightness: 0.9,
         }
@@ -215,7 +215,7 @@ impl Default for OutputConfig {
     fn default() -> Self {
         Self {
             size: 512,
-            keep_intermediates: true,
+            keep_intermediates: false,
         }
     }
 }
@@ -300,7 +300,7 @@ impl Default for EyeFilterConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_ear: 0.22,
+            min_ear: 0.12,
         }
     }
 }

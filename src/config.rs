@@ -584,12 +584,6 @@ fn default_true() -> bool {
     true
 }
 
-fn num_cpus() -> usize {
-    std::thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or(4)
-}
-
 // ============================================================================
 // Video Configuration
 // ============================================================================

@@ -49,9 +49,13 @@ WORKDIR /app
 # Download models
 RUN mkdir -p models && \
     curl -fsSL -o models/dmhead_nomask_Nx3x224x224.onnx \
-    https://github.com/PINTO0309/DMHead/releases/download/1.1.2/dmhead_nomask_Nx3x224x224.onnx && \
-    curl -fsSL http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 \
-    | bzip2 -d > models/shape_predictor_68_face_landmarks.dat && \
+        https://github.com/PINTO0309/DMHead/releases/download/1.1.2/dmhead_nomask_Nx3x224x224.onnx && \
+    echo "8dd5643923680b3a8e27507c4fc3d7331e0044a2554169e5658770d5b27fd122  models/dmhead_nomask_Nx3x224x224.onnx" | sha256sum -c && \
+    curl -fsSL -o /tmp/shape_predictor.dat.bz2 \
+        https://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 && \
+    echo "7d6637b8f34ddb0c1363e09a4628acb34314019ec3566fd66b80c04dda6980f5  /tmp/shape_predictor.dat.bz2" | sha256sum -c && \
+    bzip2 -d < /tmp/shape_predictor.dat.bz2 > models/shape_predictor_68_face_landmarks.dat && \
+    rm /tmp/shape_predictor.dat.bz2 && \
     apt-get purge -y --autoremove curl bzip2
 
 # Copy artifacts from build stages

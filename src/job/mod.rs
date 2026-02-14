@@ -138,7 +138,13 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     status: JobStatus::Completed,
                     completed: final_progress.completed,
                     total: final_progress.total,
-                    message: Some(format!("Video saved to: {}", output_path.display())),
+                    message: Some(format!(
+                        "Video saved to: {}\
+                        <br><i>Please note that for the best \
+                        looking results, you should do a manual pass in the gallery view \
+                        (button available in the section below)</i>",
+                        output_path.display()
+                    )),
                     skip_stats: final_progress.skip_stats,
                     person_id: final_progress.person_id,
                     person_name: final_progress.person_name,

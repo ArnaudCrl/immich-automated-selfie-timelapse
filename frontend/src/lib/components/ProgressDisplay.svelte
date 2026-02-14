@@ -130,7 +130,7 @@
   {/if}
 
   {#if progress.message}
-    <p class="message">{progress.message}</p>
+    <p class="message">{@html progress.message}</p>
   {/if}
 
   {#if (jobStatus === 'running' || jobStatus === 'completed' || jobStatus === 'cancelled') && (displayCompleted > 0 || Object.keys(displaySkipStats).length > 0)}

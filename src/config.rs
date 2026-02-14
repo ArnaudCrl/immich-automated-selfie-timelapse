@@ -544,7 +544,7 @@ pub struct ProcessingConfig {
 impl Default for ProcessingConfig {
     fn default() -> Self {
         Self {
-            max_workers: num_cpus(),
+            max_workers: 1,
             use_preview: true,
             face_resolution: FaceResolutionConfig::default(),
             blur: BlurConfig::default(),

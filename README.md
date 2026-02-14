@@ -38,10 +38,11 @@ To access your immich library, this project requires an Immich API key.
 Follow this guide to create one: https://immich.app/docs/features/command-line-interface#obtain-the-api-key
 
 Here are the features that need to be enabled:
-- server.about
-- asset.download
-- asset.read
-- person.read
+- `asset.download`
+- `asset.read`
+- `asset.view`
+- `person.read`
+- `server.about`
 
 *Note: It is advised to store this API key in a `.env` file adjacent to your `docker-compose.yml` rather than in plain text.*
 

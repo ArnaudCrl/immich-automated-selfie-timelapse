@@ -108,6 +108,32 @@ impl ImmichClient {
         })
     }
 
+    /// Check an HTTP response for authentication/permission errors and return
+    /// a descriptive error. Call this before checking `is_success()`.
+    async fn check_response_error(
+        response: reqwest::Response,
+        operation: &str,
+    ) -> std::result::Result<reqwest::Response, Error> {
+        let status = response.status();
+        if status.is_success() {
+            return Ok(response);
+        }
+
+        let body = response.text().await.unwrap_or_default();
+
+        match status {
+            reqwest::StatusCode::UNAUTHORIZED => Err(Error::ImmichApi(format!(
+                "{operation}: invalid or expired API key (401)"
+            ))),
+            reqwest::StatusCode::FORBIDDEN => Err(Error::ImmichApi(format!(
+                "{operation}: missing permission (403). {body}"
+            ))),
+            _ => Err(Error::ImmichApi(format!(
+                "{operation}: HTTP {status}. {body}"
+            ))),
+        }
+    }
+
     /// Sanitize the base URL to ensure it ends with /api.
     fn sanitize_base_url(url: &str) -> String {
         let trimmed = url.trim_end_matches('/');
@@ -130,16 +156,7 @@ impl ImmichClient {
             .send()
             .await?;
 
-        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(Error::ImmichApi("Invalid API key".to_string()));
-        }
-
-        if !response.status().is_success() {
-            return Err(Error::ImmichApi(format!(
-                "Server returned status {}",
-                response.status()
-            )));
-        }
+        let response = Self::check_response_error(response, "Validate connection").await?;
 
         let info: ServerInfo = response.json().await?;
         Ok(info)
@@ -175,14 +192,7 @@ impl ImmichClient {
                 .send()
                 .await?;
 
-            if !response.status().is_success() {
-                let status = response.status();
-                let body = response.text().await.unwrap_or_default();
-                return Err(Error::ImmichApi(format!(
-                    "Search failed with status {}: {}",
-                    status, body
-                )));
-            }
+            let response = Self::check_response_error(response, "Search assets by person").await?;
 
             let search_response: SearchResponse = response.json().await?;
             all_assets.extend(search_response.assets.items);
@@ -197,7 +207,7 @@ impl ImmichClient {
             }
         }
 
-        tracing::info!("Found {} assets for person {}", all_assets.len(), person_id);
+        tracing::debug!("Found {} assets for person {}", all_assets.len(), person_id);
         Ok(all_assets)
     }
 
@@ -216,13 +226,7 @@ impl ImmichClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            return Err(Error::ImmichApi(format!(
-                "Failed to download asset {}: {}",
-                asset_id,
-                response.status()
-            )));
-        }
+        let response = Self::check_response_error(response, "Download asset").await?;
 
         // Check Content-Length before downloading to reject unexpectedly large files
         if let Some(content_length) = response.content_length() {
@@ -258,13 +262,7 @@ impl ImmichClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            return Err(Error::ImmichApi(format!(
-                "Failed to download preview for asset {}: {}",
-                asset_id,
-                response.status()
-            )));
-        }
+        let response = Self::check_response_error(response, "Download asset preview").await?;
 
         let bytes = response.bytes().await?;
         Ok(bytes)
@@ -281,12 +279,7 @@ impl ImmichClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            return Err(Error::ImmichApi(format!(
-                "Failed to get people: {}",
-                response.status()
-            )));
-        }
+        let response = Self::check_response_error(response, "Get people").await?;
 
         #[derive(Deserialize)]
         struct PeopleResponse {
@@ -311,13 +304,7 @@ impl ImmichClient {
             .send()
             .await?;
 
-        if !response.status().is_success() {
-            return Err(Error::ImmichApi(format!(
-                "Failed to get thumbnail for person {}: {}",
-                person_id,
-                response.status()
-            )));
-        }
+        let response = Self::check_response_error(response, "Get person thumbnail").await?;
 
         let content_type = response
             .headers()

@@ -9,11 +9,18 @@
  * @returns {Promise<string>} Error message
  */
 export async function parseError(error) {
-  // If it's a Response object, try to extract JSON error message
+  // If it's a Response object, try to extract the error message
   if (error instanceof Response) {
     try {
-      const data = await error.json();
-      return data.message || `Request failed with status ${error.status}`;
+      const text = await error.text();
+      // Try parsing as JSON first (for structured error responses)
+      try {
+        const data = JSON.parse(text);
+        return data.message || text || `Request failed with status ${error.status}`;
+      } catch {
+        // Plain text response from the backend
+        return text || `Request failed with status ${error.status}`;
+      }
     } catch {
       return `Request failed with status ${error.status}`;
     }

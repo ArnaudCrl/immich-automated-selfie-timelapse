@@ -401,15 +401,44 @@ async fn run_job_inner(
     // Get final skip statistics from atomic counters
     let final_skip_stats = skip_stats.snapshot();
 
-    // Count results
-    let successful = results
-        .iter()
-        .filter(|r| matches!(r, AssetProcessResult::Success { .. }))
-        .count();
-    let errors = results
-        .iter()
-        .filter(|r| matches!(r, AssetProcessResult::Error { .. }))
-        .count();
+    // Count results and log errors (deduplicated)
+    let mut successful = 0usize;
+    let mut errors = 0usize;
+    let mut first_error: Option<String> = None;
+    let mut all_same_error = true;
+    for result in &results {
+        match result {
+            AssetProcessResult::Success { .. } => successful += 1,
+            AssetProcessResult::Error { error, .. } => {
+                errors += 1;
+                match &first_error {
+                    None => first_error = Some(error.clone()),
+                    Some(first) if first != error => all_same_error = false,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(ref err) = first_error {
+        if all_same_error {
+            tracing::error!("{} assets failed with: {}", errors, err);
+        } else {
+            // Log distinct errors individually (up to 3)
+            let mut logged = 0;
+            for result in &results {
+                if let AssetProcessResult::Error { asset_id, error } = result {
+                    if logged < 3 {
+                        tracing::error!("Asset {} failed: {}", asset_id, error);
+                        logged += 1;
+                    }
+                }
+            }
+            if errors > 3 {
+                tracing::error!("... and {} more errors", errors - 3);
+            }
+        }
+    }
     let skipped = final_skip_stats.total();
 
     tracing::info!(
@@ -433,9 +462,13 @@ async fn run_job_inner(
         .await;
 
     if successful == 0 {
-        return Err(Error::ImageProcessing(
-            "No images were successfully processed".to_string(),
-        ));
+        let detail = first_error
+            .map(|e| format!(" First error: {}", e))
+            .unwrap_or_default();
+        return Err(Error::ImageProcessing(format!(
+            "No images were successfully processed ({} errors).{}",
+            errors, detail
+        )));
     }
 
     // Check for cancellation before video compilation

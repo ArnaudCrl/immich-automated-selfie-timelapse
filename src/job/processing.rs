@@ -120,7 +120,7 @@ pub async fn process_single_asset(
             skip_stats.increment("download_failed");
             return AssetProcessResult::Error {
                 asset_id: asset_id.clone(),
-                error: format!("Download failed: {}", e),
+                error: e.to_string(),
             };
         }
     };

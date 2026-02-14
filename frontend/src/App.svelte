@@ -268,6 +268,12 @@
     <section class="not-connected">
       <p>Connect to your Immich server to get started.</p>
       <p class="hint">Make sure the backend is running and configured with your Immich API credentials.</p>
+      <p class="hint">
+        You need an Immich API key with the following permissions:
+        <code>asset.download</code>, <code>asset.read</code>, <code>asset.view</code>, <code>person.read</code>, <code>server.about</code>.
+        <br />
+        See the <a href="https://immich.app/docs/features/command-line-interface#obtain-the-api-key" target="_blank" rel="noopener noreferrer">Immich docs</a> to create one.
+      </p>
     </section>
   {/if}
 </main>

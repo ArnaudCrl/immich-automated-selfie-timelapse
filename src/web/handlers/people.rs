@@ -29,12 +29,10 @@ pub async fn get_people(
         )
     })?;
 
-    let people = client.get_people().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to get people: {}", e),
-        )
-    })?;
+    let people = client
+        .get_people()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let people_info: Vec<PersonInfo> = people
         .into_iter()

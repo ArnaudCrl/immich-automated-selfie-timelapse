@@ -80,6 +80,8 @@ Then open **http://your_server:5000** to access the web interface.
 
 ### Volumes
 
+*Ensure correct read/write permissions to these folders.*
+
 | Path | Description |
 |---|---|
 | `/app/config` | Persisted configuration file (`config.toml`) |
@@ -96,6 +98,7 @@ Please adjust image brightness filtering, eye aspect ratio etc. for the person y
 
 ## Additional info
 
+- The photo filtering is not 100% accurate and will continue to improve.
 - Heartfelt thanks to the Immich team and contributors for making this project possible.
 - About contribution : When I first created this project, I marked it as open to contributions. I now realize that I don't have as much time as I thought to dedicate to this project. I feel comfortable with issues being opened as it allows me to go through them at my own pace. For pull requests, I cannot guarantee a reasonable time frame for review. 
 - Thank you thomaslrg for the discussions around the project.

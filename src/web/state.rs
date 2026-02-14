@@ -56,6 +56,8 @@ impl std::fmt::Display for JobStatus {
 pub struct SkipStats {
     /// Map of skip reason ID to count.
     counts: HashMap<String, u32>,
+    /// Number of images kept (passed all filters).
+    kept: u32,
 }
 
 impl SkipStats {
@@ -79,6 +81,16 @@ impl SkipStats {
         &self.counts
     }
 
+    /// Number of images kept (passed all filters).
+    pub fn kept(&self) -> u32 {
+        self.kept
+    }
+
+    /// Set the kept count.
+    pub fn set_kept(&mut self, count: u32) {
+        self.kept = count;
+    }
+
     /// Total number of skipped images.
     pub fn total(&self) -> u32 {
         self.counts.values().sum()
@@ -94,12 +106,19 @@ pub struct AtomicSkipStats {
     /// Map of skip reason to atomic counter.
     /// Uses std::sync::RwLock for synchronous access (required for HashMap mutations).
     counts: StdRwLock<HashMap<String, Arc<AtomicU32>>>,
+    /// Number of images kept (passed all filters).
+    kept: AtomicU32,
 }
 
 impl AtomicSkipStats {
     /// Create a new AtomicSkipStats with no counters.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Increment the kept counter. Returns the new count.
+    pub fn increment_kept(&self) -> u32 {
+        self.kept.fetch_add(1, Ordering::SeqCst) + 1
     }
 
     /// Increment a counter for the given reason string.
@@ -136,6 +155,7 @@ impl AtomicSkipStats {
         for (reason, counter) in counts.iter() {
             stats.set(reason.clone(), counter.load(Ordering::SeqCst));
         }
+        stats.set_kept(self.kept.load(Ordering::SeqCst));
         stats
     }
 
@@ -143,6 +163,7 @@ impl AtomicSkipStats {
     pub fn reset(&self) {
         let mut counts = self.counts.write().unwrap();
         counts.clear();
+        self.kept.store(0, Ordering::SeqCst);
     }
 }
 

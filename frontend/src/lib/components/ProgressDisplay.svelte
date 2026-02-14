@@ -84,8 +84,8 @@
           .reduce((sum, [_, val]) => sum + (typeof val === 'number' ? val : 0), 0)
   );
 
-  // Calculate kept (successful) count: completed - skipped
-  let keptCount = $derived(Math.max(0, displayCompleted - skipTotal));
+  // Kept count from backend (tracked atomically alongside skip stats)
+  let keptCount = $derived(displaySkipStats.kept || 0);
 
   // Dynamically build skip reasons from whatever the backend sends
   // Filter to only show non-zero counts, exclude the 'total' field

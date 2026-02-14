@@ -206,6 +206,7 @@ pub async fn process_single_asset(
                 };
             }
 
+            skip_stats.increment_kept();
             AssetProcessResult::Success { asset_id }
         }
         PipelineResult::Skipped {

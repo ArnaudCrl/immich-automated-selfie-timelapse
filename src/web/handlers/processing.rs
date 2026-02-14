@@ -18,6 +18,8 @@ pub struct SkipStatsResponse {
     pub counts: HashMap<String, u32>,
     /// Total number of skipped images.
     pub total: u32,
+    /// Number of images kept (passed all filters).
+    pub kept: u32,
 }
 
 impl From<&SkipStats> for SkipStatsResponse {
@@ -25,6 +27,7 @@ impl From<&SkipStats> for SkipStatsResponse {
         Self {
             counts: stats.counts().clone(),
             total: stats.total(),
+            kept: stats.kept(),
         }
     }
 }

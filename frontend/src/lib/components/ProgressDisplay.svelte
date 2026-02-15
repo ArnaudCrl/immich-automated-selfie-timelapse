@@ -91,7 +91,7 @@
   // Filter to only show non-zero counts, exclude the 'total' field
   let skipReasons = $derived(
     Object.entries(displaySkipStats)
-      .filter(([key, count]) => key !== 'total' && typeof count === 'number' && count > 0)
+      .filter(([key, count]) => key !== 'total' && key !== 'kept' && typeof count === 'number' && count > 0)
       .map(([key, count]) => ({ label: formatLabel(key), count }))
       .sort((a, b) => b.count - a.count) // Sort by count descending
   );

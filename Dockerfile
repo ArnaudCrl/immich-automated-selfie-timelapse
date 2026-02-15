@@ -26,7 +26,7 @@ RUN mkdir src && \
     cargo build --release && \
     rm -rf src
 
-# Build real binary
+# Build real binaries (This builds BOTH the app and our healthcheck)
 COPY src/ src/
 RUN touch src/main.rs src/lib.rs && cargo build --release
 
@@ -61,6 +61,12 @@ RUN mkdir -p models && \
 # Copy artifacts from build stages
 COPY --from=rust-build /app/target/release/immich-timelapse ./
 COPY --from=frontend-build /app/frontend/dist/ ./frontend/dist/
+# Fixed: Copy the healthcheck from the rust-build stage
+COPY --from=rust-build /app/target/release/healthcheck /usr/local/bin/healthcheck
+
+# Set the Internal Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD ["healthcheck"]
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash timelapse && \

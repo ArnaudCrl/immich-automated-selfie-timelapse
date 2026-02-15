@@ -4,6 +4,7 @@
 
 use immich_timelapse::{
     config::{Config, CONFIG_PATH},
+    error::PERMISSION_HINT,
     models::DlibLandmarks,
     web,
 };
@@ -32,6 +33,21 @@ async fn main() -> anyhow::Result<()> {
     // Load configuration
     let config = load_config()?;
     tracing::info!("Configuration loaded");
+
+    // Check AVX support (required by ONNX models, x86_64 only)
+    #[cfg(target_arch = "x86_64")]
+    {
+        if !std::arch::is_x86_feature_detected!("avx") {
+            tracing::error!(
+                "This CPU does not support AVX instructions, which are required by the ML models \
+                (dlib landmarks, DMHead pose estimation). The application cannot run on this hardware."
+            );
+            std::process::exit(1);
+        }
+    }
+
+    // Check output directory writability
+    check_output_dir(&config);
 
     // Check ffmpeg availability
     match immich_timelapse::video::check_ffmpeg().await {
@@ -64,6 +80,43 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn check_output_dir(config: &Config) {
+    let dir = &config.output_dir;
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            tracing::warn!(
+                "Cannot create output directory '{}': permission denied. {}",
+                dir.display(),
+                PERMISSION_HINT
+            );
+        } else {
+            tracing::warn!("Cannot create output directory '{}': {}", dir.display(), e);
+        }
+        return;
+    }
+
+    let test_file = dir.join(".writetest");
+    match std::fs::write(&test_file, b"ok") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&test_file);
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::warn!(
+                "Output directory '{}' is not writable: permission denied. {}",
+                dir.display(),
+                PERMISSION_HINT
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "Output directory '{}' is not writable: {}",
+                dir.display(),
+                e
+            );
+        }
+    }
+}
+
 fn load_config() -> anyhow::Result<Config> {
     let config_path = std::path::Path::new(CONFIG_PATH);
 
@@ -82,10 +135,9 @@ fn load_config() -> anyhow::Result<Config> {
                 if msg.contains("permission denied") || msg.contains("Permission denied") {
                     tracing::warn!(
                         "Could not write default config to {}: permission denied. \
-                        If running in Docker, ensure the config directory is writable \
-                        (e.g. mount a volume with the correct permissions: \
-                        -v /host/config:/app/config). Continuing with in-memory defaults.",
-                        CONFIG_PATH
+                        {} Continuing with in-memory defaults.",
+                        CONFIG_PATH,
+                        PERMISSION_HINT
                     );
                 } else {
                     tracing::warn!("Could not write default config to {}: {}", CONFIG_PATH, e);

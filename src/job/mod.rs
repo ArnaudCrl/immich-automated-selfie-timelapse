@@ -166,12 +166,13 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
         }
         Err(e) => {
             tracing::error!("Job failed: {}", e);
+            let friendly = e.user_message();
             state
                 .update_progress(Progress {
-                    status: JobStatus::Error(e.to_string()),
+                    status: JobStatus::Error(friendly.clone()),
                     completed: final_progress.completed,
                     total: final_progress.total,
-                    message: Some(e.to_string()),
+                    message: Some(friendly),
                     skip_stats: final_progress.skip_stats,
                     person_id: final_progress.person_id,
                     person_name: final_progress.person_name,
@@ -201,7 +202,9 @@ async fn run_job_inner(
 
     // Create output directories
     let images_dir = person_dir.join("images");
-    tokio::fs::create_dir_all(&images_dir).await?;
+    tokio::fs::create_dir_all(&images_dir)
+        .await
+        .map_err(|e| permission_aware_io_error(e, &images_dir))?;
 
     // Create debug directories if enabled
     let debug = if config.processing.output.keep_intermediates {
@@ -513,6 +516,19 @@ async fn run_job_inner(
         Ok(output_dirs.video.clone())
     } else {
         Ok(output_dirs.images.clone())
+    }
+}
+
+/// Convert a permission-denied I/O error into a Config error with Docker fix instructions.
+fn permission_aware_io_error(e: std::io::Error, path: &std::path::Path) -> Error {
+    if e.kind() == std::io::ErrorKind::PermissionDenied {
+        Error::Config(format!(
+            "Permission denied for '{}'. {}",
+            path.display(),
+            crate::error::PERMISSION_HINT
+        ))
+    } else {
+        Error::Io(e)
     }
 }
 

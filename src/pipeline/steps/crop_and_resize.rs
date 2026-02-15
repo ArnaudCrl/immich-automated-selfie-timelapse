@@ -73,10 +73,7 @@ impl ProcessingStep for CropAndResizeStep {
                 let scale = output_size as f32 / cropped_size as f32;
 
                 // Store scale for downstream steps (e.g. blur normalization)
-                ctx.set_computed(
-                    computed_keys::CROP_SCALE,
-                    ComputedValue::Float(scale),
-                );
+                ctx.set_computed(computed_keys::CROP_SCALE, ComputedValue::Float(scale));
 
                 let scaled_face_rect = BoundingBox {
                     x1: crop_result.face_rect.x1 * scale,

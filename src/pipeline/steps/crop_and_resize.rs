@@ -191,7 +191,8 @@ impl ProcessingStep for CropAndResizeStep {
         }
 
         // Draw threshold marker on the bar
-        let threshold_x = bar_x + 2 + ((bar_width - 4) as f32 * (max_pct / max_scale).clamp(0.0, 1.0)) as u32;
+        let threshold_x =
+            bar_x + 2 + ((bar_width - 4) as f32 * (max_pct / max_scale).clamp(0.0, 1.0)) as u32;
         if threshold_x < bar_x + bar_width {
             for y in outline_y..(outline_y + outline_height) {
                 debug_img.put_pixel(threshold_x, y, Rgb([255, 255, 255]));

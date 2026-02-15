@@ -188,21 +188,23 @@
                 </div>
 
                 {#if config.processing.face_resolution.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="min-face-size">
-                      <span class="setting-label">Min Face Size</span>
-                      <span class="setting-hint">Minimum face resolution in pixels</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="min-face-size"
-                        type="range"
-                        bind:value={config.processing.face_resolution.min_size}
-                        min="20"
-                        max="200"
-                        step="10"
-                      />
-                      <span class="value">{config.processing.face_resolution.min_size}px</span>
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <label for="min-face-size">
+                        <span class="setting-label">Min Face Size</span>
+                        <span class="setting-hint">Minimum face resolution in pixels</span>
+                      </label>
+                      <div class="setting-control">
+                        <input
+                          id="min-face-size"
+                          type="range"
+                          bind:value={config.processing.face_resolution.min_size}
+                          min="20"
+                          max="200"
+                          step="10"
+                        />
+                        <span class="value">{config.processing.face_resolution.min_size}px</span>
+                      </div>
                     </div>
                   </div>
                 {/if}
@@ -220,25 +222,27 @@
                 <div class="section-hint">Padding happens when a face is at the border of a photo. It is required to move the subject to the center of the frame.</div>
 
                 {#if config.processing.crop.enabled}
-                  <div class="setting-row sub-setting no-border">
-                    <label for="max-padding">
-                      <span class="setting-label">Max Padding</span>
-                      <span class="setting-hint">Maximum allowed padding</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="max-padding"
-                        type="range"
-                        bind:value={config.processing.crop.max_padding_percent}
-                        min="5"
-                        max="80"
-                        step="5"
-                      />
-                      <span class="value">{config.processing.crop.max_padding_percent}%</span>
+                  <div class="sub-settings-group">
+                    <div class="setting-row no-border">
+                      <label for="max-padding">
+                        <span class="setting-label">Max Padding</span>
+                        <span class="setting-hint">Maximum allowed padding</span>
+                      </label>
+                      <div class="setting-control">
+                        <input
+                          id="max-padding"
+                          type="range"
+                          bind:value={config.processing.crop.max_padding_percent}
+                          min="5"
+                          max="80"
+                          step="5"
+                        />
+                        <span class="value">{config.processing.crop.max_padding_percent}%</span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="padding-indicator-container">
-                    <PaddingIndicator maxPaddingPercent={config.processing.crop.max_padding_percent} />
+                    <div class="padding-indicator-container">
+                      <PaddingIndicator maxPaddingPercent={config.processing.crop.max_padding_percent} />
+                    </div>
                   </div>
                 {/if}
               </div>
@@ -254,7 +258,7 @@
                 </div>
 
                 {#if config.processing.brightness.enabled}
-                  <div class="brightness-visual-control sub-setting">
+                  <div class="brightness-visual-control sub-settings-group">
                     <div class="brightness-hint">
                       Discard photos if the face is under/over exposed
                     </div>
@@ -279,21 +283,23 @@
                 </div>
 
                 {#if config.processing.blur.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="min-sharpness">
-                      <span class="setting-label">Min Sharpness</span>
-                      <span class="setting-hint">Discard blurry faces</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="min-sharpness"
-                        type="range"
-                        bind:value={config.processing.blur.min_sharpness}
-                        min="10"
-                        max="50"
-                        step="1"
-                      />
-                      <span class="value">{Number(config.processing.blur.min_sharpness).toFixed(0)}</span>
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <label for="min-sharpness">
+                        <span class="setting-label">Min Sharpness</span>
+                        <span class="setting-hint">Discard blurry faces</span>
+                      </label>
+                      <div class="setting-control">
+                        <input
+                          id="min-sharpness"
+                          type="range"
+                          bind:value={config.processing.blur.min_sharpness}
+                          min="10"
+                          max="50"
+                          step="1"
+                        />
+                        <span class="value">{Number(config.processing.blur.min_sharpness).toFixed(0)}</span>
+                      </div>
                     </div>
                   </div>
                 {/if}
@@ -310,42 +316,43 @@
                 </div>
 
                 {#if config.processing.head_pose.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="max-yaw">
-                      <span class="setting-label">Max Yaw</span>
-                      <span class="setting-hint">Maximum left/right turn angle</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="max-yaw"
-                        type="range"
-                        bind:value={config.processing.head_pose.max_yaw}
-                        min="5"
-                        max="90"
-                        step="5"
-                      />
-                      <span class="value">{config.processing.head_pose.max_yaw.toFixed(0)}°</span>
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <label for="max-yaw">
+                        <span class="setting-label">Max Yaw</span>
+                        <span class="setting-hint">Maximum left/right turn angle</span>
+                      </label>
+                      <div class="setting-control">
+                        <input
+                          id="max-yaw"
+                          type="range"
+                          bind:value={config.processing.head_pose.max_yaw}
+                          min="5"
+                          max="90"
+                          step="5"
+                        />
+                        <span class="value">{config.processing.head_pose.max_yaw.toFixed(0)}°</span>
+                      </div>
+                    </div>
+
+                    <div class="setting-row">
+                      <label for="max-pitch">
+                        <span class="setting-label">Max Pitch</span>
+                        <span class="setting-hint">Maximum up/down tilt angle</span>
+                      </label>
+                      <div class="setting-control">
+                        <input
+                          id="max-pitch"
+                          type="range"
+                          bind:value={config.processing.head_pose.max_pitch}
+                          min="5"
+                          max="90"
+                          step="5"
+                        />
+                        <span class="value">{config.processing.head_pose.max_pitch.toFixed(0)}°</span>
+                      </div>
                     </div>
                   </div>
-
-                  <div class="setting-row sub-setting">
-                    <label for="max-pitch">
-                      <span class="setting-label">Max Pitch</span>
-                      <span class="setting-hint">Maximum up/down tilt angle</span>
-                    </label>
-                    <div class="setting-control">
-                      <input
-                        id="max-pitch"
-                        type="range"
-                        bind:value={config.processing.head_pose.max_pitch}
-                        min="5"
-                        max="90"
-                        step="5"
-                      />
-                      <span class="value">{config.processing.head_pose.max_pitch.toFixed(0)}°</span>
-                    </div>
-                  </div>
-
                 {/if}
               </div>
 
@@ -360,23 +367,25 @@
                 </div>
 
                 {#if config.processing.eye_filter.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="min-ear">
-                      <span class="setting-label">Minimum eye opening</span>
-                      <span class="setting-hint">Discard image if Eye Aspect Ratio is below this value</span>
-                    </label>
-                    <div class="setting-control-with-visual">
-                      <input
-                        id="min-ear"
-                        type="range"
-                        bind:value={config.processing.eye_filter.min_ear}
-                        min="0.1"
-                        max="0.4"
-                        step="0.02"
-                      />
-                      <span class="value">{config.processing.eye_filter.min_ear.toFixed(2)}</span>
-                      <div class="inline-visual-indicator">
-                        <EyeIndicator ear={config.processing.eye_filter.min_ear} />
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <label for="min-ear">
+                        <span class="setting-label">Minimum eye opening</span>
+                        <span class="setting-hint">Discard image if Eye Aspect Ratio is below this value</span>
+                      </label>
+                      <div class="setting-control-with-visual">
+                        <input
+                          id="min-ear"
+                          type="range"
+                          bind:value={config.processing.eye_filter.min_ear}
+                          min="0.1"
+                          max="0.4"
+                          step="0.02"
+                        />
+                        <span class="value">{config.processing.eye_filter.min_ear.toFixed(2)}</span>
+                        <div class="inline-visual-indicator">
+                          <EyeIndicator ear={config.processing.eye_filter.min_ear} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -451,27 +460,29 @@
                 </div>
 
                 {#if config.processing.time_interval.enabled}
-                  <div class="setting-row sub-setting">
-                    <span class="setting-label">Keep at most</span>
-                    <div class="setting-control">
-                      <input
-                        id="max-photos"
-                        type="number"
-                        class="inline-number"
-                        bind:value={config.processing.time_interval.max_photos}
-                        min="1"
-                        max="10"
-                      />
-                      <span class="setting-label">photos per</span>
-                      <div class="toggle-group">
-                        {#each [['day', 'day'], ['week', 'week'], ['month', 'month']] as [value, label]}
-                          <button
-                            type="button"
-                            class="toggle-btn-option"
-                            class:active={config.processing.time_interval.time_range === value}
-                            onclick={() => config.processing.time_interval.time_range = value}
-                          >{label}</button>
-                        {/each}
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <span class="setting-label">Keep at most</span>
+                      <div class="setting-control">
+                        <input
+                          id="max-photos"
+                          type="number"
+                          class="inline-number"
+                          bind:value={config.processing.time_interval.max_photos}
+                          min="1"
+                          max="10"
+                        />
+                        <span class="setting-label">photos per</span>
+                        <div class="toggle-group">
+                          {#each [['day', 'day'], ['week', 'week'], ['month', 'month']] as [value, label]}
+                            <button
+                              type="button"
+                              class="toggle-btn-option"
+                              class:active={config.processing.time_interval.time_range === value}
+                              onclick={() => config.processing.time_interval.time_range = value}
+                            >{label}</button>
+                          {/each}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -489,40 +500,42 @@
                 </div>
 
                 {#if config.processing.timestamp.enabled}
-                  <div class="setting-row sub-setting">
-                    <label for="timestamp-position">
-                      <span class="setting-label">Position</span>
-                      <span class="setting-hint">Where to place the timestamp</span>
-                    </label>
-                    <select id="timestamp-position" bind:value={config.processing.timestamp.position}>
-                      <option value="top_left">Top Left</option>
-                      <option value="top_right">Top Right</option>
-                      <option value="bottom_left">Bottom Left</option>
-                      <option value="bottom_right">Bottom Right</option>
-                    </select>
-                  </div>
+                  <div class="sub-settings-group">
+                    <div class="setting-row">
+                      <label for="timestamp-position">
+                        <span class="setting-label">Position</span>
+                        <span class="setting-hint">Where to place the timestamp</span>
+                      </label>
+                      <select id="timestamp-position" bind:value={config.processing.timestamp.position}>
+                        <option value="top_left">Top Left</option>
+                        <option value="top_right">Top Right</option>
+                        <option value="bottom_left">Bottom Left</option>
+                        <option value="bottom_right">Bottom Right</option>
+                      </select>
+                    </div>
 
-                  <div class="setting-row sub-setting">
-                    <span class="setting-label">Date Components</span>
-                    <div class="toggle-group">
-                      <button
-                        type="button"
-                        class="toggle-btn-option"
-                        class:active={config.processing.timestamp.year}
-                        onclick={() => config.processing.timestamp.year = !config.processing.timestamp.year}
-                      >Year</button>
-                      <button
-                        type="button"
-                        class="toggle-btn-option"
-                        class:active={config.processing.timestamp.month}
-                        onclick={() => config.processing.timestamp.month = !config.processing.timestamp.month}
-                      >Month</button>
-                      <button
-                        type="button"
-                        class="toggle-btn-option"
-                        class:active={config.processing.timestamp.day}
-                        onclick={() => config.processing.timestamp.day = !config.processing.timestamp.day}
-                      >Day</button>
+                    <div class="setting-row">
+                      <span class="setting-label">Date Components</span>
+                      <div class="toggle-group">
+                        <button
+                          type="button"
+                          class="toggle-btn-option"
+                          class:active={config.processing.timestamp.year}
+                          onclick={() => config.processing.timestamp.year = !config.processing.timestamp.year}
+                        >Year</button>
+                        <button
+                          type="button"
+                          class="toggle-btn-option"
+                          class:active={config.processing.timestamp.month}
+                          onclick={() => config.processing.timestamp.month = !config.processing.timestamp.month}
+                        >Month</button>
+                        <button
+                          type="button"
+                          class="toggle-btn-option"
+                          class:active={config.processing.timestamp.day}
+                          onclick={() => config.processing.timestamp.day = !config.processing.timestamp.day}
+                        >Day</button>
+                      </div>
                     </div>
                   </div>
                 {/if}
@@ -533,23 +546,25 @@
                 <div class="section-header">
                   <span class="section-title">Final Image Composition</span>
                 </div>
-                <div class="setting-row sub-setting">
-                  <label for="eye-distance">
-                    <span class="setting-label">Eye Distance</span>
-                    <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
-                  </label>
-                  <div class="setting-control-with-visual">
-                    <input
-                      id="eye-distance"
-                      type="range"
-                      bind:value={config.processing.alignment.eye_distance}
-                      min="0.05"
-                      max="0.4"
-                      step="0.01"
-                    />
-                    <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
-                    <div class="inline-visual-indicator">
-                      <AlignmentIndicator eyeDistance={config.processing.alignment.eye_distance} />
+                <div class="sub-settings-group">
+                  <div class="setting-row">
+                    <label for="eye-distance">
+                      <span class="setting-label">Eye Distance</span>
+                      <span class="setting-hint">Distance between eyes as % of image width (larger = zoom in)</span>
+                    </label>
+                    <div class="setting-control-with-visual">
+                      <input
+                        id="eye-distance"
+                        type="range"
+                        bind:value={config.processing.alignment.eye_distance}
+                        min="0.05"
+                        max="0.4"
+                        step="0.01"
+                      />
+                      <span class="value">{(config.processing.alignment.eye_distance * 100).toFixed(0)}%</span>
+                      <div class="inline-visual-indicator">
+                        <AlignmentIndicator eyeDistance={config.processing.alignment.eye_distance} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -847,7 +862,7 @@
     cursor: pointer;
   }
 
-  .sub-setting {
+  .sub-settings-group {
     padding-left: 1.5rem;
     border-left: 2px solid #333;
     margin-left: 0.75rem;
@@ -936,6 +951,7 @@
     font-size: 0.875rem;
     text-align: center;
     -moz-appearance: textfield;
+    appearance: textfield;
   }
 
   .inline-number::-webkit-inner-spin-button,

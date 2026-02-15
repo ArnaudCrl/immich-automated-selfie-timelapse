@@ -98,6 +98,11 @@ impl ProcessingStep for CropAndResizeStep {
         let edges = ctx
             .get_computed(computed_keys::PADDING_EDGES)
             .and_then(|v| v.as_padding_edges())?;
+
+        // Don't save debug images for passed photos with zero padding
+        if edges.total_fraction() == 0.0 {
+            return None;
+        }
         let image = ctx.image.as_ref()?;
         let rgb = image.to_rgb8();
         let (width, height) = (rgb.width(), rgb.height());

@@ -56,7 +56,7 @@ RUN mkdir -p models && \
     echo "7d6637b8f34ddb0c1363e09a4628acb34314019ec3566fd66b80c04dda6980f5  /tmp/shape_predictor.dat.bz2" | sha256sum -c && \
     bzip2 -d < /tmp/shape_predictor.dat.bz2 > models/shape_predictor_68_face_landmarks.dat && \
     rm /tmp/shape_predictor.dat.bz2 && \
-    apt-get purge -y --autoremove curl bzip2
+    apt-get purge -y --autoremove bzip2
 
 # Copy artifacts from build stages
 COPY --from=rust-build /app/target/release/immich-timelapse ./
@@ -70,5 +70,5 @@ RUN useradd --create-home --shell /bin/bash timelapse && \
 USER timelapse
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:5000/api/health || exit 1
+    CMD curl -fs http://localhost:5000/api/health || exit 1
 CMD ["./immich-timelapse"]

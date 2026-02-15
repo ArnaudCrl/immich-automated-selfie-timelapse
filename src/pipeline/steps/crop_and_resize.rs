@@ -252,6 +252,7 @@ mod tests {
 
         let mut config = Config::default();
         config.processing.output.size = 512;
+        config.processing.crop.enabled = false;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {
@@ -295,6 +296,7 @@ mod tests {
 
         let mut config = Config::default();
         config.processing.output.size = 256;
+        config.processing.crop.enabled = false;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(new_ctx) => {

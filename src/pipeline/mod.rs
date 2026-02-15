@@ -20,7 +20,7 @@ pub mod steps;
 mod traits;
 mod types;
 
-pub use crop_utils::{crop_face_with_intermediate, CropResult};
+pub use crop_utils::{crop_face_with_intermediate, CropResult, PaddingEdges};
 pub use debug_utils::{draw_simple_text, face_rect_pixels};
 pub use orientation::load_image_with_orientation;
 pub use traits::*;

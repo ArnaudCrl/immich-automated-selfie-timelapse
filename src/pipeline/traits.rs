@@ -29,6 +29,8 @@ pub mod computed_keys {
     pub const HEAD_POSE: &str = "head_pose";
     /// Face bounding box in current image coordinates computed by CropAndResizeStep.
     pub const FACE_RECT: &str = "face_rect";
+    /// Per-edge padding fractions computed by CropAndResizeStep.
+    pub const PADDING_EDGES: &str = "padding_edges";
 }
 
 /// Outcome of a pipeline step execution.
@@ -63,6 +65,8 @@ pub enum ComputedValue {
     Landmarks(Box<Landmarks>),
     /// Face bounding box in current image coordinates.
     FaceRect(BoundingBox),
+    /// Per-edge padding fractions from crop step.
+    PaddingEdges(super::PaddingEdges),
 }
 
 impl ComputedValue {
@@ -118,6 +122,14 @@ impl ComputedValue {
     pub fn as_face_rect(&self) -> Option<&BoundingBox> {
         match self {
             ComputedValue::FaceRect(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// Get as PaddingEdges if this is a PaddingEdges variant.
+    pub fn as_padding_edges(&self) -> Option<&super::PaddingEdges> {
+        match self {
+            ComputedValue::PaddingEdges(v) => Some(v),
             _ => None,
         }
     }

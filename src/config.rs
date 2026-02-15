@@ -201,6 +201,41 @@ impl BlurConfig {
     }
 }
 
+/// Crop padding filter configuration.
+///
+/// Skips images where too much of the crop region falls outside the original
+/// image bounds (filled by edge-pixel replication).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CropConfig {
+    /// Whether crop padding filtering is enabled.
+    pub enabled: bool,
+
+    /// Maximum allowed padding percentage (0.0-100.0).
+    /// Images where the replicated-fill area exceeds this will be skipped.
+    pub max_padding_percent: f32,
+}
+
+impl Default for CropConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_padding_percent: 30.0,
+        }
+    }
+}
+
+impl CropConfig {
+    /// Validate the configuration values.
+    pub fn validate(&self) -> Result<()> {
+        if self.enabled && !(0.0..=100.0).contains(&self.max_padding_percent) {
+            return Err(Error::Config(
+                "Crop max_padding_percent must be between 0.0 and 100.0".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Output/resize configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputConfig {
@@ -508,6 +543,10 @@ pub struct ProcessingConfig {
     #[serde(default)]
     pub face_resolution: FaceResolutionConfig,
 
+    /// Crop padding filter settings.
+    #[serde(default)]
+    pub crop: CropConfig,
+
     /// Blur detection settings.
     #[serde(default)]
     pub blur: BlurConfig,
@@ -547,6 +586,7 @@ impl Default for ProcessingConfig {
             max_workers: 1,
             use_preview: true,
             face_resolution: FaceResolutionConfig::default(),
+            crop: CropConfig::default(),
             blur: BlurConfig::default(),
             brightness: BrightnessConfig::default(),
             head_pose: HeadPoseConfig::default(),
@@ -568,6 +608,7 @@ impl ProcessingConfig {
             ));
         }
         self.face_resolution.validate()?;
+        self.crop.validate()?;
         self.blur.validate()?;
         self.brightness.validate()?;
         self.head_pose.validate()?;

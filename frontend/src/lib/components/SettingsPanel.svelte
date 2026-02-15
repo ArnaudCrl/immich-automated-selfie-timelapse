@@ -45,6 +45,10 @@
             enabled: config.processing.face_resolution.enabled,
             min_size: Number(config.processing.face_resolution.min_size),
           },
+          crop: {
+            enabled: config.processing.crop.enabled,
+            max_padding_percent: Number(config.processing.crop.max_padding_percent),
+          },
           brightness: {
             enabled: config.processing.brightness.enabled,
             min_brightness: Number(config.processing.brightness.min_brightness),
@@ -198,6 +202,38 @@
                         step="10"
                       />
                       <span class="value">{config.processing.face_resolution.min_size}px</span>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Face Too Close to Edge Section -->
+              <div class="setting-section">
+                <div class="section-header">
+                  <span class="section-title">Face Too Close to Edge</span>
+                  <input
+                    type="checkbox"
+                    bind:checked={config.processing.crop.enabled}
+                  />
+                </div>
+                <div class="section-hint">Faces too close to the edge of the photo are often distorted and require too much padding</div>
+
+                {#if config.processing.crop.enabled}
+                  <div class="setting-row sub-setting">
+                    <label for="max-padding">
+                      <span class="setting-label">Max Padding</span>
+                      <span class="setting-hint">Maximum allowed padding from edge replication</span>
+                    </label>
+                    <div class="setting-control">
+                      <input
+                        id="max-padding"
+                        type="range"
+                        bind:value={config.processing.crop.max_padding_percent}
+                        min="5"
+                        max="80"
+                        step="5"
+                      />
+                      <span class="value">{config.processing.crop.max_padding_percent}%</span>
                     </div>
                   </div>
                 {/if}
@@ -791,6 +827,12 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: #e0e0e0;
+  }
+
+  .section-hint {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 0.5rem;
   }
 
   .section-header input[type='checkbox'] {

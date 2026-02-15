@@ -9,6 +9,25 @@ use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, RgbImage};
 use std::borrow::Cow;
 
+/// Per-edge padding fractions (0.0-1.0) relative to crop size.
+#[derive(Debug, Clone, Copy)]
+pub struct PaddingEdges {
+    pub top: f32,
+    pub bottom: f32,
+    pub left: f32,
+    pub right: f32,
+}
+
+impl PaddingEdges {
+    /// Total fraction of crop area that is padding.
+    pub fn total_fraction(&self) -> f32 {
+        // Area = 1 - (1-left-right)*(1-top-bottom)
+        let inner_w = (1.0 - self.left - self.right).max(0.0);
+        let inner_h = (1.0 - self.top - self.bottom).max(0.0);
+        1.0 - inner_w * inner_h
+    }
+}
+
 /// Result of cropping a face from an image.
 pub struct CropResult {
     /// The cropped image at full resolution.
@@ -17,6 +36,10 @@ pub struct CropResult {
     pub resized: DynamicImage,
     /// The face bounding box in crop coordinates.
     pub face_rect: BoundingBox,
+    /// Fraction of the crop area that falls outside the original image (0.0-1.0).
+    pub padding_fraction: f32,
+    /// Per-edge padding fractions.
+    pub padding_edges: PaddingEdges,
 }
 
 /// Crop and resize the face from an image using bounding box.
@@ -70,6 +93,25 @@ pub fn crop_face_with_intermediate(
     let ideal_x1 = center_x as i32 - crop_size as i32 / 2;
     let ideal_y1 = center_y as i32 - crop_size as i32 / 2;
 
+    // Calculate what fraction of the crop area falls outside the image bounds.
+    let overlap_x1 = (ideal_x1).max(0) as u64;
+    let overlap_y1 = (ideal_y1).max(0) as u64;
+    let overlap_x2 = ((ideal_x1 + crop_size as i32) as u64).min(img_width as u64);
+    let overlap_y2 = ((ideal_y1 + crop_size as i32) as u64).min(img_height as u64);
+    let overlap_area =
+        overlap_x2.saturating_sub(overlap_x1) * overlap_y2.saturating_sub(overlap_y1);
+    let total_area = crop_size as u64 * crop_size as u64;
+    let padding_fraction = 1.0 - (overlap_area as f32 / total_area as f32);
+
+    // Per-edge padding as fraction of crop size
+    let cs = crop_size as f32;
+    let padding_edges = PaddingEdges {
+        left: (-ideal_x1).max(0) as f32 / cs,
+        top: (-ideal_y1).max(0) as f32 / cs,
+        right: ((ideal_x1 + crop_size as i32) - img_width as i32).max(0) as f32 / cs,
+        bottom: ((ideal_y1 + crop_size as i32) - img_height as i32).max(0) as f32 / cs,
+    };
+
     // Crop with replicate-fill: always keeps the face centered by extending
     // edge pixels at image borders instead of shifting the crop window.
     let cropped = crop_with_replicate_fill(img, ideal_x1, ideal_y1, crop_size);
@@ -89,6 +131,8 @@ pub fn crop_face_with_intermediate(
         cropped,
         resized,
         face_rect,
+        padding_fraction,
+        padding_edges,
     })
 }
 

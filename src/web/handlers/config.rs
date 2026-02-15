@@ -1,9 +1,9 @@
 //! Configuration endpoints.
 
 use crate::config::{
-    AlignmentConfig, BlurConfig, BrightnessConfig, EyeFilterConfig, FaceResolutionConfig,
-    HeadPoseConfig, OutputConfig, ProcessingConfig, TimeIntervalConfig, TimestampConfig,
-    VideoConfig, CONFIG_PATH,
+    AlignmentConfig, BlurConfig, BrightnessConfig, CropConfig, EyeFilterConfig,
+    FaceResolutionConfig, HeadPoseConfig, OutputConfig, ProcessingConfig, TimeIntervalConfig,
+    TimestampConfig, VideoConfig, CONFIG_PATH,
 };
 use crate::web::state::AppState;
 use axum::{extract::State, http::StatusCode, response::Json};
@@ -48,6 +48,7 @@ pub struct ConfigUpdateRequest {
 pub struct ProcessingConfigUpdate {
     pub max_workers: Option<usize>,
     pub face_resolution: Option<FaceResolutionConfig>,
+    pub crop: Option<CropConfig>,
     pub blur: Option<BlurConfig>,
     pub brightness: Option<BrightnessConfig>,
     pub head_pose: Option<HeadPoseConfig>,
@@ -104,6 +105,18 @@ fn validate_processing_config(proc: &ProcessingConfigUpdate) -> Result<(), Valid
             return Err(ValidationError::new(
                 "processing.face_resolution.min_size",
                 format!("must be at most 1000, got {}", fr.min_size),
+            ));
+        }
+    }
+
+    if let Some(ref cr) = proc.crop {
+        if cr.enabled && !(0.0..=100.0).contains(&cr.max_padding_percent) {
+            return Err(ValidationError::new(
+                "processing.crop.max_padding_percent",
+                format!(
+                    "must be between 0.0 and 100.0, got {}",
+                    cr.max_padding_percent
+                ),
             ));
         }
     }
@@ -267,6 +280,9 @@ pub async fn update_config(
             }
             if let Some(v) = proc.face_resolution {
                 config.processing.face_resolution = v;
+            }
+            if let Some(v) = proc.crop {
+                config.processing.crop = v;
             }
             if let Some(v) = proc.blur {
                 config.processing.blur = v;

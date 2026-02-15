@@ -295,7 +295,7 @@
                           type="range"
                           bind:value={config.processing.blur.min_sharpness}
                           min="10"
-                          max="50"
+                          max="150"
                           step="1"
                         />
                         <span class="value">{Number(config.processing.blur.min_sharpness).toFixed(0)}</span>

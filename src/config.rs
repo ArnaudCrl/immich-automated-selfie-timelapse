@@ -184,7 +184,7 @@ impl Default for BlurConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_sharpness: 100.0,
+            min_sharpness: 75.0,
         }
     }
 }

@@ -100,8 +100,8 @@ impl Pipeline {
     /// 2. DecodeImageStep - Load and orient the image (always)
     /// 3. CropAndResizeStep - Extract face region with padding and resize to output size (always)
     /// 4. BrightnessStep - Filter by luminance on face region within cropped image (if enabled)
-    /// 5. BlurStep - Filter blurry images using gradient magnitude (if enabled)
-    /// 6. HeadPoseStep - Filter non-frontal faces (if enabled)
+    /// 5. HeadPoseStep - Filter non-frontal faces (if enabled)
+    /// 6. BlurStep - Filter blurry images using gradient magnitude (if enabled)
     /// 7. LandmarksStep - Detect 68 facial landmarks (always)
     /// 8. EyeFilterStep - Filter closed eyes by EAR (if enabled)
     /// 9. AlignmentStep - Align face based on eye positions and resize to final output (always)
@@ -127,14 +127,14 @@ impl Pipeline {
             pipeline.add_step(Box::new(BrightnessStep));
         }
 
-        // Optional: Blur detection
-        if config.processing.blur.enabled {
-            pipeline.add_step(Box::new(BlurStep));
-        }
-
         // Optional: Head pose validation
         if config.processing.head_pose.enabled {
             pipeline.add_step(Box::new(HeadPoseStep));
+        }
+
+        // Optional: Blur detection
+        if config.processing.blur.enabled {
+            pipeline.add_step(Box::new(BlurStep));
         }
 
         // Core: Always detect landmarks (required for alignment)
@@ -166,8 +166,8 @@ impl Pipeline {
         pipeline.add_step(Box::new(DecodeImageStep));
         pipeline.add_step(Box::new(CropAndResizeStep));
         pipeline.add_step(Box::new(BrightnessStep));
-        pipeline.add_step(Box::new(BlurStep));
         pipeline.add_step(Box::new(HeadPoseStep));
+        pipeline.add_step(Box::new(BlurStep));
         pipeline.add_step(Box::new(LandmarksStep));
         pipeline.add_step(Box::new(EyeFilterStep));
         pipeline.add_step(Box::new(AlignmentStep));

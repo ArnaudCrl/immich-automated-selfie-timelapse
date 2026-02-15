@@ -1,11 +1,11 @@
 //! Blur detection step.
 //!
-//! Detects blurry faces using gradient magnitude analysis within the face region:
+//! Detects blurry faces using Laplacian variance analysis within the face region:
 //! 1. Convert image to grayscale
-//! 2. Apply Sobel operator (Sobel-X and Sobel-Y) within the face bounding box
-//! 3. Compute gradient magnitude for each pixel: sqrt(gx² + gy²)
-//! 4. Calculate mean gradient magnitude
-//! 5. Low gradient magnitude → blurry face (weak, spread-out edges)
+//! 2. Apply Laplacian operator within the face bounding box
+//! 3. Compute variance of the Laplacian response across all pixels
+//! 4. Low variance → blurry image (weak edge response, values clustered near zero)
+//! 5. High variance → sharp image (strong edges mixed with smooth regions)
 
 use crate::config::Config;
 use crate::pipeline::{
@@ -18,24 +18,25 @@ use image::{DynamicImage, Rgb};
 pub struct BlurStep;
 
 impl BlurStep {
-    /// Calculate the mean gradient magnitude of a specific region within an image.
+    /// Calculate the Laplacian variance of a specific region within an image.
     ///
     /// This method:
     /// 1. Converts the image to grayscale
-    /// 2. Applies Sobel-X and Sobel-Y kernels within the specified region:
-    ///    Sobel-X: [-1  0  1]    Sobel-Y: [-1 -2 -1]
-    ///    [-2  0  2]             [ 0  0  0]
-    ///    [-1  0  1]             [ 1  2  1]
-    /// 3. Computes gradient magnitude for each pixel: sqrt(gx² + gy²)
-    /// 4. Returns the mean gradient magnitude
+    /// 2. Applies the discrete Laplacian kernel within the specified region:
+    ///    [ 0  1  0]
+    ///    [ 1 -4  1]
+    ///    [ 0  1  0]
+    /// 3. Computes the variance of the Laplacian response across all pixels
     ///
-    /// Higher gradient magnitude = sharper image (strong, concentrated edges)
-    /// Lower gradient magnitude = blurrier image (weak, spread-out edges)
+    /// Variance is used rather than mean because:
+    /// - Blurry images: Laplacian values all near zero → low variance
+    /// - Sharp images: strong responses at edges, near-zero on smooth skin → high variance
+    /// - Mean can be near-zero for both (positive and negative Laplacian values cancel out)
     ///
     /// # Arguments
     /// * `image` - The full image
     /// * `x1`, `y1`, `x2`, `y2` - Bounding box coordinates (pixels, clamped to image bounds)
-    fn calculate_gradient_magnitude_in_region(
+    fn calculate_laplacian_variance_in_region(
         image: &DynamicImage,
         x1: u32,
         y1: u32,
@@ -56,41 +57,32 @@ impl BlurStep {
             return 0.0;
         }
 
-        // Apply Sobel filter within the region and compute gradient magnitudes
-        let mut sum_magnitude = 0.0f32;
-        let mut count = 0usize;
+        // Apply Laplacian kernel and collect responses
+        // Kernel: [0, 1, 0; 1, -4, 1; 0, 1, 0]
+        let mut values = Vec::with_capacity(((x2 - x1) * (y2 - y1)) as usize);
 
         for y in (y1 + 1)..(y2 - 1) {
             for x in (x1 + 1)..(x2 - 1) {
-                // Get the 3x3 neighborhood
-                let p00 = gray.get_pixel(x - 1, y - 1)[0] as i32;
-                let p01 = gray.get_pixel(x, y - 1)[0] as i32;
-                let p02 = gray.get_pixel(x + 1, y - 1)[0] as i32;
-                let p10 = gray.get_pixel(x - 1, y)[0] as i32;
-                let p12 = gray.get_pixel(x + 1, y)[0] as i32;
-                let p20 = gray.get_pixel(x - 1, y + 1)[0] as i32;
-                let p21 = gray.get_pixel(x, y + 1)[0] as i32;
-                let p22 = gray.get_pixel(x + 1, y + 1)[0] as i32;
+                let center = gray.get_pixel(x, y)[0] as i32;
+                let top = gray.get_pixel(x, y - 1)[0] as i32;
+                let bottom = gray.get_pixel(x, y + 1)[0] as i32;
+                let left = gray.get_pixel(x - 1, y)[0] as i32;
+                let right = gray.get_pixel(x + 1, y)[0] as i32;
 
-                // Apply Sobel-X kernel: [-1 0 1; -2 0 2; -1 0 1]
-                let gx = -p00 + p02 - 2 * p10 + 2 * p12 - p20 + p22;
-
-                // Apply Sobel-Y kernel: [-1 -2 -1; 0 0 0; 1 2 1]
-                let gy = -p00 - 2 * p01 - p02 + p20 + 2 * p21 + p22;
-
-                // Compute gradient magnitude: sqrt(gx² + gy²)
-                let magnitude = ((gx * gx + gy * gy) as f32).sqrt();
-                sum_magnitude += magnitude;
-                count += 1;
+                let laplacian = (top + bottom + left + right - 4 * center) as f32;
+                values.push(laplacian);
             }
         }
 
-        if count == 0 {
+        if values.is_empty() {
             return 0.0;
         }
 
-        // Return mean gradient magnitude
-        sum_magnitude / count as f32
+        // Compute variance: E[X²] - E[X]²
+        let n = values.len() as f32;
+        let mean = values.iter().sum::<f32>() / n;
+        let variance = values.iter().map(|v| (v - mean).powi(2)).sum::<f32>() / n;
+        variance
     }
 }
 
@@ -119,22 +111,37 @@ impl ProcessingStep for BlurStep {
         let (img_width, img_height) = (image.width(), image.height());
         let (x1, y1, x2, y2) = face_rect_pixels(&ctx, img_width, img_height);
 
-        let gradient_magnitude =
-            Self::calculate_gradient_magnitude_in_region(image, x1, y1, x2, y2);
+        let laplacian_variance =
+            Self::calculate_laplacian_variance_in_region(image, x1, y1, x2, y2);
 
-        // Store computed gradient magnitude for potential use by other steps
+        // Normalize for upscaling only.
+        // When the crop was upscaled to output_size (scale > 1), Lanczos3 smooths edges
+        // and artificially reduces sharpness metrics. For variance, the correction is
+        // scale² (variance of k·X = k²·variance(X)), so we multiply by scale².
+        //
+        // We do NOT correct for downscaling (scale < 1): downsampling doesn't
+        // meaningfully inflate variance, and dividing by scale² < 1 would penalize
+        // images where a large crop was taken, producing false blurry rejections.
+        let crop_scale = ctx
+            .get_computed(computed_keys::CROP_SCALE)
+            .and_then(|v| v.as_float())
+            .unwrap_or(1.0);
+        let scale_factor = crop_scale.max(1.0);
+        let normalized_variance = laplacian_variance * scale_factor * scale_factor;
+
+        // Store computed variance for potential use by other steps
         ctx.set_computed(
             computed_keys::BLUR_METRIC,
-            ComputedValue::Float(gradient_magnitude),
+            ComputedValue::Float(normalized_variance),
         );
 
-        if gradient_magnitude < step_config.min_sharpness {
+        if normalized_variance < step_config.min_sharpness {
             return StepOutcome::Skip {
                 ctx,
                 reason: "too_blurry".to_string(),
                 detail: Some(format!(
-                    "gradient: {:.1} (min: {:.1})",
-                    gradient_magnitude, step_config.min_sharpness
+                    "laplacian_var: {:.1} (raw: {:.1}, scale: {:.2}, min: {:.1})",
+                    normalized_variance, laplacian_variance, crop_scale, step_config.min_sharpness
                 )),
             };
         }
@@ -211,11 +218,13 @@ impl ProcessingStep for BlurStep {
             debug_img.put_pixel(bar_x + bar_width - 1, y, Rgb([200, 200, 200]));
         }
 
-        // Fill the bar based on gradient magnitude value (scale: 0-50 maps to 0-100% bar)
-        let max_gradient = 50.0;
-        let normalized = (gradient_mag / max_gradient).clamp(0.0, 1.0);
+        // Fill the bar based on Laplacian variance (log scale: 1–10000 maps to 0–100%)
+        // Using log scale because variance spans several orders of magnitude.
+        let log_variance = (gradient_mag + 1.0).ln();
+        let log_max = (10000.0f32 + 1.0).ln();
+        let normalized = (log_variance / log_max).clamp(0.0, 1.0);
         let fill_width = ((bar_width - 4) as f32 * normalized) as u32;
-        let fill_color = gradient_to_color(gradient_mag);
+        let fill_color = variance_to_color(gradient_mag);
         for y in (outline_y + 2)..(outline_y + outline_height - 2) {
             for x in (bar_x + 2)..(bar_x + 2 + fill_width) {
                 if x < width {
@@ -224,25 +233,23 @@ impl ProcessingStep for BlurStep {
             }
         }
 
-        // Draw gradient magnitude text value
-        let text = format!("{:.1}", gradient_mag);
+        // Draw Laplacian variance text value
+        let text = format!("{:.0}", gradient_mag);
         draw_simple_text(&mut debug_img, 5, bar_y + 6, &text, Rgb([255, 255, 255]));
 
         Some(DynamicImage::ImageRgb8(debug_img))
     }
 }
 
-/// Convert gradient magnitude value to a color (red for blurry, green for sharp)
-fn gradient_to_color(gradient_mag: f32) -> Rgb<u8> {
-    // Very low gradient (< 10) = red (blurry)
-    // Medium gradient (10-20) = yellow/orange
-    // High gradient (> 20) = green (sharp)
-    if gradient_mag < 10.0 {
-        Rgb([255, 80, 80]) // Red
-    } else if gradient_mag < 20.0 {
-        Rgb([255, 200, 80]) // Yellow/orange
+/// Convert Laplacian variance to a color (red for blurry, green for sharp).
+/// Typical ranges: < 100 = blurry, 100–500 = borderline, > 500 = sharp.
+fn variance_to_color(variance: f32) -> Rgb<u8> {
+    if variance < 100.0 {
+        Rgb([255, 80, 80]) // Red (blurry)
+    } else if variance < 500.0 {
+        Rgb([255, 200, 80]) // Yellow/orange (borderline)
     } else {
-        Rgb([80, 255, 80]) // Green
+        Rgb([80, 255, 80]) // Green (sharp)
     }
 }
 
@@ -283,37 +290,36 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_gradient_magnitude_uniform() {
-        // Uniform image should have very low gradient magnitude (no edges)
+    fn test_laplacian_variance_uniform() {
+        // Uniform image: Laplacian is zero everywhere → variance is zero
         let img = create_solid_image(128, 128, 128);
-        let gradient_mag = BlurStep::calculate_gradient_magnitude_in_region(&img, 0, 0, 100, 100);
+        let variance = BlurStep::calculate_laplacian_variance_in_region(&img, 0, 0, 100, 100);
         assert!(
-            gradient_mag < 1.0,
-            "Uniform image should have near-zero gradient magnitude"
+            variance < 1.0,
+            "Uniform image should have near-zero Laplacian variance, got {variance}"
         );
     }
 
     #[test]
-    fn test_calculate_gradient_magnitude_sharp() {
-        // Checkerboard should have high gradient magnitude (many edges)
+    fn test_laplacian_variance_sharp() {
+        // Checkerboard: strong Laplacian response at edges → high variance
         let img = create_checkerboard_image();
-        let gradient_mag = BlurStep::calculate_gradient_magnitude_in_region(&img, 0, 0, 100, 100);
+        let variance = BlurStep::calculate_laplacian_variance_in_region(&img, 0, 0, 100, 100);
         assert!(
-            gradient_mag > 15.0,
-            "Sharp checkerboard should have high gradient magnitude, got {}",
-            gradient_mag
+            variance > 100.0,
+            "Sharp checkerboard should have high Laplacian variance, got {variance}"
         );
     }
 
     #[tokio::test]
     async fn test_blur_too_blurry() {
         let step = BlurStep;
-        let img = create_solid_image(128, 128, 128); // Very low gradient magnitude
+        let img = create_solid_image(128, 128, 128); // Zero Laplacian variance
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
         config.processing.blur.enabled = true;
-        config.processing.blur.min_sharpness = 15.0;
+        config.processing.blur.min_sharpness = 50.0;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Skip { reason, .. } => {
@@ -326,12 +332,12 @@ mod tests {
     #[tokio::test]
     async fn test_blur_sharp_image() {
         let step = BlurStep;
-        let img = create_checkerboard_image(); // High gradient magnitude
+        let img = create_checkerboard_image(); // High Laplacian variance
         let ctx = make_ctx_with_image(img);
 
         let mut config = Config::default();
         config.processing.blur.enabled = true;
-        config.processing.blur.min_sharpness = 15.0;
+        config.processing.blur.min_sharpness = 50.0;
 
         match step.execute(ctx, &config).await {
             StepOutcome::Continue(_) => {} // Should pass

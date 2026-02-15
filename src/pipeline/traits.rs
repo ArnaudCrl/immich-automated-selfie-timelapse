@@ -31,6 +31,9 @@ pub mod computed_keys {
     pub const FACE_RECT: &str = "face_rect";
     /// Per-edge padding fractions computed by CropAndResizeStep.
     pub const PADDING_EDGES: &str = "padding_edges";
+    /// Scale factor applied when resizing the crop to output_size (output_size / crop_size).
+    /// Values > 1 mean the crop was upscaled; values < 1 mean it was downscaled.
+    pub const CROP_SCALE: &str = "crop_scale";
 }
 
 /// Outcome of a pipeline step execution.

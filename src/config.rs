@@ -174,9 +174,9 @@ pub struct BlurConfig {
     /// Whether blur detection is enabled.
     pub enabled: bool,
 
-    /// Minimum gradient magnitude threshold.
-    /// Images with gradient magnitude below this are considered blurry.
-    /// Uses Sobel operator for robust edge detection.
+    /// Minimum Laplacian variance threshold.
+    /// Images with Laplacian variance below this are considered blurry.
+    /// Typical values: < 100 = blurry, 100–500 = borderline, > 500 = sharp.
     pub min_sharpness: f32,
 }
 
@@ -184,7 +184,7 @@ impl Default for BlurConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_sharpness: 20.0,
+            min_sharpness: 100.0,
         }
     }
 }

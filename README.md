@@ -35,9 +35,10 @@ Use Immich's built-in face recognition to find all photos of a person, then runs
 ### Immich API key
 
 To access your immich library, this project requires an Immich API key.  
-Follow this guide to create one: https://immich.app/docs/features/command-line-interface#obtain-the-api-key
+Follow this guide to create one: <https://immich.app/docs/features/command-line-interface#obtain-the-api-key>
 
 Here are the features that need to be enabled:
+
 - `asset.download`
 - `asset.read`
 - `asset.view`
@@ -61,6 +62,12 @@ services:
     volumes:
       - ./config:/app/config
       - ./output:/app/output
+    healthcheck:
+      test: ["CMD", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
 ```
 
@@ -74,6 +81,11 @@ docker run -d \
   -e IMMICH_BASE_URL=http://your_server:2283 \
   -v ./config:/app/config \
   -v ./output:/app/output \
+  --health-cmd="healthcheck" \
+  --health-interval=30s \
+  --health-timeout=5s \
+  --health-retries=3 \
+  --health-start-period=60s \
   arnaudcayrol/immich-selfie-timelapse
 ```
 
@@ -101,10 +113,9 @@ Please adjust image brightness filtering, eye aspect ratio etc. for the person y
 
 - The photo filtering is not 100% accurate and will continue to improve.
 - Heartfelt thanks to the Immich team and contributors for making this project possible.
-- About contribution : When I first created this project, I marked it as open to contributions. I now realize that I don't have as much time as I thought to dedicate to this project. I feel comfortable with issues being opened as it allows me to go through them at my own pace. For pull requests, I cannot guarantee a reasonable time frame for review. 
+- About contribution : When I first created this project, I marked it as open to contributions. I now realize that I don't have as much time as I thought to dedicate to this project. I feel comfortable with issues being opened as it allows me to go through them at my own pace. For pull requests, I cannot guarantee a reasonable time frame for review.
 - Thank you thomaslrg for the discussions around the project.
 - Thank you for the 200 GitHub stars !
-
 
 ## License
 

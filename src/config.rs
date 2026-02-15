@@ -218,7 +218,7 @@ pub struct CropConfig {
 impl Default for CropConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             max_padding_percent: 30.0,
         }
     }

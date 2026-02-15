@@ -6,7 +6,7 @@ use immich_timelapse::{
     config::{Config, CONFIG_PATH},
     error::PERMISSION_HINT,
     models::DlibLandmarks,
-    web,
+    web::{self, AppState},
 };
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -68,16 +68,44 @@ async fn main() -> anyhow::Result<()> {
     let state = web::AppState::new(config);
 
     // Create router
-    let app = web::create_router(state);
+    let app = web::create_router(state.clone());
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 5000));
     tracing::info!("Starting server on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(state))
+        .await?;
 
     Ok(())
+}
+
+async fn shutdown_signal(state: AppState) {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("Received Ctrl+C, shutting down"),
+        _ = terminate => tracing::info!("Received SIGTERM, shutting down"),
+    }
+
+    state.request_cancel().await;
 }
 
 fn check_output_dir(config: &Config) {

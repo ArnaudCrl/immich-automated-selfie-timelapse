@@ -5,6 +5,7 @@
   import EyeIndicator from './visual/EyeIndicator.svelte';
   import AlignmentIndicator from './visual/AlignmentIndicator.svelte';
   import BrightnessIndicator from './visual/BrightnessIndicator.svelte';
+  import PaddingIndicator from './visual/PaddingIndicator.svelte';
 
   let { disabled = false } = $props();
 
@@ -216,13 +217,13 @@
                     bind:checked={config.processing.crop.enabled}
                   />
                 </div>
-                <div class="section-hint">Faces too close to the edge of the photo are often distorted and require too much padding</div>
+                <div class="section-hint">Padding happens when a face is at the border of a photo. It is required to move the subject to the center of the frame.</div>
 
                 {#if config.processing.crop.enabled}
-                  <div class="setting-row sub-setting">
+                  <div class="setting-row sub-setting no-border">
                     <label for="max-padding">
                       <span class="setting-label">Max Padding</span>
-                      <span class="setting-hint">Maximum allowed padding from edge replication</span>
+                      <span class="setting-hint">Maximum allowed padding</span>
                     </label>
                     <div class="setting-control">
                       <input
@@ -235,6 +236,9 @@
                       />
                       <span class="value">{config.processing.crop.max_padding_percent}%</span>
                     </div>
+                  </div>
+                  <div class="padding-indicator-container">
+                    <PaddingIndicator maxPaddingPercent={config.processing.crop.max_padding_percent} />
                   </div>
                 {/if}
               </div>
@@ -738,7 +742,8 @@
     border-bottom: 1px solid #252525;
   }
 
-  .setting-row:last-child {
+  .setting-row:last-child,
+  .setting-row.no-border {
     border-bottom: none;
   }
 
@@ -992,6 +997,16 @@
     text-align: center;
   }
 
+  .padding-indicator-container {
+    display: flex;
+    justify-content: center;
+    width: fit-content;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    background: #0f0f0f;
+    border-radius: 6px;
+  }
+
   .brightness-indicator-container {
     display: flex;
     justify-content: center;
@@ -1000,4 +1015,5 @@
     border: 1px solid #333;
     border-radius: 6px;
   }
+
 </style>

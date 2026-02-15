@@ -53,6 +53,7 @@ services:
   immich-selfie-timelapse:
     image: arnaudcayrol/immich-selfie-timelapse
     container_name: immich-selfie-timelapse
+    user: 1000:1000
     ports:
       - "5000:5000"
     environment:
@@ -81,7 +82,11 @@ Then open **http://your_server:5000** to access the web interface.
 
 ### Volumes
 
-*Ensure correct read/write permissions to these folders.*
+*Ensure correct read/write permissions to the config and output folders.*
+
+```
+chown -R 1000:1000 ./config ./output
+```
 
 | Path | Description |
 |---|---|
@@ -97,15 +102,24 @@ Please adjust image brightness filtering, eye aspect ratio etc. for the person y
   <img src="resources/settings_details.png" alt="Settings">
 </p>
 
+## Troubleshoot
+
+- No ARM support yet.
+- Processor must support AVX (DMHead model requirement).
+
 ## Additional info
 
 - The photo filtering is not 100% accurate and will continue to improve.
 - Heartfelt thanks to the Immich team and contributors for making this project possible.
 - About contribution : When I first created this project, I marked it as open to contributions. I now realize that I don't have as much time as I thought to dedicate to this project. I feel comfortable with issues being opened as it allows me to go through them at my own pace. For pull requests, I cannot guarantee a reasonable time frame for review. 
 - Thank you thomaslrg for the discussions around the project.
-- Thank you for the 200 GitHub stars !
+- Thank you for the ~~200~~ 300 GitHub stars !
 
 
 ## License
 
 This project is open source and available under the [MIT License](LICENSE).
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)](https://www.star-history.com/#ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)

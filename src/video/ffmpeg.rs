@@ -114,6 +114,8 @@ where
         .arg("0") // Allow absolute paths
         .arg("-i")
         .arg(concat_path)
+        .arg("-r")
+        .arg(config.framerate.to_string())
         .arg("-c:v")
         .arg(&config.codec)
         .arg("-crf")

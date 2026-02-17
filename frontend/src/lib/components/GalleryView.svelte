@@ -24,6 +24,10 @@
   let selectedCount = $derived(selectedImages.size);
   let allSelected = $derived(images.length > 0 && selectedImages.size === images.length);
 
+  const ZOOM_LEVELS = [80, 120, 180, 250];
+  let zoomIndex = $state(1);
+  let gridMinSize = $derived(`${ZOOM_LEVELS[zoomIndex]}px`);
+
   function openLightbox(index) {
     lightboxIndex = index;
   }
@@ -198,9 +202,25 @@
           {/if}
         </button>
       </div>
+      <div class="zoom-controls">
+        <button
+          type="button"
+          class="zoom-btn"
+          onclick={() => zoomIndex--}
+          disabled={zoomIndex === 0}
+          aria-label="Zoom out"
+        >−</button>
+        <button
+          type="button"
+          class="zoom-btn"
+          onclick={() => zoomIndex++}
+          disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+          aria-label="Zoom in"
+        >+</button>
+      </div>
     </div>
 
-    <div class="image-grid">
+    <div class="image-grid" style="grid-template-columns: repeat(auto-fill, minmax({gridMinSize}, 1fr))">
       {#each images as image, i}
         <div
           class="image-card"
@@ -208,16 +228,9 @@
         >
           <button
             type="button"
-            class="checkbox-overlay"
-            aria-label={selectedImages.has(image.filename) ? `Deselect ${image.filename}` : `Select ${image.filename}`}
-            onclick={(e) => { e.stopPropagation(); toggleSelect(image.filename); }}
-          >
-            <span class="checkbox">{selectedImages.has(image.filename) ? '✓' : ''}</span>
-          </button>
-          <button
-            type="button"
             class="image-button"
-            onclick={() => openLightbox(i)}
+            aria-label={selectedImages.has(image.filename) ? `Deselect ${image.filename}` : `Select ${image.filename}`}
+            onclick={() => toggleSelect(image.filename)}
           >
             <img
               src="/output/{encodeURIComponent(folderName)}/images/{encodeURIComponent(image.filename)}?v={cacheBust}"
@@ -225,6 +238,12 @@
               loading="lazy"
             />
           </button>
+          <button
+            type="button"
+            class="expand-overlay"
+            aria-label="View {image.filename}"
+            onclick={(e) => { e.stopPropagation(); openLightbox(i); }}
+          >⤢</button>
           <div class="image-info">
             <span class="image-date">{image.filename.split('_')[0]}</span>
           </div>
@@ -397,9 +416,35 @@
     color: #fff;
   }
 
+  .zoom-controls {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+  }
+
+  .zoom-btn {
+    padding: 0.375rem 0.625rem;
+    background: #333;
+    border: none;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .zoom-btn:hover:not(:disabled) {
+    background: #444;
+  }
+
+  .zoom-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
   .image-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 0.75rem;
     flex: 1;
     overflow-y: auto;
@@ -430,30 +475,28 @@
     outline-offset: 2px;
   }
 
-  .checkbox-overlay {
+  .expand-overlay {
     all: unset;
     position: absolute;
     top: 0.25rem;
     left: 0.25rem;
-    width: 1.25rem;
-    height: 1.25rem;
-    background: rgba(0, 0, 0, 0.6);
+    width: 1.5rem;
+    height: 1.5rem;
+    background: rgba(0, 0, 0, 0.55);
     border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1;
     cursor: pointer;
-  }
-
-  .image-card.selected .checkbox-overlay {
-    background: #4f46e5;
-  }
-
-  .checkbox {
     color: #fff;
-    font-size: 0.75rem;
-    font-weight: bold;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .image-card:hover .expand-overlay {
+    opacity: 1;
   }
 
   .image-card img {

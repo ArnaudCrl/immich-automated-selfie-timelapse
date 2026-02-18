@@ -3,17 +3,12 @@
   import { handleError } from '../errorHandler.js';
   import { API } from '../constants.js';
 
-  let { disabled = false, onselect, initialSelectedId = null } = $props();
+  let { disabled = false, onselect, initialSelectedIds = [] } = $props();
 
   let albums = $state([]);
   let loading = $state(true);
   let error = $state(null);
-  let selectedId = $state(null);
-
-  // Sync selectedId with initialSelectedId prop changes
-  $effect(() => {
-    selectedId = initialSelectedId;
-  });
+  let selectedIds = $state(new Set());
 
   async function loadAlbums() {
     loading = true;
@@ -24,15 +19,11 @@
       if (!res.ok) throw res;
       albums = await res.json();
 
-      if (selectedId) {
-        const album = albums.find(a => a.id === selectedId);
-        if (album) {
-          onselect?.(album);
-        } else {
-          // Album no longer exists, clear selection
-          selectedId = null;
-        }
-      }
+      // Restore selection from initialSelectedIds, filtering to albums that still exist
+      const validIds = new Set(albums.map(a => a.id));
+      const restored = initialSelectedIds.filter(id => validIds.has(id));
+      selectedIds = new Set(restored);
+      onselect?.(albums.filter(a => selectedIds.has(a.id)));
     } catch (e) {
       error = await handleError('Failed to load albums', e);
     } finally {
@@ -42,20 +33,20 @@
 
   function selectAlbum(album) {
     if (disabled) return;
-    if (selectedId === album.id) {
-      // Clicking the selected album clears the selection
-      selectedId = null;
-      onselect?.(null);
+    const next = new Set(selectedIds);
+    if (next.has(album.id)) {
+      next.delete(album.id);
     } else {
-      selectedId = album.id;
-      onselect?.(album);
+      next.add(album.id);
     }
+    selectedIds = next;
+    onselect?.(albums.filter(a => selectedIds.has(a.id)));
   }
 
   function clearSelection() {
     if (disabled) return;
-    selectedId = null;
-    onselect?.(null);
+    selectedIds = new Set();
+    onselect?.([]);
   }
 
   onMount(() => {
@@ -66,7 +57,8 @@
 <div class="album-selector">
   <div class="header">
     <h2>Filter by Album <span class="optional">(optional)</span></h2>
-    {#if selectedId}
+    {#if selectedIds.size > 0}
+      <span class="selected-count">{selectedIds.size} selected</span>
       <button type="button" class="clear-btn" onclick={clearSelection} {disabled}>
         Clear
       </button>
@@ -88,10 +80,13 @@
         <button
           type="button"
           class="album-card"
-          class:selected={selectedId === album.id}
+          class:selected={selectedIds.has(album.id)}
           onclick={() => selectAlbum(album)}
           {disabled}
         >
+          {#if selectedIds.has(album.id)}
+            <span class="checkmark">✓</span>
+          {/if}
           <div class="thumbnail">
             {#if album.thumbnail_asset_id}
               <img
@@ -136,6 +131,29 @@
     color: #666;
   }
 
+  .selected-count {
+    font-size: 0.75rem;
+    color: #4f46e5;
+    margin-right: 0.5rem;
+  }
+
+  .checkmark {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    background: #4f46e5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    color: #fff;
+    z-index: 2;
+    line-height: 1;
+  }
+
   .clear-btn {
     padding: 0.25rem 0.75rem;
     background: #333;
@@ -176,6 +194,7 @@
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.15s ease;
+    position: relative;
   }
 
   .album-card:hover:not(:disabled) {

@@ -3,13 +3,14 @@
   import { JOB_STATUS, API } from '../constants.js';
   import { handleError } from '../errorHandler.js';
 
-  let { personId, personName, album = null, jobStatus, outputFolders = [], onupdate } = $props();
+  let { personId, personName, albums = [], jobStatus, outputFolders = [], onupdate } = $props();
 
   let dateFrom = $state('');
   let dateTo = $state('');
   let assetCount = $state(null);
   let loadingCount = $state(false);
   let starting = $state(false);
+  let fetchSeq = 0;
 
   let isRunning = $derived(
     jobStatus === JOB_STATUS.running || jobStatus === JOB_STATUS.compiling || jobStatus === JOB_STATUS.cancelling
@@ -21,27 +22,36 @@
     return outputFolders.find(f => f.name === expectedName);
   });
 
-  // Fetch asset count when personId or album changes
+  // Fetch asset count when personId or albums changes
   $effect(() => {
     if (personId) {
-      fetchAssetCount(personId, album?.id ?? null);
+      fetchAssetCount(personId, albums);
     }
   });
 
-  async function fetchAssetCount(id, albumId = null) {
+  async function fetchAssetCount(id, albumList = []) {
+    const seq = ++fetchSeq;
     loadingCount = true;
     assetCount = null;
     try {
-      const url = albumId
-        ? `${API.people}/${encodeURIComponent(id)}/asset-count?album_id=${encodeURIComponent(albumId)}`
-        : `${API.people}/${encodeURIComponent(id)}/asset-count`;
+      let url = `${API.people}/${encodeURIComponent(id)}/asset-count`;
+      if (albumList.length > 0) {
+        url += `?album_ids=${albumList.map(a => encodeURIComponent(a.id)).join(',')}`;
+      }
       const res = await fetch(url);
       if (!res.ok) throw res;
-      assetCount = await res.json();
+      const data = await res.json();
+      if (seq === fetchSeq) {
+        assetCount = data;
+      }
     } catch (e) {
-      await handleError('Failed to fetch asset count', e);
+      if (seq === fetchSeq) {
+        await handleError('Failed to fetch asset count', e);
+      }
     } finally {
-      loadingCount = false;
+      if (seq === fetchSeq) {
+        loadingCount = false;
+      }
     }
   }
 
@@ -56,8 +66,8 @@
           person_name: personName || null,
           date_from: dateFrom || null,
           date_to: dateTo || null,
-          album_id: album?.id || null,
-          album_name: album?.name || null,
+          album_ids: albums.map(a => a.id),
+          album_names: albums.map(a => a.name),
         }),
       });
 
@@ -113,16 +123,20 @@
     <span class="person-name">
       Person: <strong>{personName || 'Unnamed'}</strong>
     </span>
-    {#if album}
+    {#if albums.length === 1}
       <span class="album-name">
-        Album: <strong>{album.name}</strong>
+        Album: <strong>{albums[0].name}</strong>
+      </span>
+    {:else if albums.length > 1}
+      <span class="album-name">
+        Albums: <strong>{albums.length} selected</strong>
       </span>
     {/if}
     {#if loadingCount}
       <span class="asset-count loading">Loading images...</span>
     {:else if assetCount}
       <span class="asset-count">
-        <span class="count-number">{assetCount.assets_with_faces}</span> images of <strong>{personName || 'Unnamed'}</strong>{album ? ' in this album' : ''}
+        <span class="count-number">{assetCount.assets_with_faces}</span> images of <strong>{personName || 'Unnamed'}</strong>{albums.length === 1 ? ' in this album' : albums.length > 1 ? ` across ${albums.length} albums` : ''}
         {#if assetCount.total_assets !== assetCount.assets_with_faces}
           <span class="count-detail">({assetCount.total_assets} total)</span>
         {/if}

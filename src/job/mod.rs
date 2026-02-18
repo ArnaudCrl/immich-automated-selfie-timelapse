@@ -116,8 +116,8 @@ pub struct JobParams {
     pub person_name: Option<String>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
-    pub album_id: Option<String>,
-    pub album_name: Option<String>,
+    pub album_ids: Vec<String>,
+    pub album_names: Vec<String>,
 }
 
 /// Run the complete processing pipeline.
@@ -221,8 +221,8 @@ async fn run_job_inner(
     let params_base = Progress {
         person_id: Some(params.person_id.clone()),
         person_name: params.person_name.clone(),
-        album_id: params.album_id.clone(),
-        album_name: params.album_name.clone(),
+        album_ids: params.album_ids.clone(),
+        album_names: params.album_names.clone(),
         ..Progress::default()
     };
 
@@ -240,24 +240,26 @@ async fn run_job_inner(
         return Err(Error::Cancelled);
     }
 
-    // Fetch all assets for this person (optionally filtered by album)
+    // Fetch all assets for this person (optionally filtered by albums)
     let assets = client
         .get_assets_with_person(
             &params.person_id,
             params.date_from.as_deref(),
             params.date_to.as_deref(),
-            params.album_id.as_deref(),
+            &params.album_ids,
         )
         .await?;
 
     if assets.is_empty() {
-        let msg = if params.album_id.is_some() {
-            format!(
-                "No assets found for this person in album '{}'",
-                params.album_name.as_deref().unwrap_or("selected album")
-            )
-        } else {
+        let msg = if params.album_ids.is_empty() {
             "No assets found for this person".to_string()
+        } else {
+            let names = if params.album_names.is_empty() {
+                "selected albums".to_string()
+            } else {
+                params.album_names.join(", ")
+            };
+            format!("No assets found for this person in: {}", names)
         };
         return Err(Error::ImageProcessing(msg));
     }

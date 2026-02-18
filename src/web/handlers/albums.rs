@@ -62,13 +62,20 @@ pub async fn get_album_thumbnail(
         )
     })?;
 
-    let (bytes, content_type) = client.get_album_thumbnail(&thumbnail_asset_id).await.map_err(|e| {
-        tracing::error!("Album thumbnail fetch failed for asset {}: {}", thumbnail_asset_id, e);
-        (
-            StatusCode::NOT_FOUND,
-            format!("Failed to get thumbnail: {}", e),
-        )
-    })?;
+    let (bytes, content_type) = client
+        .get_album_thumbnail(&thumbnail_asset_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "Album thumbnail fetch failed for asset {}: {}",
+                thumbnail_asset_id,
+                e
+            );
+            (
+                StatusCode::NOT_FOUND,
+                format!("Failed to get thumbnail: {}", e),
+            )
+        })?;
 
     Response::builder()
         .status(StatusCode::OK)

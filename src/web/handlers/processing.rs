@@ -42,8 +42,8 @@ pub struct ProgressResponse {
     pub skip_stats: SkipStatsResponse,
     pub person_id: Option<String>,
     pub person_name: Option<String>,
-    pub album_id: Option<String>,
-    pub album_name: Option<String>,
+    pub album_ids: Vec<String>,
+    pub album_names: Vec<String>,
 }
 
 impl From<&Progress> for ProgressResponse {
@@ -56,8 +56,8 @@ impl From<&Progress> for ProgressResponse {
             skip_stats: SkipStatsResponse::from(&p.skip_stats),
             person_id: p.person_id.clone(),
             person_name: p.person_name.clone(),
-            album_id: p.album_id.clone(),
-            album_name: p.album_name.clone(),
+            album_ids: p.album_ids.clone(),
+            album_names: p.album_names.clone(),
         }
     }
 }
@@ -74,8 +74,8 @@ pub struct StartRequest {
     pub person_name: Option<String>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
-    pub album_id: Option<String>,
-    pub album_name: Option<String>,
+    pub album_ids: Vec<String>,
+    pub album_names: Vec<String>,
 }
 
 /// Validate that a person_id looks reasonable (non-empty, reasonable length, safe characters).
@@ -124,8 +124,8 @@ pub async fn start_processing(
             message: Some("Starting...".to_string()),
             person_id: Some(request.person_id.clone()),
             person_name: request.person_name.clone(),
-            album_id: request.album_id.clone(),
-            album_name: request.album_name.clone(),
+            album_ids: request.album_ids.clone(),
+            album_names: request.album_names.clone(),
             ..Progress::default()
         };
         *progress = new_progress.clone();
@@ -148,8 +148,8 @@ pub async fn start_processing(
         person_name: request.person_name,
         date_from: request.date_from,
         date_to: request.date_to,
-        album_id: request.album_id,
-        album_name: request.album_name,
+        album_ids: request.album_ids,
+        album_names: request.album_names,
     };
 
     let job_state = state.clone();

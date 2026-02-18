@@ -78,7 +78,10 @@ pub fn create_router(state: AppState) -> Router {
             get(get_person_asset_count),
         )
         .route("/api/albums", get(get_albums))
-        .route("/api/albums/{thumbnail_asset_id}/thumbnail", get(get_album_thumbnail))
+        .route(
+            "/api/albums/{thumbnail_asset_id}/thumbnail",
+            get(get_album_thumbnail),
+        )
         .route("/api/progress", get(get_progress))
         .route("/api/ws", get(ws_handler))
         .route("/api/start", post(start_processing))

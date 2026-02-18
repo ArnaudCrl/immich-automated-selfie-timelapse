@@ -90,7 +90,7 @@ pub struct AssetCountResponse {
 /// Query params for asset count endpoint.
 #[derive(Deserialize)]
 pub struct AssetCountQuery {
-    pub album_id: Option<String>,
+    pub album_ids: Option<String>,
 }
 
 /// Get the count of assets for a person.
@@ -107,9 +107,20 @@ pub async fn get_person_asset_count(
         )
     })?;
 
-    // Fetch assets for this person (optionally filtered by album)
+    // Parse comma-separated album IDs from query param
+    let album_ids: Vec<String> = query
+        .album_ids
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect();
+
+    // Fetch assets for this person (optionally filtered by albums)
     let assets = client
-        .get_assets_with_person(&person_id, None, None, query.album_id.as_deref())
+        .get_assets_with_person(&person_id, None, None, &album_ids)
         .await
         .map_err(|e| {
             (

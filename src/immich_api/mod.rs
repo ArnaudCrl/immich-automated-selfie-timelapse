@@ -174,8 +174,56 @@ impl ImmichClient {
         Ok(info)
     }
 
-    /// Search for assets containing a specific person, optionally filtered by album.
+    /// Search for assets containing a specific person, optionally filtered by albums.
+    ///
+    /// When multiple albums are provided, fetches each album separately and merges
+    /// the results by asset ID.
     pub async fn get_assets_with_person(
+        &self,
+        person_id: &str,
+        taken_after: Option<&str>,
+        taken_before: Option<&str>,
+        album_ids: &[String],
+    ) -> Result<Vec<Asset>> {
+        if album_ids.len() <= 1 {
+            // 0 or 1 album: single request
+            let album_id = album_ids.first().map(|s| s.as_str());
+            self.search_person_assets(person_id, taken_after, taken_before, album_id)
+                .await
+        } else {
+            // Multiple albums: fetch per album and merge by asset ID
+            use std::collections::HashSet;
+            let mut all_assets: Vec<Asset> = Vec::new();
+            let mut seen_ids: HashSet<String> = HashSet::new();
+
+            for album_id in album_ids {
+                let assets = self
+                    .search_person_assets(
+                        person_id,
+                        taken_after,
+                        taken_before,
+                        Some(album_id.as_str()),
+                    )
+                    .await?;
+                for asset in assets {
+                    if seen_ids.insert(asset.id.clone()) {
+                        all_assets.push(asset);
+                    }
+                }
+            }
+
+            tracing::debug!(
+                "Found {} merged assets for person {} across {} albums",
+                all_assets.len(),
+                person_id,
+                album_ids.len()
+            );
+            Ok(all_assets)
+        }
+    }
+
+    /// Fetch all paginated assets for a person, with an optional single album filter.
+    async fn search_person_assets(
         &self,
         person_id: &str,
         taken_after: Option<&str>,
@@ -186,7 +234,7 @@ impl ImmichClient {
         let mut page = 1u32;
 
         loop {
-            let params: SearchParams = SearchParams {
+            let params = SearchParams {
                 person_ids: Some(vec![person_id.to_string()]),
                 album_ids: album_id.map(|id| vec![id.to_string()]),
                 taken_after: taken_after.map(|s| s.to_string()),
@@ -511,7 +559,7 @@ mod tests {
         );
 
         let result = client
-            .get_assets_with_person(&person.id, None, None, None)
+            .get_assets_with_person(&person.id, None, None, &[])
             .await;
 
         match &result {

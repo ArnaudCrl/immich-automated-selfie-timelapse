@@ -38,36 +38,36 @@
     }
   }
 
-  function loadPersistedAlbumId() {
+  function loadPersistedAlbumIds() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.selectedAlbum);
+      const stored = localStorage.getItem(STORAGE_KEYS.selectedAlbums);
       if (stored) {
         const parsed = JSON.parse(stored);
-        return parsed?.id || null;
+        return Array.isArray(parsed) ? parsed.map(a => a.id).filter(Boolean) : [];
       }
     } catch (e) {
-      console.warn('Failed to load persisted album:', e);
+      console.warn('Failed to load persisted albums:', e);
     }
-    return null;
+    return [];
   }
 
-  function persistSelectedAlbum(album) {
+  function persistSelectedAlbums(albums) {
     try {
-      if (album) {
-        localStorage.setItem(STORAGE_KEYS.selectedAlbum, JSON.stringify({ id: album.id, name: album.name }));
+      if (albums && albums.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.selectedAlbums, JSON.stringify(albums.map(a => ({ id: a.id, name: a.name }))));
       } else {
-        localStorage.removeItem(STORAGE_KEYS.selectedAlbum);
+        localStorage.removeItem(STORAGE_KEYS.selectedAlbums);
       }
     } catch (e) {
-      console.warn('Failed to persist album:', e);
+      console.warn('Failed to persist albums:', e);
     }
   }
 
   let connectionOk = $state(false);
   let selectedPerson = $state(null);
   let initialSelectedPersonId = $state(loadPersistedPersonId());
-  let selectedAlbum = $state(null);
-  let initialSelectedAlbumId = $state(loadPersistedAlbumId());
+  let selectedAlbums = $state([]);
+  let initialSelectedAlbumIds = $state(loadPersistedAlbumIds());
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
   let ws = null;
@@ -147,9 +147,9 @@
     persistSelectedPerson(person);
   }
 
-  function handleAlbumSelect(album) {
-    selectedAlbum = album;
-    persistSelectedAlbum(album);
+  function handleAlbumSelect(albums) {
+    selectedAlbums = albums;
+    persistSelectedAlbums(albums);
   }
 
   function handleJobUpdate(data) {
@@ -269,7 +269,7 @@
           <AlbumSelector
             onselect={handleAlbumSelect}
             disabled={isJobRunning}
-            initialSelectedId={initialSelectedAlbumId}
+            initialSelectedIds={initialSelectedAlbumIds}
           />
         {/if}
 
@@ -277,7 +277,7 @@
           <ProcessingControls
             personId={selectedPerson.id}
             personName={selectedPerson.name}
-            album={selectedAlbum}
+            albums={selectedAlbums}
             {jobStatus}
             {outputFolders}
             onupdate={handleJobUpdate}

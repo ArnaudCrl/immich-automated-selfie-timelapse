@@ -167,7 +167,6 @@
     background: #1a1a1a;
     border-radius: 8px;
     padding: 1.5rem;
-    margin-top: 1rem;
   }
 
   h2 {

@@ -651,7 +651,6 @@
   .settings-panel {
     background: #1a1a1a;
     border-radius: 8px;
-    margin-bottom: 1rem;
   }
 
   .toggle-btn {

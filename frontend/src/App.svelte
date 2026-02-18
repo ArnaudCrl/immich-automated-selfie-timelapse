@@ -1,5 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
+  import AlbumSelector from './lib/components/AlbumSelector.svelte';
   import ConnectionStatus from './lib/components/ConnectionStatus.svelte';
   import GalleryView from './lib/components/GalleryView.svelte';
   import OutputManager from './lib/components/OutputManager.svelte';
@@ -37,9 +38,36 @@
     }
   }
 
+  function loadPersistedAlbumId() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.selectedAlbum);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return parsed?.id || null;
+      }
+    } catch (e) {
+      console.warn('Failed to load persisted album:', e);
+    }
+    return null;
+  }
+
+  function persistSelectedAlbum(album) {
+    try {
+      if (album) {
+        localStorage.setItem(STORAGE_KEYS.selectedAlbum, JSON.stringify({ id: album.id, name: album.name }));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.selectedAlbum);
+      }
+    } catch (e) {
+      console.warn('Failed to persist album:', e);
+    }
+  }
+
   let connectionOk = $state(false);
   let selectedPerson = $state(null);
   let initialSelectedPersonId = $state(loadPersistedPersonId());
+  let selectedAlbum = $state(null);
+  let initialSelectedAlbumId = $state(loadPersistedAlbumId());
   let jobStatus = $state('idle');
   let progress = $state({ completed: 0, total: 0, message: '' });
   let ws = null;
@@ -117,6 +145,11 @@
   function handlePersonSelect(person) {
     selectedPerson = person;
     persistSelectedPerson(person);
+  }
+
+  function handleAlbumSelect(album) {
+    selectedAlbum = album;
+    persistSelectedAlbum(album);
   }
 
   function handleJobUpdate(data) {
@@ -232,10 +265,19 @@
           initialSelectedId={initialSelectedPersonId}
         />
 
+        {#if selectedPerson}
+          <AlbumSelector
+            onselect={handleAlbumSelect}
+            disabled={isJobRunning}
+            initialSelectedId={initialSelectedAlbumId}
+          />
+        {/if}
+
         {#if selectedPerson && !isJobRunning}
           <ProcessingControls
             personId={selectedPerson.id}
             personName={selectedPerson.name}
+            album={selectedAlbum}
             {jobStatus}
             {outputFolders}
             onupdate={handleJobUpdate}
@@ -270,7 +312,7 @@
       <p class="hint">Make sure the backend is running and configured with your Immich API credentials.</p>
       <p class="hint">
         You need an Immich API key with the following permissions:
-        <code>asset.download</code>, <code>asset.read</code>, <code>asset.view</code>, <code>person.read</code>, <code>server.about</code>.
+        <code>asset.download</code>, <code>asset.read</code>, <code>asset.view</code>, <code>person.read</code>, <code>album.read</code>, <code>server.about</code>.
         <br />
         See the <a href="https://immich.app/docs/features/command-line-interface#obtain-the-api-key" target="_blank" rel="noopener noreferrer">Immich docs</a> to create one.
       </p>

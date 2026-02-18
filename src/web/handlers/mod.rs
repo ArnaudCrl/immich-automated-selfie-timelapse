@@ -3,10 +3,12 @@
 //! This module is organized into submodules by domain:
 //! - `health`: Health check and connection status
 //! - `people`: People listing, thumbnails, asset counts
+//! - `albums`: Album listing and thumbnails
 //! - `processing`: Job control (progress, start, cancel)
 //! - `output`: Output folder and image management
 //! - `config`: Configuration get/update
 
+mod albums;
 mod config;
 mod health;
 mod output;
@@ -27,6 +29,7 @@ use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 // Re-export handler functions for use in router
+use albums::{get_album_thumbnail, get_albums};
 use config::{get_config, get_config_defaults, update_config};
 use health::{check_connection, health_check};
 use output::{
@@ -38,6 +41,7 @@ use processing::{cancel_processing, get_progress, start_processing};
 use ws::ws_handler;
 
 // Re-export types that may be needed by other modules
+pub use albums::AlbumInfo;
 pub use config::ConfigResponse;
 pub use health::ConnectionStatus;
 pub use output::{BulkDeleteResponse, FolderImagesResponse, ImageInfo, OutputFolderInfo};
@@ -73,6 +77,8 @@ pub fn create_router(state: AppState) -> Router {
             "/api/people/{person_id}/asset-count",
             get(get_person_asset_count),
         )
+        .route("/api/albums", get(get_albums))
+        .route("/api/albums/{thumbnail_asset_id}/thumbnail", get(get_album_thumbnail))
         .route("/api/progress", get(get_progress))
         .route("/api/ws", get(ws_handler))
         .route("/api/start", post(start_processing))

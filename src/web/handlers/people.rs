@@ -102,7 +102,7 @@ pub async fn get_person_asset_count(
 
     // Fetch assets for this person
     let assets = client
-        .get_assets_with_person(&person_id, None, None)
+        .get_assets_with_person(&person_id, None, None, None)
         .await
         .map_err(|e| {
             (

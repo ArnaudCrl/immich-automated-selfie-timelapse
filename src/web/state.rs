@@ -178,6 +178,9 @@ pub struct Progress {
     /// The person being processed (for display when resuming)
     pub person_id: Option<String>,
     pub person_name: Option<String>,
+    /// The album filter applied (optional)
+    pub album_id: Option<String>,
+    pub album_name: Option<String>,
 }
 
 impl Default for Progress {
@@ -190,6 +193,8 @@ impl Default for Progress {
             skip_stats: SkipStats::default(),
             person_id: None,
             person_name: None,
+            album_id: None,
+            album_name: None,
         }
     }
 }

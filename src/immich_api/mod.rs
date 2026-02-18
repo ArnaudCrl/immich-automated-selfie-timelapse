@@ -30,6 +30,16 @@ pub struct Person {
     pub name: Option<String>,
 }
 
+/// Album data. Obtained from the /albums Immich endpoint.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Album {
+    pub id: String,
+    pub album_name: String,
+    pub asset_count: u32,
+    pub album_thumbnail_asset_id: Option<String>,
+}
+
 /// Asset data from Immich. May contain one or more person inside. Obtained from /search/metadata Immich endpoint.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +93,8 @@ pub struct SearchAssets {
 pub struct SearchParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub person_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album_ids: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub taken_after: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -162,12 +174,13 @@ impl ImmichClient {
         Ok(info)
     }
 
-    /// Search for assets containing a specific person.
+    /// Search for assets containing a specific person, optionally filtered by album.
     pub async fn get_assets_with_person(
         &self,
         person_id: &str,
         taken_after: Option<&str>,
         taken_before: Option<&str>,
+        album_id: Option<&str>,
     ) -> Result<Vec<Asset>> {
         let mut all_assets = Vec::new();
         let mut page = 1u32;
@@ -175,6 +188,7 @@ impl ImmichClient {
         loop {
             let params: SearchParams = SearchParams {
                 person_ids: Some(vec![person_id.to_string()]),
+                album_ids: album_id.map(|id| vec![id.to_string()]),
                 taken_after: taken_after.map(|s| s.to_string()),
                 taken_before: taken_before.map(|s| s.to_string()),
                 asset_type: "IMAGE".to_string(),
@@ -266,6 +280,51 @@ impl ImmichClient {
 
         let bytes = response.bytes().await?;
         Ok(bytes)
+    }
+
+    /// Get all albums from Immich.
+    pub async fn get_albums(&self) -> Result<Vec<Album>> {
+        let url = format!("{}/albums", self.base_url);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("x-api-key", &self.api_key)
+            .send()
+            .await?;
+
+        let response = Self::check_response_error(response, "Get albums").await?;
+        let albums: Vec<Album> = response.json().await?;
+        Ok(albums)
+    }
+
+    /// Get an album thumbnail image by asset ID.
+    /// Returns the image bytes and content-type.
+    pub async fn get_album_thumbnail(&self, asset_id: &str) -> Result<(bytes::Bytes, String)> {
+        let encoded_id = urlencode(asset_id);
+        let url = format!(
+            "{}/assets/{}/thumbnail?size=preview",
+            self.base_url, encoded_id
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .header("x-api-key", &self.api_key)
+            .send()
+            .await?;
+
+        let response = Self::check_response_error(response, "Get album thumbnail").await?;
+
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("image/jpeg")
+            .to_string();
+
+        let bytes = response.bytes().await?;
+        Ok((bytes, content_type))
     }
 
     /// Get all people from Immich.
@@ -451,7 +510,9 @@ mod tests {
             person.id
         );
 
-        let result = client.get_assets_with_person(&person.id, None, None).await;
+        let result = client
+            .get_assets_with_person(&person.id, None, None, None)
+            .await;
 
         match &result {
             Ok(assets) => {

@@ -42,6 +42,8 @@ pub struct ProgressResponse {
     pub skip_stats: SkipStatsResponse,
     pub person_id: Option<String>,
     pub person_name: Option<String>,
+    pub album_id: Option<String>,
+    pub album_name: Option<String>,
 }
 
 /// Get current progress.
@@ -56,6 +58,8 @@ pub async fn get_progress(State(state): State<AppState>) -> Json<ProgressRespons
         skip_stats: SkipStatsResponse::from(&progress.skip_stats),
         person_id: progress.person_id.clone(),
         person_name: progress.person_name.clone(),
+        album_id: progress.album_id.clone(),
+        album_name: progress.album_name.clone(),
     })
 }
 
@@ -66,6 +70,8 @@ pub struct StartRequest {
     pub person_name: Option<String>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
+    pub album_id: Option<String>,
+    pub album_name: Option<String>,
 }
 
 /// Validate that a person_id looks reasonable (non-empty, reasonable length, safe characters).
@@ -117,6 +123,8 @@ pub async fn start_processing(
             skip_stats: SkipStats::default(),
             person_id: Some(request.person_id.clone()),
             person_name: request.person_name.clone(),
+            album_id: request.album_id.clone(),
+            album_name: request.album_name.clone(),
         };
         *progress = new_progress.clone();
         let _ = state.progress_tx.send(new_progress);
@@ -138,6 +146,8 @@ pub async fn start_processing(
         person_name: request.person_name,
         date_from: request.date_from,
         date_to: request.date_to,
+        album_id: request.album_id,
+        album_name: request.album_name,
     };
 
     let job_state = state.clone();

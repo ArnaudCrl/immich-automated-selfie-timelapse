@@ -116,6 +116,8 @@ pub struct JobParams {
     pub person_name: Option<String>,
     pub date_from: Option<String>,
     pub date_to: Option<String>,
+    pub album_id: Option<String>,
+    pub album_name: Option<String>,
 }
 
 /// Run the complete processing pipeline.
@@ -148,6 +150,8 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     skip_stats: final_progress.skip_stats,
                     person_id: final_progress.person_id,
                     person_name: final_progress.person_name,
+                    album_id: final_progress.album_id,
+                    album_name: final_progress.album_name,
                 })
                 .await;
         }
@@ -161,6 +165,8 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     skip_stats: final_progress.skip_stats,
                     person_id: final_progress.person_id,
                     person_name: final_progress.person_name,
+                    album_id: final_progress.album_id,
+                    album_name: final_progress.album_name,
                 })
                 .await;
         }
@@ -176,6 +182,8 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                     skip_stats: final_progress.skip_stats,
                     person_id: final_progress.person_id,
                     person_name: final_progress.person_name,
+                    album_id: final_progress.album_id,
+                    album_name: final_progress.album_name,
                 })
                 .await;
         }
@@ -237,6 +245,8 @@ async fn run_job_inner(
             skip_stats: SkipStats::default(),
             person_id: Some(params.person_id.clone()),
             person_name: params.person_name.clone(),
+            album_id: params.album_id.clone(),
+            album_name: params.album_name.clone(),
         })
         .await;
 
@@ -245,19 +255,26 @@ async fn run_job_inner(
         return Err(Error::Cancelled);
     }
 
-    // Fetch all assets for this person
+    // Fetch all assets for this person (optionally filtered by album)
     let assets = client
         .get_assets_with_person(
             &params.person_id,
             params.date_from.as_deref(),
             params.date_to.as_deref(),
+            params.album_id.as_deref(),
         )
         .await?;
 
     if assets.is_empty() {
-        return Err(Error::ImageProcessing(
-            "No assets found for this person".to_string(),
-        ));
+        let msg = if params.album_id.is_some() {
+            format!(
+                "No assets found for this person in album '{}'",
+                params.album_name.as_deref().unwrap_or("selected album")
+            )
+        } else {
+            "No assets found for this person".to_string()
+        };
+        return Err(Error::ImageProcessing(msg));
     }
 
     tracing::info!("Found {} assets to process", assets.len());
@@ -290,6 +307,8 @@ async fn run_job_inner(
             skip_stats: SkipStats::default(),
             person_id: Some(params.person_id.clone()),
             person_name: params.person_name.clone(),
+            album_id: params.album_id.clone(),
+            album_name: params.album_name.clone(),
         })
         .await;
 
@@ -313,9 +332,11 @@ async fn run_job_inner(
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
 
-    // Clone person info for use in spawned tasks
+    // Clone person/album info for use in spawned tasks
     let task_person_id = params.person_id.clone();
     let task_person_name = params.person_name.clone();
+    let task_album_id = params.album_id.clone();
+    let task_album_name = params.album_name.clone();
 
     for (asset, face_data) in assets_with_faces {
         // Check for cancellation before spawning more tasks
@@ -341,9 +362,11 @@ async fn run_job_inner(
         // Clone photo limit tracker for this task
         let time_interval_tracker = time_interval_tracker.clone();
 
-        // Clone person info for this task
+        // Clone person/album info for this task
         let person_id = task_person_id.clone();
         let person_name = task_person_name.clone();
+        let album_id = task_album_id.clone();
+        let album_name = task_album_name.clone();
 
         let handle = tokio::spawn(async move {
             // Check cancellation at start of task
@@ -380,6 +403,8 @@ async fn run_job_inner(
                         skip_stats: current_skip_stats,
                         person_id: Some(person_id.clone()),
                         person_name: person_name.clone(),
+                        album_id: album_id.clone(),
+                        album_name: album_name.clone(),
                     })
                     .await;
             }
@@ -467,6 +492,8 @@ async fn run_job_inner(
             skip_stats: final_skip_stats.clone(),
             person_id: Some(params.person_id.clone()),
             person_name: params.person_name.clone(),
+            album_id: params.album_id.clone(),
+            album_name: params.album_name.clone(),
         })
         .await;
 
@@ -496,6 +523,8 @@ async fn run_job_inner(
                 skip_stats: final_skip_stats.clone(),
                 person_id: Some(params.person_id.clone()),
                 person_name: params.person_name.clone(),
+                album_id: params.album_id.clone(),
+                album_name: params.album_name.clone(),
             })
             .await;
 

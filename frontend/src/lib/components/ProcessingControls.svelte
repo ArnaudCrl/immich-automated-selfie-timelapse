@@ -3,7 +3,7 @@
   import { JOB_STATUS, API } from '../constants.js';
   import { handleError } from '../errorHandler.js';
 
-  let { personId, personName, jobStatus, outputFolders = [], onupdate } = $props();
+  let { personId, personName, album = null, jobStatus, outputFolders = [], onupdate } = $props();
 
   let dateFrom = $state('');
   let dateTo = $state('');
@@ -53,6 +53,8 @@
           person_name: personName || null,
           date_from: dateFrom || null,
           date_to: dateTo || null,
+          album_id: album?.id || null,
+          album_name: album?.name || null,
         }),
       });
 
@@ -106,8 +108,13 @@
 
   <div class="selected-person">
     <span class="person-name">
-      Selected: <strong>{personName || 'Unnamed'}</strong>
+      Person: <strong>{personName || 'Unnamed'}</strong>
     </span>
+    {#if album}
+      <span class="album-name">
+        Album: <strong>{album.name}</strong>
+      </span>
+    {/if}
     {#if loadingCount}
       <span class="asset-count loading">Loading images...</span>
     {:else if assetCount}
@@ -160,12 +167,12 @@
     margin-bottom: 1rem;
   }
 
-  .person-name {
+  .person-name, .album-name {
     font-size: 0.875rem;
     color: #888;
   }
 
-  .person-name strong {
+  .person-name strong, .album-name strong {
     color: #e0e0e0;
   }
 

@@ -10,6 +10,7 @@ export const TIMING = {
 // ===== Local Storage Keys =====
 export const STORAGE_KEYS = {
   selectedPerson: 'immich-timelapse-selected-person',
+  selectedAlbum: 'immich-timelapse-selected-album',
 };
 
 // ===== API Endpoints =====
@@ -17,6 +18,7 @@ export const API = {
   health: '/api/health',
   connection: '/api/connection',
   people: '/api/people',
+  albums: '/api/albums',
   progress: '/api/progress',
   start: '/api/start',
   cancel: '/api/cancel',

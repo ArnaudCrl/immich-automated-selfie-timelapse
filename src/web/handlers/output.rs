@@ -473,6 +473,8 @@ pub async fn compile_folder_video(
             skip_stats: SkipStats::default(),
             person_id: None,
             person_name: Some(folder_name.clone()),
+            album_id: None,
+            album_name: None,
         };
         *progress = new_progress.clone();
         let _ = state.progress_tx.send(new_progress);
@@ -514,6 +516,8 @@ pub async fn compile_folder_video(
                             skip_stats: SkipStats::default(),
                             person_id: None,
                             person_name: Some(folder_clone),
+                            album_id: None,
+                            album_name: None,
                         })
                         .await;
                 });
@@ -533,6 +537,8 @@ pub async fn compile_folder_video(
                         skip_stats: SkipStats::default(),
                         person_id: None,
                         person_name: Some(folder_name_clone),
+                        album_id: None,
+                        album_name: None,
                     })
                     .await;
             }
@@ -547,6 +553,8 @@ pub async fn compile_folder_video(
                             skip_stats: SkipStats::default(),
                             person_id: None,
                             person_name: Some(folder_name_clone),
+                            album_id: None,
+                            album_name: None,
                         })
                         .await;
                 } else {
@@ -560,6 +568,8 @@ pub async fn compile_folder_video(
                             skip_stats: SkipStats::default(),
                             person_id: None,
                             person_name: Some(folder_name_clone),
+                            album_id: None,
+                            album_name: None,
                         })
                         .await;
                 }

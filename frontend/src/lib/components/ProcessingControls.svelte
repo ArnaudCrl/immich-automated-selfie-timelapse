@@ -21,18 +21,21 @@
     return outputFolders.find(f => f.name === expectedName);
   });
 
-  // Fetch asset count when personId changes
+  // Fetch asset count when personId or album changes
   $effect(() => {
     if (personId) {
-      fetchAssetCount(personId);
+      fetchAssetCount(personId, album?.id ?? null);
     }
   });
 
-  async function fetchAssetCount(id) {
+  async function fetchAssetCount(id, albumId = null) {
     loadingCount = true;
     assetCount = null;
     try {
-      const res = await fetch(`${API.people}/${encodeURIComponent(id)}/asset-count`);
+      const url = albumId
+        ? `${API.people}/${encodeURIComponent(id)}/asset-count?album_id=${encodeURIComponent(albumId)}`
+        : `${API.people}/${encodeURIComponent(id)}/asset-count`;
+      const res = await fetch(url);
       if (!res.ok) throw res;
       assetCount = await res.json();
     } catch (e) {
@@ -119,7 +122,7 @@
       <span class="asset-count loading">Loading images...</span>
     {:else if assetCount}
       <span class="asset-count">
-        <span class="count-number">{assetCount.assets_with_faces}</span> images with face data
+        <span class="count-number">{assetCount.assets_with_faces}</span> images of <strong>{personName || 'Unnamed'}</strong>{album ? ' in this album' : ''}
         {#if assetCount.total_assets !== assetCount.assets_with_faces}
           <span class="count-detail">({assetCount.total_assets} total)</span>
         {/if}

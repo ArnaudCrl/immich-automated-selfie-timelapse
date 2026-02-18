@@ -4,11 +4,11 @@ use crate::immich_api::ImmichClient;
 use crate::web::state::AppState;
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{header, StatusCode},
     response::{Json, Response},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Basic person info for listing.
 #[derive(Serialize)]
@@ -87,10 +87,17 @@ pub struct AssetCountResponse {
     pub assets_with_faces: u32,
 }
 
+/// Query params for asset count endpoint.
+#[derive(Deserialize)]
+pub struct AssetCountQuery {
+    pub album_id: Option<String>,
+}
+
 /// Get the count of assets for a person.
 pub async fn get_person_asset_count(
     State(state): State<AppState>,
     Path(person_id): Path<String>,
+    Query(query): Query<AssetCountQuery>,
 ) -> Result<Json<AssetCountResponse>, (StatusCode, String)> {
     let config = state.config.read().await;
     let client = ImmichClient::new(&config.api).map_err(|e| {
@@ -100,9 +107,9 @@ pub async fn get_person_asset_count(
         )
     })?;
 
-    // Fetch assets for this person
+    // Fetch assets for this person (optionally filtered by album)
     let assets = client
-        .get_assets_with_person(&person_id, None, None, None)
+        .get_assets_with_person(&person_id, None, None, query.album_id.as_deref())
         .await
         .map_err(|e| {
             (

@@ -14,7 +14,7 @@ use crate::immich_api::{Asset, FaceData, ImmichClient};
 use crate::pipeline::Pipeline;
 use crate::utils::sanitize_folder_name;
 use crate::video::compile_timelapse;
-use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress, SkipStats};
+use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress};
 
 use processing::{process_single_asset, AssetProcessResult, DebugDirs, OutputDirs};
 
@@ -138,8 +138,6 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
             state
                 .update_progress(Progress {
                     status: JobStatus::Completed,
-                    completed: final_progress.completed,
-                    total: final_progress.total,
                     message: Some(format!(
                         "Video saved to: {}\
                         <br><i>Please note that for the best \
@@ -147,11 +145,7 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
                         (button available in the section below)</i>",
                         output_path.display()
                     )),
-                    skip_stats: final_progress.skip_stats,
-                    person_id: final_progress.person_id,
-                    person_name: final_progress.person_name,
-                    album_id: final_progress.album_id,
-                    album_name: final_progress.album_name,
+                    ..final_progress
                 })
                 .await;
         }
@@ -159,14 +153,8 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
             state
                 .update_progress(Progress {
                     status: JobStatus::Cancelled,
-                    completed: final_progress.completed,
-                    total: final_progress.total,
                     message: Some("Job cancelled by user".to_string()),
-                    skip_stats: final_progress.skip_stats,
-                    person_id: final_progress.person_id,
-                    person_name: final_progress.person_name,
-                    album_id: final_progress.album_id,
-                    album_name: final_progress.album_name,
+                    ..final_progress
                 })
                 .await;
         }
@@ -176,14 +164,8 @@ pub async fn run_job(state: AppState, params: JobParams, cancel_token: Cancellat
             state
                 .update_progress(Progress {
                     status: JobStatus::Error(friendly.clone()),
-                    completed: final_progress.completed,
-                    total: final_progress.total,
                     message: Some(friendly),
-                    skip_stats: final_progress.skip_stats,
-                    person_id: final_progress.person_id,
-                    person_name: final_progress.person_name,
-                    album_id: final_progress.album_id,
-                    album_name: final_progress.album_name,
+                    ..final_progress
                 })
                 .await;
         }
@@ -235,18 +217,21 @@ async fn run_job_inner(
     // Create Immich client
     let client = ImmichClient::new(&config.api)?;
 
+    // Base progress carrying person/album identity, reused for all updates in this job
+    let params_base = Progress {
+        person_id: Some(params.person_id.clone()),
+        person_name: params.person_name.clone(),
+        album_id: params.album_id.clone(),
+        album_name: params.album_name.clone(),
+        ..Progress::default()
+    };
+
     // Update progress: fetching assets
     state
         .update_progress(Progress {
             status: JobStatus::Running,
-            completed: 0,
-            total: 0,
             message: Some("Fetching assets from Immich...".to_string()),
-            skip_stats: SkipStats::default(),
-            person_id: Some(params.person_id.clone()),
-            person_name: params.person_name.clone(),
-            album_id: params.album_id.clone(),
-            album_name: params.album_name.clone(),
+            ..params_base.clone()
         })
         .await;
 
@@ -301,14 +286,9 @@ async fn run_job_inner(
     state
         .update_progress(Progress {
             status: JobStatus::Running,
-            completed: 0,
             total,
             message: Some(format!("Processing {} images...", total)),
-            skip_stats: SkipStats::default(),
-            person_id: Some(params.person_id.clone()),
-            person_name: params.person_name.clone(),
-            album_id: params.album_id.clone(),
-            album_name: params.album_name.clone(),
+            ..params_base.clone()
         })
         .await;
 
@@ -331,12 +311,6 @@ async fn run_job_inner(
     let skip_stats = Arc::new(AtomicSkipStats::new());
 
     let mut handles = Vec::with_capacity(assets_with_faces.len());
-
-    // Clone person/album info for use in spawned tasks
-    let task_person_id = params.person_id.clone();
-    let task_person_name = params.person_name.clone();
-    let task_album_id = params.album_id.clone();
-    let task_album_name = params.album_name.clone();
 
     for (asset, face_data) in assets_with_faces {
         // Check for cancellation before spawning more tasks
@@ -362,11 +336,7 @@ async fn run_job_inner(
         // Clone photo limit tracker for this task
         let time_interval_tracker = time_interval_tracker.clone();
 
-        // Clone person/album info for this task
-        let person_id = task_person_id.clone();
-        let person_name = task_person_name.clone();
-        let album_id = task_album_id.clone();
-        let album_name = task_album_name.clone();
+        let task_base = params_base.clone();
 
         let handle = tokio::spawn(async move {
             // Check cancellation at start of task
@@ -401,10 +371,7 @@ async fn run_job_inner(
                         total,
                         message: Some(format!("Processing images... ({}/{})", done, total)),
                         skip_stats: current_skip_stats,
-                        person_id: Some(person_id.clone()),
-                        person_name: person_name.clone(),
-                        album_id: album_id.clone(),
-                        album_name: album_name.clone(),
+                        ..task_base
                     })
                     .await;
             }
@@ -490,10 +457,7 @@ async fn run_job_inner(
             total,
             message: Some("Processing complete, preparing video...".to_string()),
             skip_stats: final_skip_stats.clone(),
-            person_id: Some(params.person_id.clone()),
-            person_name: params.person_name.clone(),
-            album_id: params.album_id.clone(),
-            album_name: params.album_name.clone(),
+            ..params_base.clone()
         })
         .await;
 
@@ -517,14 +481,10 @@ async fn run_job_inner(
         state
             .update_progress(Progress {
                 status: JobStatus::CompilingVideo,
-                completed: 0,
                 total: successful as u32,
                 message: Some("Compiling video...".to_string()),
                 skip_stats: final_skip_stats.clone(),
-                person_id: Some(params.person_id.clone()),
-                person_name: params.person_name.clone(),
-                album_id: params.album_id.clone(),
-                album_name: params.album_name.clone(),
+                ..params_base
             })
             .await;
 

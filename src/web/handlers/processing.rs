@@ -46,21 +46,25 @@ pub struct ProgressResponse {
     pub album_name: Option<String>,
 }
 
+impl From<&Progress> for ProgressResponse {
+    fn from(p: &Progress) -> Self {
+        Self {
+            status: p.status.as_str().to_string(),
+            completed: p.completed,
+            total: p.total,
+            message: p.message.clone(),
+            skip_stats: SkipStatsResponse::from(&p.skip_stats),
+            person_id: p.person_id.clone(),
+            person_name: p.person_name.clone(),
+            album_id: p.album_id.clone(),
+            album_name: p.album_name.clone(),
+        }
+    }
+}
+
 /// Get current progress.
 pub async fn get_progress(State(state): State<AppState>) -> Json<ProgressResponse> {
-    let progress = state.progress.read().await;
-
-    Json(ProgressResponse {
-        status: progress.status.as_str().to_string(),
-        completed: progress.completed,
-        total: progress.total,
-        message: progress.message.clone(),
-        skip_stats: SkipStatsResponse::from(&progress.skip_stats),
-        person_id: progress.person_id.clone(),
-        person_name: progress.person_name.clone(),
-        album_id: progress.album_id.clone(),
-        album_name: progress.album_name.clone(),
-    })
+    Json(ProgressResponse::from(&*state.progress.read().await))
 }
 
 /// Start processing request.
@@ -117,14 +121,12 @@ pub async fn start_processing(
         }
         let new_progress = Progress {
             status: JobStatus::Running,
-            completed: 0,
-            total: 0,
             message: Some("Starting...".to_string()),
-            skip_stats: SkipStats::default(),
             person_id: Some(request.person_id.clone()),
             person_name: request.person_name.clone(),
             album_id: request.album_id.clone(),
             album_name: request.album_name.clone(),
+            ..Progress::default()
         };
         *progress = new_progress.clone();
         let _ = state.progress_tx.send(new_progress);

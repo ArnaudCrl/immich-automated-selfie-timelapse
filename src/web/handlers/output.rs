@@ -1,6 +1,6 @@
 //! Output folder and image management endpoints.
 
-use crate::web::state::{validate_path_component, AppState, JobStatus, Progress, SkipStats};
+use crate::web::state::{validate_path_component, AppState, JobStatus, Progress};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -467,14 +467,10 @@ pub async fn compile_folder_video(
         }
         let new_progress = Progress {
             status: JobStatus::CompilingVideo,
-            completed: 0,
             total: image_count,
             message: Some(format!("Compiling video for {}...", folder_name)),
-            skip_stats: SkipStats::default(),
-            person_id: None,
             person_name: Some(folder_name.clone()),
-            album_id: None,
-            album_name: None,
+            ..Progress::default()
         };
         *progress = new_progress.clone();
         let _ = state.progress_tx.send(new_progress);
@@ -513,11 +509,8 @@ pub async fn compile_folder_video(
                             completed: current,
                             total,
                             message: Some(format!("Compiling video for {}...", folder_clone)),
-                            skip_stats: SkipStats::default(),
-                            person_id: None,
                             person_name: Some(folder_clone),
-                            album_id: None,
-                            album_name: None,
+                            ..Progress::default()
                         })
                         .await;
                 });
@@ -534,11 +527,8 @@ pub async fn compile_folder_video(
                         completed: image_count,
                         total: image_count,
                         message: Some("Video compilation complete".to_string()),
-                        skip_stats: SkipStats::default(),
-                        person_id: None,
                         person_name: Some(folder_name_clone),
-                        album_id: None,
-                        album_name: None,
+                        ..Progress::default()
                     })
                     .await;
             }
@@ -547,14 +537,10 @@ pub async fn compile_folder_video(
                     job_state
                         .update_progress(Progress {
                             status: JobStatus::Cancelled,
-                            completed: 0,
                             total: image_count,
                             message: Some("Video compilation cancelled".to_string()),
-                            skip_stats: SkipStats::default(),
-                            person_id: None,
                             person_name: Some(folder_name_clone),
-                            album_id: None,
-                            album_name: None,
+                            ..Progress::default()
                         })
                         .await;
                 } else {
@@ -562,14 +548,10 @@ pub async fn compile_folder_video(
                     job_state
                         .update_progress(Progress {
                             status: JobStatus::Error(e.to_string()),
-                            completed: 0,
                             total: image_count,
                             message: Some(format!("Video compilation failed: {}", e)),
-                            skip_stats: SkipStats::default(),
-                            person_id: None,
                             person_name: Some(folder_name_clone),
-                            album_id: None,
-                            album_name: None,
+                            ..Progress::default()
                         })
                         .await;
                 }

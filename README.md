@@ -38,6 +38,7 @@ To access your immich library, this project requires an Immich API key.
 Follow this guide to create one: https://immich.app/docs/features/command-line-interface#obtain-the-api-key
 
 Here are the features that need to be enabled:
+- `album.read`
 - `asset.download`
 - `asset.read`
 - `asset.view`

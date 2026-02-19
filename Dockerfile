@@ -62,12 +62,8 @@ RUN mkdir -p models && \
 COPY --from=rust-build /app/target/release/immich-timelapse ./
 COPY --from=frontend-build /app/frontend/dist/ ./frontend/dist/
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash timelapse && \
-    mkdir -p output config && \
-    chown -R timelapse:timelapse /app
+RUN mkdir -p output config
 
-USER timelapse
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fs http://localhost:5000/api/health || exit 1

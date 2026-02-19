@@ -37,10 +37,12 @@ async fn main() -> anyhow::Result<()> {
     // Check AVX support (required by ONNX models, x86_64 only)
     #[cfg(target_arch = "x86_64")]
     {
-        if !std::arch::is_x86_feature_detected!("avx") {
+        if !std::arch::is_x86_feature_detected!("avx2") {
             tracing::error!(
-                "This CPU does not support AVX instructions, which are required by the ML models \
-                (dlib landmarks, DMHead pose estimation). The application cannot run on this hardware."
+                "This CPU does not support AVX2 instructions, which are required by the ONNX Runtime \
+                used for head pose estimation (DMHead). Disable the head pose filter or use a CPU \
+                with AVX2 support (Intel Haswell / AMD Excavator or newer). \
+                I will try to work around this issue in a future release."
             );
             std::process::exit(1);
         }

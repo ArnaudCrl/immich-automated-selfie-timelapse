@@ -25,7 +25,7 @@
   let allSelected = $derived(images.length > 0 && selectedImages.size === images.length);
 
   const ZOOM_LEVELS = [80, 120, 180, 250];
-  let zoomIndex = $state(1);
+  let zoomIndex = $state(2);
   let gridMinSize = $derived(`${ZOOM_LEVELS[zoomIndex]}px`);
 
   function openLightbox(index) {

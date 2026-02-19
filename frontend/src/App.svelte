@@ -126,6 +126,8 @@
   function closeGallery() {
     galleryFolder = null;
     currentView = 'main';
+    // Refresh folder list to reflect any image deletions made in the gallery
+    loadOutputFolders();
     // Check for any running job (e.g., video compilation started from gallery)
     connectWebSocket();
     // Restore scroll position after DOM updates

@@ -63,7 +63,7 @@ jobs:
   docker-build:
     name: Build Docker image (${{ matrix.arch }})
     needs: [check, frontend-check]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: "!startsWith(github.ref, 'refs/tags/')"
     permissions:
       contents: read
     strategy:

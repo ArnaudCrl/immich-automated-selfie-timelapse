@@ -48,6 +48,9 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    tracing::debug!("Running on aarch64 — NEON SIMD is used by ONNX Runtime");
+
     // Check output directory writability
     check_output_dir(&config);
 

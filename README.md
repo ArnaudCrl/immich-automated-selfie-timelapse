@@ -49,6 +49,8 @@ Here are the features that need to be enabled:
 
 ### Docker Compose (recommended)
 
+Feel free to deploy this container on a more powerfull PC for faster timelapse generation. This is a 'one shot' application, it does not necessarily need to be deployed on a always on server.
+
 ```yaml
 services:
   immich-selfie-timelapse:
@@ -103,18 +105,15 @@ Please adjust image brightness filtering, eye aspect ratio etc. for the person y
   <img src="resources/settings_details.png" alt="Settings">
 </p>
 
-## Troubleshoot
-
-- No ARM support yet.
-- Processor must support AVX (DMHead model requirement).
 
 ## Additional info
 
+- **To get the best results, I advise going into the galery view and quickly going through the images to remove bad ones, then hit "Compile video" at the bottom to recreate the video. There are always outliers that pass the quality filters. Removing bad photos makes a big difference in the final output.**
 - The photo filtering is not 100% accurate and will continue to improve.
 - Heartfelt thanks to the Immich team and contributors for making this project possible.
 - About contribution : When I first created this project, I marked it as open to contributions. I now realize that I don't have as much time as I thought to dedicate to this project. I feel comfortable with issues being opened as it allows me to go through them at my own pace. For pull requests, I cannot guarantee a reasonable time frame for review. 
 - Thank you thomaslrg for the discussions around the project.
-- Thank you for the ~~200~~ 300 GitHub stars !
+- Thank you for the ~~200~~ ~~300~~ 600 GitHub stars !
 
 
 ## License

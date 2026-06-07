@@ -34,15 +34,16 @@ async fn main() -> anyhow::Result<()> {
     let config = load_config()?;
     tracing::info!("Configuration loaded");
 
-    // Check AVX support (required by ONNX models, x86_64 only)
+    // Check AVX support (required by ONNX models on x86_64)
     #[cfg(target_arch = "x86_64")]
     {
         if !std::arch::is_x86_feature_detected!("avx2") {
             tracing::error!(
-                "This CPU does not support AVX2 instructions, which are required by the ONNX Runtime \
-                used for head pose estimation (DMHead). Disable the head pose filter or use a CPU \
-                with AVX2 support (Intel Haswell / AMD Excavator or newer). \
-                I will try to work around this issue in a future release."
+                "This CPU does not support AVX2 instructions, which are required on x86_64 by the \
+                ONNX Runtime used for head pose estimation (DMHead). Consider running this container \
+                on a more modern environment. This application is a 'one shot' and doesn't have to be \
+                deployed on a always on server. Alternatively, disable the head pose filter \
+                or use a CPU with AVX2 support (Intel Haswell / AMD Excavator or newer)."
             );
             std::process::exit(1);
         }

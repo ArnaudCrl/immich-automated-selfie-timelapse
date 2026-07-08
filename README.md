@@ -42,6 +42,7 @@ Here are the features that need to be enabled:
 - `asset.download`
 - `asset.read`
 - `asset.view`
+- `face.read`
 - `person.read`
 - `server.about`
 

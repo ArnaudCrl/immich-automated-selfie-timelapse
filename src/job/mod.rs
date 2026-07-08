@@ -19,6 +19,7 @@ use crate::web::{AppState, AtomicSkipStats, JobStatus, Progress};
 use processing::{process_single_asset, AssetProcessResult, DebugDirs, OutputDirs};
 
 use chrono::NaiveDate;
+use futures_util::stream::{self, StreamExt, TryStreamExt};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -266,14 +267,21 @@ async fn run_job_inner(
 
     tracing::info!("Found {} assets to process", assets.len());
 
-    // Filter assets that have face data for the target person
-    let assets_with_faces: Vec<(Asset, FaceData)> = assets
-        .into_iter()
-        .filter_map(|asset| {
-            let face = find_face_for_person(&asset, &params.person_id)?;
-            Some((asset, face))
+    // Fetch face bounding box data for the target person on each asset.
+    let face_concurrency = config.processing.max_workers.max(1);
+    let assets_with_faces: Vec<(Asset, FaceData)> = stream::iter(assets)
+        .map(|asset| {
+            let client = &client;
+            let person_id = &params.person_id;
+            async move {
+                let face = client.get_face_for_person(&asset.id, person_id).await?;
+                Ok::<_, Error>((asset, face))
+            }
         })
-        .collect();
+        .buffer_unordered(face_concurrency)
+        .try_filter_map(|(asset, face)| async move { Ok(face.map(|f| (asset, f))) })
+        .try_collect()
+        .await?;
 
     if assets_with_faces.is_empty() {
         return Err(Error::ImageProcessing(
@@ -520,57 +528,5 @@ fn permission_aware_io_error(e: std::io::Error, path: &std::path::Path) -> Error
         ))
     } else {
         Error::Io(e)
-    }
-}
-
-/// Find the face data for a specific person in an asset.
-fn find_face_for_person(asset: &Asset, person_id: &str) -> Option<FaceData> {
-    let people = asset.people.as_ref()?;
-
-    for person in people {
-        if person.id == person_id {
-            if let Some(faces) = &person.faces {
-                // Return the first face (Immich shouldn't detect the same person more than once per image)
-                return faces.first().cloned();
-            }
-        }
-    }
-
-    None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_find_face_for_person() {
-        use crate::immich_api::PersonWithFaces;
-
-        let asset = Asset {
-            id: "asset1".to_string(),
-            device_asset_id: None,
-            original_file_name: None,
-            file_created_at: Some("2024-01-15T10:30:00Z".to_string()),
-            local_date_time: None,
-            people: Some(vec![PersonWithFaces {
-                id: "person1".to_string(),
-                name: Some("Test Person".to_string()),
-                faces: Some(vec![FaceData {
-                    bounding_box_x1: 0.2,
-                    bounding_box_y1: 0.1,
-                    bounding_box_x2: 0.5,
-                    bounding_box_y2: 0.6,
-                    image_width: 1920,
-                    image_height: 1080,
-                }]),
-            }]),
-        };
-
-        let face = find_face_for_person(&asset, "person1");
-        assert!(face.is_some());
-
-        let face = find_face_for_person(&asset, "person2");
-        assert!(face.is_none());
     }
 }

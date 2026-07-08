@@ -40,7 +40,7 @@ pub struct Album {
     pub album_thumbnail_asset_id: Option<String>,
 }
 
-/// Asset data from Immich. May contain one or more person inside. Obtained from /search/metadata Immich endpoint.
+/// Asset data from Immich. Obtained from /search/metadata Immich endpoint.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Asset {
@@ -49,16 +49,6 @@ pub struct Asset {
     pub original_file_name: Option<String>,
     pub file_created_at: Option<String>,
     pub local_date_time: Option<String>,
-    pub people: Option<Vec<PersonWithFaces>>,
-}
-
-/// Person with face data.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PersonWithFaces {
-    pub id: String,
-    pub name: Option<String>,
-    pub faces: Option<Vec<FaceData>>,
 }
 
 /// Face data from Immich.
@@ -71,6 +61,23 @@ pub struct FaceData {
     pub bounding_box_y2: f32,
     pub image_width: u32,
     pub image_height: u32,
+}
+
+/// A single detected face, as returned by the `/faces?id=<assetId>` endpoint.
+/// One entry per person detected in the asset.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetFace {
+    #[serde(flatten)]
+    pub data: FaceData,
+    pub person: Option<FacePerson>,
+}
+
+/// Minimal person reference embedded in a face record.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FacePerson {
+    pub id: String,
 }
 
 /// Search response from Immich.
@@ -103,7 +110,6 @@ pub struct SearchParams {
     pub asset_type: String,
     pub page: u32,
     pub size: u32,
-    pub with_people: bool,
 }
 
 impl ImmichClient {
@@ -185,6 +191,14 @@ impl ImmichClient {
         taken_before: Option<&str>,
         album_ids: &[String],
     ) -> Result<Vec<Asset>> {
+        // Immich requires full ISO 8601 datetimes, but callers pass plain
+        // `YYYY-MM-DD` dates (e.g. from an HTML date input), so widen them
+        // to cover the whole day.
+        let taken_after = taken_after.map(|d| format!("{d}T00:00:00.000Z"));
+        let taken_before = taken_before.map(|d| format!("{d}T23:59:59.999Z"));
+        let taken_after = taken_after.as_deref();
+        let taken_before = taken_before.as_deref();
+
         if album_ids.len() <= 1 {
             // 0 or 1 album: single request
             let album_id = album_ids.first().map(|s| s.as_str());
@@ -242,7 +256,6 @@ impl ImmichClient {
                 asset_type: "IMAGE".to_string(),
                 page,
                 size: 100,
-                with_people: true,
             };
 
             let url = format!("{}/search/metadata", self.base_url);
@@ -328,6 +341,36 @@ impl ImmichClient {
 
         let bytes = response.bytes().await?;
         Ok(bytes)
+    }
+
+    /// Get all detected faces for an asset (one entry per person present in the photo).
+    pub async fn get_faces(&self, asset_id: &str) -> Result<Vec<AssetFace>> {
+        let encoded_id = urlencode(asset_id);
+        let url = format!("{}/faces?id={}", self.base_url, encoded_id);
+
+        let response = self
+            .client
+            .get(&url)
+            .header("x-api-key", &self.api_key)
+            .send()
+            .await?;
+
+        let response = Self::check_response_error(response, "Get faces").await?;
+        let faces: Vec<AssetFace> = response.json().await?;
+        Ok(faces)
+    }
+
+    /// Get the face bounding box for a specific person on an asset, if present.
+    pub async fn get_face_for_person(
+        &self,
+        asset_id: &str,
+        person_id: &str,
+    ) -> Result<Option<FaceData>> {
+        let faces = self.get_faces(asset_id).await?;
+        Ok(faces
+            .into_iter()
+            .find(|f| f.person.as_ref().is_some_and(|p| p.id == person_id))
+            .map(|f| f.data))
     }
 
     /// Get all albums from Immich.
@@ -567,12 +610,8 @@ mod tests {
                 println!("Found {} assets for person", assets.len());
                 for asset in assets.iter().take(5) {
                     println!("  - {} (created: {:?})", asset.id, asset.file_created_at);
-                    if let Some(people) = &asset.people {
-                        for p in people {
-                            if let Some(faces) = &p.faces {
-                                println!("    Faces: {}", faces.len());
-                            }
-                        }
+                    if let Ok(faces) = client.get_faces(&asset.id).await {
+                        println!("    Faces: {}", faces.len());
                     }
                 }
             }

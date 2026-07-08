@@ -8,6 +8,7 @@ use axum::{
     http::{header, StatusCode},
     response::{Json, Response},
 };
+use futures_util::stream::{self, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 
 /// Basic person info for listing.
@@ -131,17 +132,25 @@ pub async fn get_person_asset_count(
 
     let total_assets = assets.len() as u32;
 
-    // Count assets that have face data for the target person
-    let assets_with_faces = assets
-        .iter()
-        .filter(|asset| {
-            asset.people.as_ref().is_some_and(|people| {
-                people.iter().any(|p| {
-                    p.id == person_id && p.faces.as_ref().is_some_and(|faces| !faces.is_empty())
-                })
-            })
+    // Count assets that have face data for the target person.
+    const FACE_CHECK_CONCURRENCY: usize = 8;
+    let assets_with_faces = stream::iter(assets)
+        .map(|asset| {
+            let client = &client;
+            let person_id = &person_id;
+            async move { client.get_face_for_person(&asset.id, person_id).await }
         })
-        .count() as u32;
+        .buffer_unordered(FACE_CHECK_CONCURRENCY)
+        .try_fold(0u32, |count, face| async move {
+            Ok(if face.is_some() { count + 1 } else { count })
+        })
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get face data: {}", e),
+            )
+        })?;
 
     Ok(Json(AssetCountResponse {
         total_assets,

@@ -47,6 +47,7 @@ pub struct ConfigUpdateRequest {
 #[derive(Deserialize)]
 pub struct ProcessingConfigUpdate {
     pub max_workers: Option<usize>,
+    pub use_preview: Option<bool>,
     pub face_resolution: Option<FaceResolutionConfig>,
     pub crop: Option<CropConfig>,
     pub blur: Option<BlurConfig>,
@@ -277,6 +278,9 @@ pub async fn update_config(
         if let Some(proc) = update.processing {
             if let Some(v) = proc.max_workers {
                 config.processing.max_workers = v;
+            }
+            if let Some(v) = proc.use_preview {
+                config.processing.use_preview = v;
             }
             if let Some(v) = proc.face_resolution {
                 config.processing.face_resolution = v;

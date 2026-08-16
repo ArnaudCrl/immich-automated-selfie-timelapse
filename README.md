@@ -123,4 +123,4 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)](https://www.star-history.com/#ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)
+[![Star History Chart](https://star-history.dera.page/svg?repos=ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)](https://star-history.dera.page/#ArnaudCrl/immich-automated-selfie-timelapse&type=date&legend=top-left)
